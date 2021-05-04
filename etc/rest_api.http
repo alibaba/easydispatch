@@ -1,0 +1,209 @@
+
+@hostUrl=http://localhost:8000/api/v1
+###
+# @name login
+POST {{hostUrl}}/auth/login
+Content-Type: application/json
+
+{"email": "demo", "password": "demo"}
+
+###
+# @name register
+POST {{hostUrl}}/auth/register
+Content-Type: application/json
+
+{"email": "demo", "password": "demo"}
+
+
+###
+@jwtoken = {{login.response.body.token}}
+
+
+###
+# @name planner_service
+POST {{hostUrl}}/services/
+Authorization: Bearer {{jwtoken}}
+Content-Type: application/json
+
+{"code":"planner","name":"planner","description":null,"is_active":null,"id":null,"created_at":null,"updated_at":null,"loading":false}
+
+
+
+###
+# @name planner_service_env_proxy
+POST {{hostUrl}}/service_plugins/
+Authorization: Bearer {{jwtoken}}
+Content-Type: application/json
+
+{"id":null,"plugin":{"id":28,"title":"Kandbox Plugin - Environment Proxy","slug":"kprl_env_job2slot_proxy","author":"Kandbox","author_url":"https://github.com/qiyangduan","type":"kandbox_env_proxy","enabled":true,"required":true,"multiple":false,"description":"Env Proxy for GYM for RL.","config":{"run_mode":"predict","env_code":"rl_hist_affinity_env_proxy","allow_overtime":false,"nbr_of_observed_workers":33,"nbr_of_days_planning_window":2,"data_start_day":"20201125","minutes_per_day":1440,"max_nbr_of_jobs_per_day_worker":25,"org_code":null,"team_id":null,"geo_longitude_max":119,"geo_longitude_min":113,"geo_latitude_max":41,"geo_latitude_min":37},"config_form_spec":{"type":"object","properties":{"run_mode":{"type":"string","code":"Job Type","description":"This affects timing, N=Normal, FS=Fixed Schedule.","enum":["N","FS"]},"nbr_of_observed_workers":{"type":"number","code":"Number of observed_workers"},"nbr_of_days_planning_window":{"type":"number","code":"Number of days_planning_window"},"minutes_per_day":{"type":"number","code":"minutes_per_day"},"max_nbr_of_jobs_per_day_worker":{"type":"number","code":"max_nbr_of_jobs_per_day_worker"}}}},"service":{"code":"planner","name":"planner","service_type":"realtime_heuristic_planner","description":null,"is_active":true,"id":4,"created_at":"2021-04-29T15:56:15.108107","updated_at":"2021-04-29T15:56:15.108120"},"config":{},"planning_plugin_type":"kandbox_env_proxy","loading":false}
+
+
+###
+# @name planner_service_rule
+POST {{hostUrl}}/service_plugins/
+Authorization: Bearer {{jwtoken}}
+Content-Type: application/json
+
+
+{"id":null,"plugin":{"id":30,"title":"Requested Skills","slug":"kandbox_rule_requested_skills","author":"Kandbox","author_url":"https://github.com/alibaba/easydispatch","type":"kandbox_rule","enabled":true,"required":true,"multiple":true,"description":"Rule sufficient_travel_time for GYM for RL.","config":{},"config_form_spec":{"type":"object","properties":{}}},"service":{"code":"planner","name":"planner","service_type":"realtime_heuristic_planner","description":null,"is_active":true,"id":4,"created_at":"2021-04-29T15:56:15.108107","updated_at":"2021-04-29T15:56:15.108120"},"config":null,"planning_plugin_type":"kandbox_rule","loading":false}
+
+
+###
+# @name planner_service_env_agent
+POST {{hostUrl}}/service_plugins/
+Authorization: Bearer {{jwtoken}}
+Content-Type: application/json
+
+{"id":null,"plugin":{"id":25,"title":"Kandbox Plugin - Agent - Heuristic","slug":"kandbox_heuristic_realtime_agent","author":"Kandbox","author_url":"https://github.com/alibaba/easydispatch","type":"kandbox_agent","enabled":true,"required":false,"multiple":false,"description":"Env for GYM for RL.","config":{"nbr_of_actions":4,"working_dir":"/Users/qiyangduan/temp/kandbox"},"config_form_spec":{"type":"object","properties":{}}},"service":{"code":"planner","name":"planner","service_type":"realtime_heuristic_planner","description":null,"is_active":true,"id":4,"created_at":"2021-04-29T15:56:15.108107","updated_at":"2021-04-29T15:56:15.108120"},"config":null,"planning_plugin_type":"kandbox_agent","loading":false}
+
+
+###
+# @name planner_service_optimizer
+POST {{hostUrl}}/service_plugins/
+Authorization: Bearer {{jwtoken}}
+Content-Type: application/json
+
+{
+  "plugin": {
+    "title": "Kandbox Plugin - Batch Optimizer - for n days",
+    "slug": "kandbox_ortools_n_days_optimizer",
+    "author": "Kandbox",
+    "author_url": "https://github.com/alibaba/easydispatch",
+    "type": "kandbox_batch_optimizer",
+    "config": { "log_search_progress": true, "max_exec_time": 10 },
+    "config_form_spec": { "type": "object", "properties": {} }
+  },
+  "service": {
+    "code": "planner",
+    "name": "planner",
+    "service_type": "realtime_heuristic_planner"
+  },
+  "planning_plugin_type": "kandbox_batch_optimizer"
+}
+
+###
+# @name create_team
+POST {{hostUrl}}/teams/
+Authorization: Bearer {{jwtoken}}
+Content-Type: application/json
+
+{"id":null,"code":"london_t1","planner_service":{"code":"planner","name":"planner","service_type":"realtime_heuristic_planner","description":null,"is_active":true,"id":4,"created_at":"2021-04-29T15:56:15.108107","updated_at":"2021-04-29T15:56:15.108120"},"name":"london_t1","description":null,"created_at":null,"updated_at":null,"loading":false,"flex_form_data":{"env_start_day":"20210428", "nbr_of_days_planning_window":2}}
+
+
+# From here onward, you can call util generate data to create jobs and workers.
+
+
+###
+# @name create_job
+
+POST {{hostUrl}}/jobs/  HTTP/1.1
+Content-Type: application/json
+Authorization: Bearer {{jwtoken}}
+
+{
+  "id": null,
+  "code": "dd",
+  "name": null,
+  "description": null,
+  "location": { "location_code": "job_loc_1", "geo_longitude": -0.306, "geo_latitude": 51.429 },
+  "team": {
+    "code": "kk",
+    "name": "kk",
+    "description": null,
+    "planner_service": null,
+    "id": 1,
+    "created_at": "2021-04-15T12:16:26.250067",
+    "updated_at": "2021-04-15T13:09:20.590065"
+  },
+  "flex_form_data": null,
+  "requested_start_datetime": null,
+  "requested_duration_minutes": "11",
+  "scheduled_start_datetime": null,
+  "scheduled_duration_minutes": null,
+  "requested_primary_worker": {
+    "code": "ww",
+    "name": "ww",
+    "team": {
+      "code": "kk",
+      "name": "kk",
+      "description": null,
+      "planner_service": null,
+      "id": 1,
+      "created_at": "2021-04-15T12:16:26.250067",
+      "updated_at": "2021-04-15T13:09:20.590065"
+    },
+    "flex_form_data": { "skills": ["2111"], "level": 1 },
+    "business_hour": {
+      "sunday": [{ "open": "", "close": "", "id": "5ca5578b0c5c7", "isOpen": false }],
+      "monday": [{ "open": "0800", "close": "1700", "id": "5ca5578b0c5d1", "isOpen": true }],
+      "tuesday": [{ "open": "0800", "close": "1700", "id": "5ca5578b0c5d8", "isOpen": true }],
+      "wednesday": [{ "open": "0800", "close": "1700", "id": "5ca5578b0c5df", "isOpen": true }],
+      "thursday": [{ "open": "0800", "close": "1700", "id": "5ca5578b0c5e6", "isOpen": true }],
+      "friday": [{ "open": "0800", "close": "1700", "id": "5ca5578b0c5ec", "isOpen": true }],
+      "saturday": [{ "open": "", "close": "", "id": "5ca5578b0c5f8", "isOpen": false }]
+    },
+    "is_active": true,
+    "auth_username": null,
+    "id": 1,
+    "location": null
+  },
+  "scheduled_primary_worker": null,
+  "scheduled_secondary_workers": null,
+  "created_at": null,
+  "events": null,
+  "reported_at": null,
+  "reporter": null,
+  "planning_status": "U",
+  "tags": [],
+  "loading": true
+}
+
+###
+GET {{hostUrl}}/jobs/?q=&page=1&itemsPerPage=10&sortBy[]=requested_primary_worker.code&descending[]=true  HTTP/1.1
+Content-Type: application/json
+Authorization: Bearer {{jwtoken}}
+
+
+###
+GET {{hostUrl}}/jobs/?q=&page=1&itemsPerPage=20&sortBy[]=scheduled_start_datetime&descending[]=false&fields[]=scheduled_start_datetime&ops[]===&values[]=2021-04-19T08:00:00  HTTP/1.1
+Content-Type: application/json
+Authorization: Bearer {{jwtoken}}
+
+###
+GET {{hostUrl}}/planner_service/get_planner_worker_job_dataset/?team_id=1&start_day=20210419&end_day=20210425&force_reload=false HTTP/1.1
+Content-Type: application/json
+Authorization: Bearer {{jwtoken}}
+
+
+###
+GET {{hostUrl}}/jobs/?q=7662&page=1&itemsPerPage=10&sortBy[]=code&descending[]=true HTTP/1.1
+Content-Type: application/json
+Authorization: Bearer {{jwtoken}}
+
+
+###
+# @name get_team
+GET {{hostUrl}}/teams/1 HTTP/1.1
+Content-Type: application/json
+Authorization: Bearer {{jwtoken}}
+
+
+
+###
+# @name veo_create_worker
+POST {{hostUrl}}/workers/   HTTP/1.1
+Content-Type: application/json
+Authorization: Bearer {{jwtoken}}
+
+{"code": "Alexia", "name": "Alexia", "auth_username": "Alexia", "is_active": true, "team": {"code": "london_t1", "name": "london_t1"}, "flex_form_data": {"level": 3, "skills": ["electric_1", "electric_2", "electric_3", "mechanic_1", "mechanic_2", "mechanic_3"], "location_code": "Alexia-1", "geo_latitude": 51.596993281323, "geo_longitude": 0.2125868187524628, "assistant_to": null, "is_assistant": false}, "tags": []}
+
+###
+# @name veo_create_job
+
+POST {{hostUrl}}/jobs/   HTTP/1.1
+Content-Type: application/json
+Authorization: Bearer {{jwtoken}}
+
+{"code": "0429-1-Access_Control-28",
+"job_type": "visit",
+"name": "0429-1-Access_Control-1006", "flex_form_data": {"requested_min_level": 1, "requested_skills": ["electric_1", "mechanic_1"], "job_schedule_type": "N", "mandatory_minutes_minmax_flag": 0, "tolerance_start_minutes": -1440, "tolerance_end_minutes": 2880, "min_number_of_workers": 1, "max_number_of_workers": 1, "priority": 1}, "team": {"code": "london_t1", "name": "london_t1"}, "location": {"geo_latitude": 51.548083471965725, "geo_longitude": -0.4738164885896168, "geo_address_text": "York Road, Uxbridge", "geo_json": {"postcode": "UB8 1QN", "formatted_address_text": "York Road, Uxbridge"}, "location_code": "job_loc_1006"}, "planning_status": "U", "requested_duration_minutes": 45, "scheduled_duration_minutes": 45, "requested_start_datetime": "2021-04-29T00:00:00", "scheduled_start_datetime": "2021-04-29T00:00:00", "requested_primary_worker": {"code": "Alexia", "team": {"code": "london_t1", "name": "london_t1"}}, "scheduled_primary_worker": {"code": "Alexia", "team": {"code": "london_t1", "name": "london_t1"}}, "auto_planning": true, "team_code": "london_t1"}

@@ -1,0 +1,4 @@
+include setup.py README.md MANIFEST.in LICENSE AUTHORS
+recursive-include ./ requirements*.txt
+graft src/dispatch
+global-exclude *~

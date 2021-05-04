@@ -127,3 +127,60 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+
+
+### VisualStudioCode Patch ###
+# Ignore all local history of files
+.history
+
+### Vuejs ###
+# Recommended template: Node.gitignore
+
+assets.json
+node_modules*
+node_modules/
+npm-debug.log*
+release
+selenium-debug.log
+yarn-debug.log*
+yarn-error.log*
+yarn.lock
+
+
+# End of https://www.gitignore.io/api/macos,visualstudiocode,python
+
+# Custom rules (everything added below won't be overriden by 'Generate .gitignore File' if you use 'Update' option)
+
+### Vim ###
+# Swap
+[._]*.s[a-v][a-z]
+[._]*.sw[a-p]
+[._]s[a-rt-v][a-z]
+[._]ss[a-gi-z]
+[._]sw[a-p]
+
+# Session
+Session.vim
+Sessionx.vim
+
+# Temporary
+.netrwhist
+*~
+# Persistent undo
+[._]*.un~
+
+# Ignore exuberant ctags, and other tags files
+tags
+
+# exclude docker env files
+docker/.env
+*.dump
+!data/dispatch-sample-data.dump
+default_model_path/checkpoint_30/*
+project/*
+
+.vscode/*
+*DS_Store*
+dev.env
+.env

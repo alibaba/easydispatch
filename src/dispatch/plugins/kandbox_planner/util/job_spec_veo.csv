@@ -1,0 +1,9 @@
+name;Quantity;priority;Duration;Location;electric;mechanic
+Access_Control Routine Maintenance;2;1;45;Random London;1;1
+HVAC Routine Maintenance;3;1;30;Random London;1;1
+Ventilation Unit Failure;3;3;45;Random London;1;2
+Replacement_Power Unit;1;2;90;Random London;2;1
+Replacement_Ventilation Unit;2;2;45;Random London;1;2
+Refrigeration Yearly Maintenance;2;2;60;Random London;1;2
+Thermal System Unit Failure;3;3;60;Random London;2;3
+New_Site_HVAC Survey and Assessment;3;2;150;Random London;1;2
