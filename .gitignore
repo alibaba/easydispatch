@@ -103,10 +103,9 @@ celerybeat.pid
 
 # Environments
 .env
+dev.env
 .venv
-env/
 venv/
-ENV/
 env.bak/
 venv.bak/
 
@@ -182,5 +181,3 @@ project/*
 
 .vscode/*
 *DS_Store*
-dev.env
-.env

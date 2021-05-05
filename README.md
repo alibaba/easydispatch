@@ -9,7 +9,7 @@ We are working on demo.
 
 
 ## Quick Start
-EasyDispatch relies on Postgres DB, Redis and Kafka. Those three components can be started by [docker-compose] (https://docs.docker.com/compose/install/) or provisioned seperately. You also should have [npm and node](https://docs.npmjs.com/downloading-and-installing-node-js-and-npm) for frontend development.
+EasyDispatch relies on Postgres DB, Redis and Kafka. Those three components can be started by [docker](https://docs.docker.com/engine/install/ubuntu/) and [compose](https://docs.docker.com/compose/install/) or provisioned seperately. You also should have [npm and node](https://docs.npmjs.com/downloading-and-installing-node-js-and-npm) for frontend development.
 
 1. To run easydispatch locally, first install it by:
 ```bash
@@ -20,7 +20,7 @@ pip install -e .
 2. Then copy and modify env file from $easydisaptch/etc/dev_env_sample to $easydisaptch/dev.env  . Start the database, redis and kafka by docker composer.
 
 ```bash
-docker-compose -f kafka-redis-postgres-compose.yml -p dispatch up
+docker-compose -f kafka-redis-postgres-compose.yml -p easy up
 ```
 
 3. Open another terminal, populate some sample data and run the frontend:

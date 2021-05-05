@@ -17,7 +17,7 @@ DISPATCH_JWT_SECRET=
 DISPATCH_JWT_EXP=8640000000
 
 # Used by postgres docker
-POSTGRES_DB=dispatch
+POSTGRES_DB=easydb
 POSTGRES_PASSWORD=dispatch
 POSTGRES_USER=dispatch
 
