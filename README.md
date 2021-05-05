@@ -35,6 +35,13 @@ python -m dispatch.cli server start --port 8000 dispatch.main:app
 ![planner_ui](doc/tutorial/planner_gantt_20210504215543.jpg)
 
 
+
+## Usage
+
+This script can clear off all existing workers and jobs for testing purpose:
+$easydispatch/tests/kandbox_clear_data.py 
+
+
 ### OS and Environements
 We tested it on Ubuntu 20.04 and MacOS, Python 3.7 / 3.8
 

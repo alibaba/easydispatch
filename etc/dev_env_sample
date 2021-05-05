@@ -2,7 +2,7 @@
 # Database
 # NOTE: Ensure that DATABASE_CREDENTIALS match the values passed to POSTGRES_USER and POSTGRES_PASSWORD
 DATABASE_CREDENTIALS=dispatch:dispatch
-DATABASE_HOSTNAME=postgres
+DATABASE_HOSTNAME=localhost
 DATABASE_NAME=easydb
 DATABASE_PORT=5432
 
