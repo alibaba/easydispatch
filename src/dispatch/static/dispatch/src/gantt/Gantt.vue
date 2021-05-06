@@ -21,12 +21,7 @@
 
     <v-spacer />
     <v-flex class="mb-0 pa-0 d-flex justify-end" lg1 sm4 xs6>
-      <v-switch
-        v-model="chartDraggable"
-        class="mx-2"
-        label="Drag"
-        disabled
-      ></v-switch>
+      <v-switch v-model="chartDraggable" class="mx-2" label="Drag"></v-switch>
     </v-flex>
     <v-flex class="mb-0 pa-0 d-flex justify-end" lg1 sm4 xs6>
       <v-switch
@@ -107,9 +102,7 @@
 
               <template v-slot:item.data-table-actions="{ item }">
                 <v-btn @click="showActionWithRecommendation(item)">
-                  <v-icon small class="mr-2">
-                    mdi-pencil
-                  </v-icon>
+                  <v-icon small class="mr-2"> mdi-pencil </v-icon>
                   Plan
                 </v-btn>
               </template>
@@ -186,7 +179,7 @@ export default {
     //MapDirect,
     JobsTimelineChart,
     DialogMapRoute,
-    DialogActionWithRecommendation
+    DialogActionWithRecommendation,
   },
 
   data() {
@@ -204,54 +197,59 @@ export default {
         {
           text: "Job Code",
           value: "job_code",
-          filter: value => {
+          filter: (value) => {
             if (!this.job_code_filter) return true;
             if (!value) return false;
             return value
               .toLowerCase()
               .includes(this.job_code_filter.toLowerCase());
-          }
+          },
         },
         {
           text: "Type",
           value: "job_type",
           width: "20",
-          filter: value => {
+          filter: (value) => {
             if (!this.job_type_filter) return true;
             return value
               .toLowerCase()
               .startsWith(this.job_type_filter.toLowerCase());
             //return value == this.status_filter
-          }
+          },
         },
         {
           text: "Changed",
           value: "changed_flag",
           width: "20",
-          filter: value => {
+          filter: (value) => {
             if (!this.changed_flag_filter) return true;
             return value == this.changed_flag_filter;
-          }
+          },
         },
 
         {
           text: "Requested Worker",
           value: "requested_primary_worker_id",
-          width: "15"
+          width: "15",
         },
         { text: "Requested Start", value: "requested_start_datetime" },
         {
           text: "Requested Minutes",
           value: "requested_duration_minutes",
-          width: "12"
+          width: "12",
         },
         {
           text: "Scheduled Worker",
           value: "scheduled_worker_codes",
-          width: "15"
+          width: "15",
         },
         { text: "Scheduled Start", value: "scheduled_start_datetime" },
-        { text: "", value: "data-table-actions", sortable: false, align: "end" }
+        {
+          text: "",
+          value: "data-table-actions",
+          sortable: false,
+          align: "end",
+        },
       ],
       q: null,
       tab: null,
@@ -262,8 +260,8 @@ export default {
       forceReloadFlag: false,
       lineChartData___: {
         expectedData: [100, 120, 161, 134, 105, 160, 165],
-        actualData: [120, 82, 91, 154, 162, 140, 145]
-      }
+        actualData: [120, 82, 91, 154, 162, 140, 145],
+      },
     };
   },
 
@@ -288,7 +286,7 @@ export default {
           this.chartClickBehaviour = "show_job";
         }
       }
-    }
+    },
     /*
     update(data) {
       //this.global_loaded_data = data
@@ -326,12 +324,12 @@ export default {
 
     forceReloadFlag: function(newValue) {
       this.$store.commit("gantt/SET_PLANNER_FILTERS", {
-        forceReloadFlag: newValue
+        forceReloadFlag: newValue,
       });
     },
     plannerHealthCheckResultShowFlag: function(newValue) {
       this.$store.commit("gantt/SET_PLANNER_SCORE_SHOW_FLAG", !newValue);
-    }
+    },
     /*
     userInfo: function() {
       if (this.userInfo.default_team_id) {
@@ -364,10 +362,10 @@ export default {
       "chartDraggable",
       "chartClickShowMapFlag",
       "plannerHealthCheckResultShowFlag",
-      "plannerScoresShowFlag"
+      "plannerScoresShowFlag",
       //"plannerFilters.forceReloadFlag"
       //"plannerFilters"
-    ])
-  }
+    ]),
+  },
 };
 </script>

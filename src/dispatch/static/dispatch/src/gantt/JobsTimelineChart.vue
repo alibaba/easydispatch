@@ -63,7 +63,7 @@ var job_types = {
   // NN: { name: "Night Service", color: "#ffff00", zlevel: 10 },
   // NA: { name: "Need Appointment", color: "#e0bc78", zlevel: 10 },
   // CFLT: { name: "Conflicted", color: "#ff0000", zlevel: 100 }, // #bd6d6c
-  NEW: { name: "New-Not saved", color: "#dc77dc", zlevel: 200 } // #bd6d6c
+  NEW: { name: "New-Not saved", color: "#dc77dc", zlevel: 200 }, // #bd6d6c
   //'nan': { name: 'Unknown', color: '#D2A8A8' },
 };
 var dropJobStyleDict = {
@@ -71,20 +71,20 @@ var dropJobStyleDict = {
     lineWidth: 2,
     fill: "rgba(0,255,0,0.1)",
     stroke: "rgba(0,255,0,0.8)",
-    lineDash: [6, 3]
+    lineDash: [6, 3],
   },
   Warning: {
     lineWidth: 2,
     fill: "rgba(255, 193, 7, 0.3)",
     stroke: "rgba(255, 193, 7, 0.9)",
-    lineDash: [6, 3]
+    lineDash: [6, 3],
   },
   Error: {
     lineWidth: 2,
     fill: "rgba(255,0,0,0.5)",
     stroke: "rgba(255,0,0,1)",
-    lineDash: [6, 3]
-  }
+    lineDash: [6, 3],
+  },
 };
 /*
  */
@@ -105,8 +105,8 @@ function getNodeItemStyle(jobType, conflict_level) {
       color: node_color,
       borderWidth: 1,
       borderColor: node_color,
-      opacity: 0.6
-    }
+      opacity: 0.6,
+    },
   };
 
   if (conflict_level > 0) {
@@ -116,8 +116,8 @@ function getNodeItemStyle(jobType, conflict_level) {
         borderWidth: 1,
         borderColor: job_types["CFLT"]["color"],
         opacity: 0.6,
-        borderType: "solid"
-      }
+        borderType: "solid",
+      },
     };
   }
 
@@ -159,11 +159,11 @@ function renderWorker(params, api) {
           x: 0,
           y: -23,
           width: 90,
-          height: 20
+          height: 20,
         },
         style: {
-          fill: selectedFill
-        }
+          fill: selectedFill,
+        },
       },
       {
         type: "text",
@@ -173,10 +173,10 @@ function renderWorker(params, api) {
           text: api.value(POS_WORKER_INDEX_name),
           textVerticalAlign: "bottom",
           textAlign: "center",
-          textFill: "#fff"
-        }
-      }
-    ]
+          textFill: "#fff",
+        },
+      },
+    ],
   };
 }
 
@@ -199,13 +199,13 @@ function renderWorkerSplitLine(params, api) {
           x1: params.coordSys.x,
           y1: y,
           x2: params.coordSys.x + params.coordSys.width,
-          y2: y
+          y2: y,
         },
 
         style: {
           opacity: 0.2,
-          stroke: "#008000"
-        }
+          stroke: "#008000",
+        },
       },
       {
         type: "rect",
@@ -213,7 +213,7 @@ function renderWorkerSplitLine(params, api) {
           x: params.coordSys.x + 100,
           y: y,
           width: 0,
-          height: 10
+          height: 10,
         },
         style: {
           normal: {
@@ -221,11 +221,11 @@ function renderWorkerSplitLine(params, api) {
             borderWidth: 1,
             borderColor: "rgba(53, 54, 38, 0.3)",
             opacity: 0.6,
-            borderType: "dashed"
-          }
-        }
-      }
-    ]
+            borderType: "dashed",
+          },
+        },
+      },
+    ],
   };
 }
 
@@ -260,13 +260,13 @@ function renderWorkingTime(params, api) {
       x: start[0],
       y: start[1] - worker_timeline_height * 0.5 - 1, //- 1 to overwrite the normal dashed splitline
       width: end[0] - start[0],
-      height: height
+      height: height,
     },
     {
       x: params.coordSys.x,
       y: params.coordSys.y,
       width: params.coordSys.width,
-      height: params.coordSys.height
+      height: params.coordSys.height,
     }
   );
   var workingSlotShapeGroup = {
@@ -275,9 +275,9 @@ function renderWorkingTime(params, api) {
       {
         type: "rect",
         shape: rectShape,
-        style: new_style
-      }
-    ]
+        style: new_style,
+      },
+    ],
   };
 
   if (jobStartOverTimeMS < jobStartTimeMS) {
@@ -287,19 +287,19 @@ function renderWorkingTime(params, api) {
         x: overtimeStartCoordinate[0],
         y: start[1] - worker_timeline_height * 0.5 - 1, //- 1 to overwrite the normal dashed splitline
         width: start[0] - overtimeStartCoordinate[0],
-        height: height
+        height: height,
       },
       {
         x: params.coordSys.x,
         y: params.coordSys.y,
         width: params.coordSys.width,
-        height: params.coordSys.height
+        height: params.coordSys.height,
       }
     );
     workingSlotShapeGroup.children.push({
       type: "rect",
       shape: startOvertimeShape,
-      style: overtime_style
+      style: overtime_style,
     });
   }
   if (jobEndOverTimeMS > jobEndTimeMS) {
@@ -309,19 +309,19 @@ function renderWorkingTime(params, api) {
         x: end[0],
         y: start[1] - worker_timeline_height * 0.5 - 1, //- 1 to overwrite the normal dashed splitline
         width: overtimeEndCoordinate[0] - end[0],
-        height: height
+        height: height,
       },
       {
         x: params.coordSys.x,
         y: params.coordSys.y,
         width: params.coordSys.width,
-        height: params.coordSys.height
+        height: params.coordSys.height,
       }
     );
     workingSlotShapeGroup.children.push({
       type: "rect",
       shape: endOvertimeShape,
-      style: overtime_style
+      style: overtime_style,
     });
   }
 
@@ -346,7 +346,7 @@ function date_formatter_hhmm(val) {
 
   var texts = [
     lpad(vdate.getHours(), 2),
-    lpad(vdate.getMinutes(), 2)
+    lpad(vdate.getMinutes(), 2),
     // parseInt(intMinutes) //vdate.getHours() * 60 + vdate.getMinutes()
   ];
   return texts.join(":");
@@ -391,11 +391,11 @@ export default {
   props: {
     className: {
       type: String,
-      default: "chart"
+      default: "chart",
     },
     width: {
       type: String,
-      default: "100%"
+      default: "100%",
     } /*
     height: {
       type: String,
@@ -403,14 +403,14 @@ export default {
     },*/,
     autoResize: {
       type: Boolean,
-      default: true
-    }
+      default: true,
+    },
   },
   data() {
     return {
       chart: null,
       //chartHeight: 200,
-      chartDivHeight: "200px"
+      chartDivHeight: "200px",
       //dataStartTime:null
     };
   },
@@ -427,8 +427,8 @@ export default {
       "plannerFilters",
       "planned_jobs_data_last_upate_date_string",
       "chartDraggable",
-      "chartClickShowMapFlag"
-    ])
+      "chartClickShowMapFlag",
+    ]),
   },
 
   watch: {
@@ -469,7 +469,7 @@ export default {
           this.global_job_dict,
           this.plannerFilters
         );
-      }
+      },
       // immediate: true,
     },
 
@@ -486,7 +486,7 @@ export default {
       //return   , oldValue
       //
       this.on_success_single_job_drop_check(newValue);
-    }
+    },
   },
   mounted() {
     this.$nextTick(() => {
@@ -504,7 +504,7 @@ export default {
     ...mapActions("gantt", [
       "showDialogMapRoute",
       "doSingleJobDropCheck",
-      "showActionWithRecommendation"
+      "showActionWithRecommendation",
     ]),
     initChart() {
       // this.chart = echarts.init(this.$el, "macarons")
@@ -598,7 +598,7 @@ export default {
             dataStartDate.getTime() + day_timeslot[0] * 60000,
             dataStartDate.getTime() + day_timeslot[1] * 60000,
             day_timeslot[2] * 60000,
-            day_timeslot[3] * 60000
+            day_timeslot[3] * 60000,
           ]);
           //console.log(currentDate, weekDayIndex)
           currentDate.setDate(currentDate.getDate() + 1); // 1 2020-10-20 18:57:26, now the timeslot already contained 1440*day_i
@@ -619,7 +619,7 @@ export default {
       loaded_data["all_jobs_in_env"].forEach(function(job, index) {
         _that.global_job_dict[job.job_code] = {
           data_latlng: [job.geo_latitude, job.geo_longitude],
-          job_index_in_all: index
+          job_index_in_all: index,
         };
 
         //var jobType = job[POS_JOB_INDEX_job_type]
@@ -653,7 +653,7 @@ export default {
             data_latlng: _that.global_job_dict[primaryJobCode].data_latlng,
             job_index_in_all:
               _that.global_job_dict[primaryJobCode].job_index_in_all,
-            job_index_in_planned: index
+            job_index_in_planned: index,
           };
         } else {
           _that.global_job_dict[
@@ -680,7 +680,7 @@ export default {
       // https://echarts.apache.org/en/option.html#series-custom.dimensions
       this.global_loaded_data.jobs_dimensions[3] = {
         name: "job_code",
-        type: "ordinal"
+        type: "ordinal",
       };
 
       var local_option = {
@@ -696,19 +696,22 @@ export default {
 
             switch (params.seriesId) {
               case "jobsSeries":
+                let local_start = new Date(
+                  params.value(POS_JOB_INDEX_start_datetime)
+                ).getTime();
+                let local_end = new Date(
+                  params.value(POS_JOB_INDEX_end_datetime)
+                ).getTime();
+
                 jobInfo =
                   params.marker +
                   params.value[POS_JOB_INDEX_job_code] +
                   "( " +
                   params.value[POS_JOB_INDEX_worker_code] +
                   ", time: " +
-                  date_formatter_hhmm(
-                    params.value[POS_JOB_INDEX_start_datetime]
-                  ) +
+                  date_formatter_hhmm(local_start) +
                   "-" +
-                  date_formatter_hhmm(
-                    params.value[POS_JOB_INDEX_end_datetime]
-                  ) +
+                  date_formatter_hhmm(local_end) +
                   " , travel: " +
                   Math.ceil(
                     parseFloat(
@@ -721,7 +724,7 @@ export default {
                   '<div contenteditable="true">',
                   // '<button onclick="console.log(\'click\');">click me</button>',
                   jobInfo,
-                  "</div>"
+                  "</div>",
                 ].join(" ");
 
                 return tooltip_str;
@@ -737,7 +740,7 @@ export default {
                 tooltip_str = [
                   '<div contenteditable="true">',
                   jobInfo,
-                  "</div>"
+                  "</div>",
                 ].join(" ");
                 return tooltip_str;
               //break
@@ -759,7 +762,7 @@ export default {
                 return null;
             }
           },
-          extraCssText: "width:500px; white-space:pre-wrap"
+          extraCssText: "width:500px; white-space:pre-wrap",
         },
         grid: {
           height: chartHeight + 10 + "px",
@@ -770,7 +773,7 @@ export default {
           left: 100,
           right: 20,
           backgroundColor: "#fff",
-          borderWidth: 0
+          borderWidth: 0,
         },
 
         dataZoom: [
@@ -789,10 +792,10 @@ export default {
               shadowBlur: 6,
               shadowOffsetX: 1,
               shadowOffsetY: 2,
-              shadowColor: "#aaa"
+              shadowColor: "#aaa",
             },
-            labelFormatter: ""
-          }
+            labelFormatter: "",
+          },
           /*{
                        type: 'inside',
                        filterMode: 'weakFilter',
@@ -807,8 +810,8 @@ export default {
           axisLine: { show: false },
           scale: true,
           axisLabel: {
-            formatter: date_formatter_mmdd_hhmm
-          }
+            formatter: date_formatter_mmdd_hhmm,
+          },
         },
         yAxis: {
           // https://github.com/apache/incubator-echarts/issues/2943
@@ -823,9 +826,9 @@ export default {
             interval: 0,
             lineStyle: {
               color: ["rgba(53, 54, 38, 0.3)"],
-              type: "dashed"
-            }
-          }
+              type: "dashed",
+            },
+          },
 
           /*
                 type: 'category',
@@ -844,14 +847,14 @@ export default {
             dimensions: this.global_loaded_data.jobs_dimensions,
             itemStyle: {
               normal: {
-                opacity: 0.8
-              }
+                opacity: 0.8,
+              },
             },
             encode: {
               x: [1, 2],
-              y: 0
+              y: 0,
             },
-            data: this.global_loaded_data.planned_jobs_data //timeline_data
+            data: this.global_loaded_data.planned_jobs_data, //timeline_data
           },
           {
             //worker
@@ -861,9 +864,9 @@ export default {
             //dimensions: this.global_loaded_data.worker_dimensions,
             encode: {
               x: -1, // Then this series will not controlled by x.
-              y: 0
+              y: 0,
             },
-            data: this.global_loaded_data.workers_data
+            data: this.global_loaded_data.workers_data,
           },
           {
             //worker
@@ -873,14 +876,14 @@ export default {
             //dimensions: global_loaded_data.worker_dimensions,
             encode: {
               x: -1, // Then this series will not controlled by x.
-              y: 0
+              y: 0,
             },
             data: echarts.util.map(
               this.global_loaded_data.workers_data,
               function(item, index) {
                 return [index].concat(item);
               }
-            )
+            ),
           },
           {
             //working_timeslot_data
@@ -892,16 +895,16 @@ export default {
                 opacity: 0.6,
                 color: "#72b362",
                 borderWidth: 1,
-                borderType: "solid"
-              }
+                borderType: "solid",
+              },
             },
             encode: {
               x: [1, 2],
-              y: 0
+              y: 0,
             },
-            data: working_timeslot_data
-          }
-        ]
+            data: working_timeslot_data,
+          },
+        ],
       };
 
       this.chart.setOption(local_option, true);
@@ -922,8 +925,12 @@ export default {
       }
 
       var workerIndex = api.value(POS_JOB_INDEX_worker_index);
-      var jobStartTimeMS = api.value(POS_JOB_INDEX_start_datetime);
-      var jobEndTimeMS = api.value(POS_JOB_INDEX_end_datetime);
+      var jobStartTimeMS = new Date(
+        api.value(POS_JOB_INDEX_start_datetime)
+      ).getTime(); //'2021-05-06T08:00:00'
+      var jobEndTimeMS = new Date(
+        api.value(POS_JOB_INDEX_end_datetime)
+      ).getTime();
       var travelTimeMS =
         api.value(POS_JOB_INDEX_travel_minutes_before) * 1000 * 60;
 
@@ -946,7 +953,7 @@ export default {
 
       var travelTimeStartXY = api.coord([
         jobStartTimeMS - travelTimeMS,
-        workerIndex
+        workerIndex,
       ]);
       var travelTime = start[0] - travelTimeStartXY[0];
 
@@ -977,20 +984,20 @@ export default {
           x: start[0],
           y: start[1] - start_y + height * conflict_level,
           width: end[0] - start[0],
-          height: height
+          height: height,
         },
         {
           x: params.coordSys.x,
           y: params.coordSys.y,
           width: params.coordSys.width,
-          height: params.coordSys.height
+          height: params.coordSys.height,
         }
       );
 
       var childRectShape = {
         type: "rect",
         shape: rectShape,
-        style: new_style
+        style: new_style,
       };
 
       var newJobWhiteRect = null;
@@ -1012,11 +1019,11 @@ export default {
               x: rectShape.x + rectShape.width / 4,
               y: rectShape.y + rectShape.height / 4,
               width: rectShape.width / 2,
-              height: rectShape.height / 2
+              height: rectShape.height / 2,
             },
             style: {
-              fill: job_types["NEW"]["color"] //'#FFFFFF'
-            }
+              fill: job_types["NEW"]["color"], //'#FFFFFF'
+            },
           };
         } else {
           newJobWhiteRect = {
@@ -1025,11 +1032,11 @@ export default {
               x: rectShape.x + rectShape.width / 4,
               y: rectShape.y + rectShape.height / 4,
               width: rectShape.width / 2,
-              height: rectShape.height / 2
+              height: rectShape.height / 2,
             },
             style: {
-              fill: "rgba(255, 255, 255, 0)"
-            }
+              fill: "rgba(255, 255, 255, 0)",
+            },
           };
         }
       }
@@ -1044,8 +1051,8 @@ export default {
             fontSize: 8,
             textVerticalAlign: "bottom",
             textAlign: "left",
-            textFill: "rgba(255, 255, 255, 0.1)"
-          }
+            textFill: "rgba(255, 255, 255, 0.1)",
+          },
         };
       }
 
@@ -1065,9 +1072,9 @@ export default {
               shape: {
                 cx: params.coordSys.x,
                 cy: start[1] - start_y + height * (conflict_level + 0.5),
-                r: height / 6
+                r: height / 6,
               },
-              style: new_style
+              style: new_style,
             },
             {
               type: "line",
@@ -1075,14 +1082,14 @@ export default {
                 x1: params.coordSys.x,
                 y1: start[1] - start_y + height * (conflict_level + 0.5),
                 x2: line_end,
-                y2: start[1] - start_y + height * (conflict_level + 0.5)
+                y2: start[1] - start_y + height * (conflict_level + 0.5),
               },
-              style: new_style
+              style: new_style,
             },
             childRectShape,
             newJobWhiteRect,
-            jobCodeText
-          ]
+            jobCodeText,
+          ],
         };
       } else {
         //Draws the travel time line and circle to the front of job box
@@ -1095,9 +1102,9 @@ export default {
               shape: {
                 cx: start[0] - travelTime,
                 cy: start[1] - start_y + height * (conflict_level + 0.5),
-                r: height / 6
+                r: height / 6,
               },
-              style: new_style
+              style: new_style,
             },
             {
               type: "line",
@@ -1105,14 +1112,14 @@ export default {
                 x1: start[0] - travelTime,
                 y1: start[1] - start_y + height * (conflict_level + 0.5),
                 x2: start[0],
-                y2: start[1] - start_y + height * (conflict_level + 0.5)
+                y2: start[1] - start_y + height * (conflict_level + 0.5),
               },
-              style: new_style
+              style: new_style,
             },
             childRectShape,
             newJobWhiteRect,
-            jobCodeText
-          ]
+            jobCodeText,
+          ],
         };
       }
 
@@ -1143,7 +1150,7 @@ export default {
               params.value[POS_JOB_INDEX_job_code]
             ) {
               this.$store.commit("gantt/SET_SELECTED", {
-                job: this.global_loaded_data.all_jobs_in_env[i]
+                job: this.global_loaded_data.all_jobs_in_env[i],
               });
               break;
             }
@@ -1157,7 +1164,7 @@ export default {
               ]["data_latlng"],
               this.global_job_dict[params.value[POS_JOB_INDEX_job_code]][
                 "data_latlng"
-              ]
+              ],
             ]
           );
         } else {
@@ -1169,11 +1176,11 @@ export default {
           this.showDialogMapRoute([
             [
               params.value[POS_JOB_INDEX_prev_geo_latitude],
-              params.value[POS_JOB_INDEX_prev_geo_longitude]
+              params.value[POS_JOB_INDEX_prev_geo_longitude],
             ],
             this.global_job_dict[params.value[POS_JOB_INDEX_job_code]][
               "data_latlng"
-            ]
+            ],
           ]);
         }
       } else if (params.seriesId == "workersSeries") {
@@ -1198,8 +1205,8 @@ export default {
         this.chart.setOption({
           series: {
             id: "workersSeries",
-            data: this.global_loaded_data.workers_data
-          }
+            data: this.global_loaded_data.workers_data,
+          },
         });
       } else {
         console.log("onChartClick_ShowMap: to dod nothing: ");
@@ -1242,16 +1249,16 @@ export default {
 
       var pointArrival = myChart.convertToPixel("grid", [
         this.singleJobDropCheckOptions.timeArrival,
-        this.singleJobDropCheckOptions.categoryIndex
+        this.singleJobDropCheckOptions.categoryIndex,
       ]);
       var pointDeparture = myChart.convertToPixel("grid", [
         this.singleJobDropCheckOptions.timeDeparture,
-        this.singleJobDropCheckOptions.categoryIndex
+        this.singleJobDropCheckOptions.categoryIndex,
       ]);
 
       var pointArrivalWithTravelTime = myChart.convertToPixel("grid", [
         this.singleJobDropCheckOptions.timeArrival - travelTimeMS,
-        this.singleJobDropCheckOptions.categoryIndex
+        this.singleJobDropCheckOptions.categoryIndex,
       ]);
       var travelTime = pointArrival[0] - pointArrivalWithTravelTime[0];
 
@@ -1275,10 +1282,10 @@ export default {
           x: pointArrival[0],
           y: pointArrival[1] - barHeight + barHeight / 2,
           width: barLength,
-          height: barHeight
+          height: barHeight,
         },
         style: style,
-        z: z
+        z: z,
       });
       _dropShadow.add(jobRect);
 
@@ -1288,10 +1295,10 @@ export default {
         shape: {
           cx: pointArrival[0] - travelTime,
           cy: travelLineStartY,
-          r: barHeight / 3
+          r: barHeight / 3,
         },
         style: style,
-        z: z
+        z: z,
       });
       _dropShadow.add(jobStartCircle);
 
@@ -1300,10 +1307,10 @@ export default {
           x1: pointArrival[0] - travelTime,
           y1: travelLineStartY,
           x2: pointArrival[0],
-          y2: travelLineStartY
+          y2: travelLineStartY,
         },
         style: style,
-        z: z
+        z: z,
       });
       _dropShadow.add(jobStartLine);
 
@@ -1402,21 +1409,29 @@ export default {
           return;
         }
         _that_vm.$store.commit("gantt/SET_SELECTED", {
-          job: selectedJob
+          job: selectedJob,
         });
+
+        let local_start = new Date(
+          param.value(POS_JOB_INDEX_start_datetime)
+        ).getTime();
+        let local_end = new Date(
+          param.value(POS_JOB_INDEX_end_datetime)
+        ).getTime();
+
         // Drag start
         _draggingRecord = {
           dataIndex: param.dataIndex,
           categoryIndex: param.value[POS_JOB_INDEX_worker_index],
-          timeArrival: param.value[POS_JOB_INDEX_start_datetime],
-          timeDeparture: param.value[POS_JOB_INDEX_end_datetime]
+          timeArrival: local_start,
+          timeDeparture: local_end,
         };
         var style = { fill: "rgba(0,0,0,0.4)" };
 
         _draggingEl = addOrUpdateBar(_draggingEl, _draggingRecord, style, 100);
         _draggingCursorOffset = [
           _draggingEl.position[0] - param.event.offsetX,
-          _draggingEl.position[1] - param.event.offsetY
+          _draggingEl.position[1] - param.event.offsetY,
         ];
         _draggingTimeLength =
           _draggingRecord.timeDeparture - _draggingRecord.timeArrival;
@@ -1434,7 +1449,7 @@ export default {
         // Move _draggingEl.
         _draggingEl.attr("position", [
           _draggingCursorOffset[0] + cursorX,
-          _draggingCursorOffset[1] + cursorY
+          _draggingCursorOffset[1] + cursorY,
         ]);
 
         _that_vm.prepareDrop();
@@ -1471,11 +1486,11 @@ export default {
       function addOrUpdateBar(el, itemData, style, z) {
         var pointArrival = myChart.convertToPixel("grid", [
           itemData.timeArrival,
-          itemData.categoryIndex
+          itemData.categoryIndex,
         ]);
         var pointDeparture = myChart.convertToPixel("grid", [
           itemData.timeDeparture,
-          itemData.categoryIndex
+          itemData.categoryIndex,
         ]);
 
         var barLength = pointDeparture[0] - pointArrival[0];
@@ -1489,7 +1504,7 @@ export default {
           el = new echarts.graphic.Rect({
             shape: { x: 0, y: 0, width: 0, height: 0 },
             style: style,
-            z: z
+            z: z,
           });
           myChart.getZr().add(el);
         }
@@ -1497,8 +1512,8 @@ export default {
           shape: { x: 0, y: 0, width: barLength, height: barHeight },
           position: [
             pointArrival[0],
-            pointArrival[1] - barHeight + barHeight / 2
-          ]
+            pointArrival[1] - barHeight + barHeight / 2,
+          ],
         });
         return el;
       }
@@ -1587,7 +1602,7 @@ export default {
           jobCode:
             global_loaded_data.planned_jobs_data[_draggingRecord.dataIndex][
               POS_JOB_INDEX_job_code
-            ]
+            ],
         };
 
         this.addOrUpdateDroppingJob();
@@ -1606,8 +1621,14 @@ export default {
       // I simply drop it .
       movingItem[POS_JOB_INDEX_worker_index] =
         global_loaded_data.workers_data[_dropRecord.categoryIndex][0];
-      movingItem[POS_JOB_INDEX_start_datetime] = _dropRecord.timeArrival;
-      movingItem[POS_JOB_INDEX_end_datetime] = _dropRecord.timeDeparture;
+
+      // This might convert to a string with timezone, which is different from server-loaded data.
+      movingItem[POS_JOB_INDEX_start_datetime] = new Date(
+        _dropRecord.timeArrival
+      ).toISOString();
+      movingItem[POS_JOB_INDEX_end_datetime] = new Date(
+        _dropRecord.timeDeparture
+      ).toISOString();
       movingItem[POS_JOB_INDEX_changed_flag] = 1;
 
       // let global_job_dict = this.global_job_dict
@@ -1624,11 +1645,11 @@ export default {
       this.chart.setOption({
         series: {
           id: "jobsSeries",
-          data: global_loaded_data.planned_jobs_data
-        }
+          data: global_loaded_data.planned_jobs_data,
+        },
       });
       return true;
-    }
-  }
+    },
+  },
 };
 </script>

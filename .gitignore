@@ -181,3 +181,5 @@ project/*
 
 .vscode/*
 *DS_Store*
+src/dispatch/static/dispatch/.vscode/*
+src/dispatch/static/dispatch/.vscode/settings.json

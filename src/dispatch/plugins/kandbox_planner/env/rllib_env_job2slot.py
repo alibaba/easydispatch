@@ -194,7 +194,8 @@ class KPlannerJob2SlotEnv(KandboxEnvPlugin):
             "minutes_per_day": MINUTES_PER_DAY,
             "max_nbr_of_jobs_per_day_worker": MAX_NBR_OF_JOBS_PER_DAY_WORKER,
             "travel_speed_km_hour": 40,
-            "scoring_factor_standard_travel_minutes": SCORING_FACTOR_STANDARD_TRAVEL_MINUTES,  # in minutes, 100 - travel / 1000 as the score
+            # in minutes, 100 - travel / 1000 as the score
+            "scoring_factor_standard_travel_minutes": SCORING_FACTOR_STANDARD_TRAVEL_MINUTES,
             "flex_form_data": {
                 "holiday_days": "20210325",
                 "weekly_rest_day": "0",
@@ -787,7 +788,6 @@ class KPlannerJob2SlotEnv(KandboxEnvPlugin):
         # with lock:
         self.kafka_server.consume_env_messages()
 
-
     def env_encode_single_worker(self, worker=None):
         if worker["code"] == "MY|D|3|CT07":
             log.debug("env_encode_single_worker debug MY|D|3|CT07")
@@ -860,7 +860,8 @@ class KPlannerJob2SlotEnv(KandboxEnvPlugin):
             # location=loc,
             #
             # TODO, @duan, only 1 slot per day? 2020-11-17 15:36:00
-            weekly_working_slots=_weekly_working_slots,  # 6 times  for _ in range(len(k_worker['result']))
+            # 6 times  for _ in range(len(k_worker['result']))
+            weekly_working_slots=_weekly_working_slots,
             weekly_start_gps=weekly_start_gps,
             weekly_end_gps=weekly_end_gps,
             linear_working_slots=[],  # 6 times  for _ in range(len(k_worker['result']))
@@ -1305,8 +1306,8 @@ class KPlannerJob2SlotEnv(KandboxEnvPlugin):
 
         jobs_dimensions = [
             "scheduled_worker_index",
-            "scheduled_start_datetime_js",
-            "scheduled_end_datetime_js",  # datetime in javascript  MilliSecond.
+            "scheduled_start_datetime",  # _js
+            "scheduled_end_datetime",  # _js datetime in javascript  MilliSecond.
             "job_code",
             "job_type",
             "scheduled_travel_minutes_before",
@@ -1460,7 +1461,7 @@ class KPlannerJob2SlotEnv(KandboxEnvPlugin):
                 "scheduled_start_datetime_js": scheduled_start_datetime_js,  # scheduled_start_datetime.isoformat(),
                 "scheduled_end_datetime_js": scheduled_end_datetime_js,  # scheduled_end_datetime.isoformat(),
                 "scheduled_start_datetime": scheduled_start_datetime.isoformat(),
-                # "scheduled_end_datetime":  scheduled_end_datetime.isoformat(),
+                "scheduled_end_datetime": scheduled_end_datetime.isoformat(),
                 # "scheduled_start_minutes": j["scheduled_start_minutes"],
                 "scheduled_duration_minutes": j["scheduled_duration_minutes"],
                 "planning_status": j["planning_status"],
@@ -2889,7 +2890,7 @@ class KPlannerJob2SlotEnv(KandboxEnvPlugin):
         self.trial_step_count += 1
         # action [1, 0, 0 ]. One hot coding, 1 means this worker take the job.
         new_act = action.copy()
-        max_i = np.argmax(new_act[0 : len(self.internal_obs_slot_list)])  #
+        max_i = np.argmax(new_act[0: len(self.internal_obs_slot_list)])  #
         if max_i >= len(self.internal_obs_slot_list):
             log.error("Wrong")
 
@@ -3610,7 +3611,7 @@ class KPlannerJob2SlotEnv(KandboxEnvPlugin):
                     * self.config["NBR_FEATURE_PER_TECH"]
                     * self.config["nbr_of_days_planning_window"]
                     + day_i
-                    * self.config["NBR_FEATURE_PER_TECH"] : current_job_worker_index
+                    * self.config["NBR_FEATURE_PER_TECH"]: current_job_worker_index
                     * self.config["NBR_FEATURE_PER_TECH"]
                     * self.config["nbr_of_days_planning_window"]
                     + (day_i + 1) * self.config["NBR_FEATURE_PER_TECH"]
@@ -4232,7 +4233,7 @@ f_start_longlat[0], f_start_longlat[1], f_end_longlat[0], f_end_longlat[1], f_av
             self.config["nbr_of_days_planning_window"],
         ]
 
-        all_worker_flags = c[0 : self.config["nbr_of_observed_workers"], action_day]
+        all_worker_flags = c[0: self.config["nbr_of_observed_workers"], action_day]
 
         for i in range(1, shared_count):
             all_worker_flags[worker_index] = 0
@@ -4451,7 +4452,7 @@ f_start_longlat[0], f_start_longlat[1], f_end_longlat[0], f_end_longlat[1], f_av
         """
         curr_job = self.jobs[self.current_job_i]
         new_act = action.copy()
-        max_i = np.argmax(new_act[0 : len(self.workers)])
+        max_i = np.argmax(new_act[0: len(self.workers)])
         action_worker_index = int(max_i / self.config["nbr_of_days_planning_window"])
         action_day_index = max_i % self.config["nbr_of_days_planning_window"]
         shared_count = int(new_act[-1])
@@ -4469,7 +4470,7 @@ f_start_longlat[0], f_start_longlat[1], f_end_longlat[0], f_end_longlat[1], f_av
         scheduled_secondary_worker_ids = []
         for shared_worker_seq in range(0, shared_count):
             new_act[max_i] = 0
-            max_i = np.argmax(new_act[0 : len(self.workers)])
+            max_i = np.argmax(new_act[0: len(self.workers)])
             sec_worker_index = int(max_i / self.config["nbr_of_days_planning_window"])
             time_period_lists.append(
                 self.workers[action_worker_index]["working_time_slots"][action_day_index]
