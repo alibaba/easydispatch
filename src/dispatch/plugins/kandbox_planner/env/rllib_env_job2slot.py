@@ -296,6 +296,9 @@ class KPlannerJob2SlotEnv(KandboxEnvPlugin):
             log.error("data_end_day is not supported from config!")
 
         self.kp_data_adapter.reload_data_from_db()
+        # I don't know why, self.kp_data_adapter loses this workers_dict_by_id after next call.
+        # 2021-05-06 21:34:01
+        self.workers_dict_by_id = self.kp_data_adapter.workers_dict_by_id
 
         # self._reset_data()
 
@@ -465,7 +468,7 @@ class KPlannerJob2SlotEnv(KandboxEnvPlugin):
         return "{}/env/planning_days".format(self.team_env_key)
 
     def get_env_replay_lock_redis_key(self) -> int:
-        return "{}/env/lock_to_apply_message".format(self.team_env_key)
+        return "lock_env/{}".format(self.team_env_key)
 
     def get_recommened_locked_slots_by_job_code_redis_key(self, job_code: str) -> str:
         return "{}/env_lock/by_job/{}".format(self.team_env_key, job_code)
@@ -752,7 +755,7 @@ class KPlannerJob2SlotEnv(KandboxEnvPlugin):
         if global_env_config is None:
             # This initialize the env dataset in redis for this envionrment.
             # all subsequent env replay_env should read from this .
-            log.info("Trying to get lock to applying messages")
+            log.info("Trying to get lock over the env key to applying messages")
             with self.redis_conn.lock(
                 self.get_env_replay_lock_redis_key(), timeout=60 * 10
             ) as lock:
@@ -1156,7 +1159,7 @@ class KPlannerJob2SlotEnv(KandboxEnvPlugin):
         primary_workers = []
         if not pd.isnull(job["scheduled_primary_worker_id"]):
             primary_workers.append(
-                self.kp_data_adapter.workers_dict_by_id[job["scheduled_primary_worker_id"]]["code"]
+                self.workers_dict_by_id[job["scheduled_primary_worker_id"]]["code"]
             )
 
         final_job = Job(

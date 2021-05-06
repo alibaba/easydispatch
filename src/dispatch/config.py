@@ -1,3 +1,4 @@
+from datetime import datetime
 import logging
 import os
 import base64
@@ -69,7 +70,7 @@ config = Config(".env")
 LOG_LEVEL = config("LOG_LEVEL", default=logging.WARNING)
 
 module_levels = {
-    "dispatch.main": logging.WARNING,
+    "dispatch.main": logging.DEBUG,
     "rllib_env_job2slot": logging.DEBUG,
 }
 
@@ -280,12 +281,9 @@ MAX_TRANSACTION_RETRY = 2
 PUBLISH_TO_PUBSUB = config("PUBLISH_TO_PUBSUB", default="no")
 
 
-#### Kandbox config
+# Kandbox config
 basedir = os.path.abspath(os.path.dirname(__file__))
 # print("kandbox_planner config basedir is :", basedir)
-
-
-from datetime import datetime
 
 
 # Print the value of

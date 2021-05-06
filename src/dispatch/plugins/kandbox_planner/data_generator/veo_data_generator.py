@@ -1,3 +1,18 @@
+from dispatch.config import DATA_START_DAY
+from dispatch.plugins.kandbox_planner.env.env_enums import JobPlanningStatus, JobType
+from dispatch.service.scheduled import update_planning_window
+from dispatch import config
+from dispatch.plugins.kandbox_planner.agent.kprl_agent_rllib_ppo import KandboxAgentRLLibPPO
+from dispatch.service_plugin.models import ServicePlugin
+from dispatch.service_plugin import service as service_plugin_service
+from dispatch.service.planner_service import get_active_planner, update_env_config
+from dispatch.plugins.kandbox_planner.planner_engine.opti1day.opti1day_planner import (
+    Opti1DayPlanner,
+)
+from dispatch.plugins.base import plugins
+from dispatch.job.scheduled import calc_historical_location_features_real_func
+from dispatch.plugins.kandbox_planner.data_adapter.kplanner_api_adapter import KPlannerAPIAdapter
+import dispatch.plugins.kandbox_planner.util.kandbox_date_util as date_util
 import json
 import os
 import random
@@ -11,28 +26,6 @@ import logging
 
 log = logging.getLogger(__name__)
 
-
-import dispatch.plugins.kandbox_planner.util.kandbox_date_util as date_util
-from dispatch.plugins.kandbox_planner.data_adapter.kplanner_api_adapter import KPlannerAPIAdapter
-
-from dispatch.job.scheduled import calc_historical_location_features_real_func
-
-from dispatch.plugins.base import plugins
-from dispatch.plugins.kandbox_planner.planner_engine.opti1day.opti1day_planner import (
-    Opti1DayPlanner,
-)
-from dispatch.service.planner_service import get_active_planner, update_env_config
-from dispatch.service_plugin import service as service_plugin_service
-from dispatch.service_plugin.models import ServicePlugin
-
-from dispatch.plugins.kandbox_planner.agent.kprl_agent_rllib_ppo import KandboxAgentRLLibPPO
-
-from dispatch import config
-
-from dispatch.service.scheduled import update_planning_window
-from dispatch.plugins.kandbox_planner.env.env_enums import JobPlanningStatus, JobType
-
-from dispatch.config import DATA_START_DAY
 
 KANDBOX_DATE_FORMAT = config.KANDBOX_DATE_FORMAT  # '%Y%m%d'
 # London sample data is acquired from here:
@@ -119,7 +112,7 @@ def get_skills(worker):
     return skills
 
 
-def generate_all_workers(kplanner_api=None):
+def generate_all_workers():
     # url = '{}/kpdata/workers/'.format(kplanner_service_url)
     worker_df = pd.read_csv(
         "{}/plugins/kandbox_planner/util/worker_spec_veo.csv".format(config.basedir),
@@ -163,11 +156,10 @@ def generate_all_workers(kplanner_api=None):
         }
 
         list_to_insert.append(myobj)
-    kplanner_api.insert_all_workers(list_to_insert)
     return list_to_insert
 
 
-def generate_and_save_one_day_orders(current_day, worker_list, kplanner_api=None):
+def generate_one_day_orders(current_day, worker_list):
 
     job_df = pd.read_csv(
         "{}/plugins/kandbox_planner/util/job_spec_veo.csv".format(config.basedir),
@@ -227,7 +219,7 @@ def generate_and_save_one_day_orders(current_day, worker_list, kplanner_api=None
                     current_day + timedelta(minutes=0), "%Y-%m-%dT%H:%M:%S"
                 ),
                 "requested_primary_worker": {
-                    "code": "Alexia", # worker_list[random.randint(0, 5)]["code"],
+                    "code": "Alexia",  # worker_list[random.randint(0, 5)]["code"],
                     "team": {
                         "code": "london_t1",
                         "name": "london_t1",
@@ -244,11 +236,7 @@ def generate_and_save_one_day_orders(current_day, worker_list, kplanner_api=None
             }
             list_to_insert.append(myobj)
 
-    kplanner_api.insert_all_orders(list_to_insert)
-
-
-from dispatch.service.scheduled import update_planning_window
-from dispatch.config import DATA_START_DAY
+    return list_to_insert
 
 
 def dispatch_jobs_batch_optimizer(opts):
@@ -258,7 +246,7 @@ def dispatch_jobs_batch_optimizer(opts):
     # GENERATOR_END_DATE = datetime.strptime(ee, KANDBOX_DATE_FORMAT)
 
     day_seq = (GENERATOR_START_DATE - datetime.strptime(DATA_START_DAY, "%Y%m%d")).days
-    window_start_minutes = day_seq * 1440 + 510  #  -1  #
+    window_start_minutes = day_seq * 1440 + 510  # -1  #
     update_planning_window(start_minutes=window_start_minutes, team_id=1)
     #TODO, remove
     opts["org_code"] = "0"
@@ -308,15 +296,17 @@ def generate_all(opts):
         password=opts["password"],
         team_code=opts["team_code"],
     )
-    worker_list = generate_all_workers(kplanner_api)
+    worker_list = generate_all_workers()
+    kplanner_api.insert_all_workers(worker_list)
 
     for day_i in range(999):
         current_day = GENERATOR_START_DATE + timedelta(days=day_i)
         if current_day >= GENERATOR_END_DATE:
             break
-        generate_and_save_one_day_orders(
-            current_day, worker_list=worker_list, kplanner_api=kplanner_api
+        order_list = generate_one_day_orders(
+            current_day, worker_list=worker_list
         )
+        kplanner_api.insert_all_orders(order_list)
         #
     # opts["dispatch_days"] = opts["dispatch_days"]
     # dispatch_jobs_batch_optimizer(opts)

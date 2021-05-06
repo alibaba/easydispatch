@@ -22,6 +22,10 @@ from dispatch.plugins.kandbox_planner.env.env_enums import (
 )
 
 
+class ResetPlanningWindowInput(DispatchBase):
+    team_code: str
+
+
 class GenericJobPredictActionInput(DispatchBase):
     team_id: int
     job_code: str

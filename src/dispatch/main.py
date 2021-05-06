@@ -181,7 +181,7 @@ async def background_env_sync_all(refresh_count: int, interval_seconds: int) -> 
 
         planners_dict_lock.release()
 
-        log.debug(f"Done for work - hello r_i = {r_i}")
+        log.info(f"Done for work - hello r_i = {r_i}, len env = {len(planners_dict_keys)}, list of env = {planners_dict_keys}")
     log.debug("background_env_sync_all is all done.")
 
 

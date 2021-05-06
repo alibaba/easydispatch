@@ -1,3 +1,6 @@
+import threading
+import redis
+from dispatch.plugins.kandbox_planner.env.env_enums import EnvRunModeType
 import json
 import logging
 from builtins import KeyError
@@ -45,16 +48,11 @@ planners_dict = CacheDict(cache_len=5)  # planners[(org_code,team_id,start_day)]
 # TODO org_code authentication.
 
 
-from dispatch.plugins.kandbox_planner.env.env_enums import EnvRunModeType
-
-import redis
-
 if REDIS_PASSWORD == "":
     redis_conn = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, password=None)
 else:
     redis_conn = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, password=REDIS_PASSWORD)
 
-import threading
 
 # import asyncio
 
@@ -245,6 +243,7 @@ def get_active_planner(
         nbr_of_days_planning_window = date_util.days_between_2_day_string(
             start_day=start_day, end_day=end_day
         )
+    team_id = int(team_id)
 
     with planners_dict_lock:
         # async with planners_dict_lock:
@@ -286,7 +285,7 @@ def get_default_active_planner(
 ):
     planner = get_active_planner(
         org_code=org_code,
-        team_id=team_id,
+        team_id=int(team_id),
         start_day=config.DEFAULT_START_DAY,
         nbr_of_days_planning_window=-1,
     )
@@ -310,3 +309,28 @@ def get_appt_code_list_from_redis() -> List:
         job_code = key.decode("utf-8").split(config.APPOINTMENT_ON_REDIS_KEY_PREFIX)[1]
         res_appt_list.append(job_code)
     return res_appt_list
+
+
+def reset_planning_window_for_team(org_code, team_id):
+
+    team_env_key = "env_{}_{}".format(org_code, team_id)
+    lock_key = "lock_env/env_{}_{}".format(org_code, team_id)
+
+    with redis_conn.lock(
+        lock_key, timeout=60 * 10
+    ) as lock:
+        for key in redis_conn.scan_iter(f"{team_env_key}/*"):
+            redis_conn.delete(key)
+
+    planner = get_active_planner(
+        org_code=org_code,
+        team_id=team_id,
+        start_day=config.DEFAULT_START_DAY,
+        nbr_of_days_planning_window=-1,
+        force_reload=True
+    )
+    rl_env = planner["planner_env"]
+    # rl_env.replay_env_to_redis()
+
+    result_info = {"status": "OK", "config": rl_env.config}
+    return result_info

@@ -58,7 +58,8 @@ class BasicAuthProviderPlugin(AuthenticationProviderPlugin):
         authorization: str = request.headers.get("Authorization")
         scheme, param = get_authorization_scheme_param(authorization)
         if not authorization or scheme.lower() != "bearer":
-            return
+            raise HTTPException(status_code=HTTP_401_UNAUTHORIZED,
+                                detail="no Authorization bearer found.")
 
         token = authorization.split()[1]
 

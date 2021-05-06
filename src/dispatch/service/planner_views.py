@@ -1,3 +1,12 @@
+import logging
+from dispatch.config import DATA_START_DAY
+from dispatch.plugins.kandbox_planner.env.env_enums import (
+    ActionType,
+    ActionScoringResultType,
+    AppointmentStatus,
+)
+from dispatch.plugins.kandbox_planner.env.env_models import ActionDict, ActionEvaluationScore
+import json
 from datetime import datetime, timedelta
 from typing import List
 import asyncio
@@ -9,48 +18,36 @@ from fastapi import APIRouter, Body, Depends, HTTPException, Query, BackgroundTa
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
-from dispatch import  config
+from dispatch import config
 from dispatch.auth.models import DispatchUser
 from dispatch.auth.service import get_current_user
+from dispatch.team import service as team_service
 from dispatch.database import get_db, search_filter_sort_paginate
 from dispatch.plugins.kandbox_planner.util.kandbox_date_util import get_current_day_string
 from dispatch.service.planner_service import (
     get_default_active_planner,
     get_appt_dict_from_redis,
-) 
-from dispatch.team.models import Team 
+    reset_planning_window_for_team
+)
+from dispatch.team.models import Team
 from dispatch.service.planner_models import (
     GenericJobPredictActionInput,
     GenericJobPredictActionOutput,
     GenericJobAction,
     GenericJobCommitActionInput,
-    LockedSlot,LockedSlotOutput,  GenericJobCommitActionInput, GenericJobCommitOutput, 
+    LockedSlot, LockedSlotOutput, GenericJobCommitActionInput, GenericJobCommitOutput,
     SingleJobDropCheckInput,
     SingleJobDropCheckOutput,
-    PLANNER_ERROR_MESSAGES
+    PLANNER_ERROR_MESSAGES,
+    ResetPlanningWindowInput
 
 )
-
-
 
 
 import dataclasses
 
 planner_router = APIRouter()
 
-import dataclasses
-import json
-
-from dispatch.plugins.kandbox_planner.env.env_models import ActionDict, ActionEvaluationScore
-from dispatch.plugins.kandbox_planner.env.env_enums import (
-    ActionType,
-    ActionScoringResultType,
-    AppointmentStatus,
-)
-
-from dispatch.config import DATA_START_DAY
-
-import logging
 
 log = logging.getLogger(__name__)
 
@@ -89,7 +86,6 @@ def hello():  # current_user: DispatchUser = Depends(get_current_user),
     # print("background_env_sync_all is done")
 
 
-
 #########################################
 @planner_router.get(
     "/get_planner_worker_job_dataset/",
@@ -101,10 +97,10 @@ async def get_worker_job_dataset(
     start_day: str = Query(None, alias="start_day"),
     end_day: str = Query(None, alias="end_day"),
     force_reload: bool = Query(False, alias="force_reload"),
-    current_user: DispatchUser = Depends(get_current_user), 
+    current_user: DispatchUser = Depends(get_current_user),
 ):
     # print(f"force_reload = {force_reload}")
-    org_code = current_user.org_code # 
+    org_code = current_user.org_code
     planner = get_default_active_planner(org_code=org_code, team_id=team_id)
 
     if start_day is None:  # request_in.
@@ -136,14 +132,15 @@ def get_planner_score_stats(
     team_id: int = Query(2, alias="team_id"),
     current_user: DispatchUser = Depends(get_current_user),
 ):
-    org_code = current_user.org_code # "0"  # current_user.org_code
+    org_code = current_user.org_code  # "0"  # current_user.org_code
     planner = get_default_active_planner(org_code=org_code, team_id=team_id)
 
-    res = planner["planner_env"].get_planner_score_stats( )
+    res = planner["planner_env"].get_planner_score_stats()
     return JSONResponse(res)
 
+
 @planner_router.post(
-    "/single_job_drop_check/", 
+    "/single_job_drop_check/",
     summary="single_job_drop_check.",
     response_model=SingleJobDropCheckOutput,
 )
@@ -169,13 +166,10 @@ def single_job_drop_check(
 
     org_code = current_user.org_code
 
-
-
     # if len(request_in.scheduled_primary_worker_id) < 1:
     #     raise HTTPException(
     #         status_code=400, detail=f"Empty request_in.scheduled_primary_worker_id is not allowed.",
     #     )
-
 
     # TODO verify team exist in org
     planner = get_default_active_planner(org_code=org_code, team_id=request_in.team_id)
@@ -187,13 +181,13 @@ def single_job_drop_check(
             detail=f"The job (with job_code ={request_in.job_code}) does not exists in env.",
         )
 
-    scheduled_worker_codes = [request_in.scheduled_primary_worker_id] + request_in.scheduled_secondary_worker_ids
+    scheduled_worker_codes = [request_in.scheduled_primary_worker_id] + \
+        request_in.scheduled_secondary_worker_ids
     for worker_code in scheduled_worker_codes:
-        if  worker_code not in rl_env.workers_dict.keys():
+        if worker_code not in rl_env.workers_dict.keys():
             raise HTTPException(
                 status_code=400, detail=f"The worker_code ({worker_code}) does not exists.",
             )
-
 
     scheduled_start_minutes = rl_env.env_encode_from_datetime_to_minutes(
         request_in.scheduled_start_datetime.replace(tzinfo=None)
@@ -229,7 +223,6 @@ def single_job_drop_check(
     # return JSONResponse(result_info)
 
 
-
 @planner_router.get(
     "/get_locked_slots/",
     response_model=LockedSlotOutput,
@@ -243,18 +236,20 @@ def get_locked_slots(
     rl_env = planner["planner_env"]
 
     all_slots = []
-    lock_prefix="{}/env_lock/slot/".format(rl_env.team_env_key )
+    lock_prefix = "{}/env_lock/slot/".format(rl_env.team_env_key)
     for lock_slot_code in rl_env.redis_conn.scan_iter(f"{lock_prefix}*"):
         slot_code_str = lock_slot_code.decode("utf-8").split(lock_prefix)[1]
         appt_code = rl_env.redis_conn.get(lock_slot_code)
         # slot_code_str = slot_code.decode("utf-8")
         # s = slot_code_str.split("_")
         w, s_t, e_t = rl_env.slot_server._decode_slot_code_info(slot_code_str)
-        start_datetime = rl_env.env_decode_from_minutes_to_datetime ( s_t)
-        end_datetime = rl_env.env_decode_from_minutes_to_datetime ( e_t)
-        all_slots.append(LockedSlot(worker_code = w, start_datetime = start_datetime, end_datetime = end_datetime, appt_code = appt_code))
+        start_datetime = rl_env.env_decode_from_minutes_to_datetime(s_t)
+        end_datetime = rl_env.env_decode_from_minutes_to_datetime(e_t)
+        all_slots.append(LockedSlot(worker_code=w, start_datetime=start_datetime,
+                         end_datetime=end_datetime, appt_code=appt_code))
 
-    return LockedSlotOutput(errorNumber = 0, lockedSlots = all_slots)
+    return LockedSlotOutput(errorNumber=0, lockedSlots=all_slots)
+
 
 @planner_router.post(
     "/generic_job_predict_actions/",
@@ -283,7 +278,7 @@ def generic_job_predict_actions(
 
     """
 
-    org_code = current_user.org_code #  "0"  #
+    org_code = current_user.org_code  # "0"  #
 
     team_id = request_in.team_id
 
@@ -295,7 +290,7 @@ def generic_job_predict_actions(
 
     if request_in.job_code not in rl_env.jobs_dict.keys():
         return GenericJobPredictActionOutput(
-            errorNumber= PLANNER_ERROR_MESSAGES["JOB_NOT_EXIST_IN_ENV"][0],
+            errorNumber=PLANNER_ERROR_MESSAGES["JOB_NOT_EXIST_IN_ENV"][0],
             errorDescription=f"The JOB (id={request_in.job_code}) is in the system but does not exist in env with team_id={team_id}.",
             recommendations=[],
         )
@@ -328,8 +323,6 @@ def generic_job_predict_actions(
     )
 
 
-
-
 @planner_router.post(
     "/generic_job_commit/",
     response_model=GenericJobCommitOutput,
@@ -339,9 +332,9 @@ def generic_job_commit(
     request_in: GenericJobCommitActionInput,
     current_user: DispatchUser = Depends(get_current_user),
     db_session: Session = Depends(get_db),
-): 
+):
 
-    org_code = current_user.org_code #  "0"  #
+    org_code = current_user.org_code  # "0"  #
 
     team_id = request_in.team_id
 
@@ -350,7 +343,7 @@ def generic_job_commit(
 
     if request_in.job_code not in rl_env.jobs_dict.keys():
         return GenericJobCommitOutput(
-            errorNumber= PLANNER_ERROR_MESSAGES["JOB_NOT_EXIST_IN_ENV"][0],
+            errorNumber=PLANNER_ERROR_MESSAGES["JOB_NOT_EXIST_IN_ENV"][0],
             errorDescription=f"The JOB (id={request_in.job_code}) is in the system but does not exist in env with team_id={team_id}.",
         )
 
@@ -361,15 +354,15 @@ def generic_job_commit(
     one_job_action_dict = ActionDict(
         is_forced_action=False,
         job_code=request_in.job_code,
-        action_type=ActionType.UNPLAN if request_in.planning_status == 'U' else ActionType.FLOATING ,
+        action_type=ActionType.UNPLAN if request_in.planning_status == 'U' else ActionType.FLOATING,
         scheduled_worker_codes=request_in.scheduled_worker_codes,
         scheduled_start_minutes=scheduled_start_minutes,
         scheduled_duration_minutes=request_in.scheduled_duration_minutes,
     )
 
     internal_result_info = rl_env.mutate_update_job_by_action_dict(
-                a_dict=one_job_action_dict, post_changes_flag=True
-            )
+        a_dict=one_job_action_dict, post_changes_flag=True
+    )
 
     if internal_result_info.status_code != ActionScoringResultType.OK:
         errorNumber = 40001
@@ -381,3 +374,30 @@ def generic_job_commit(
     return GenericJobCommitOutput(
         errorNumber=errorNumber, errorDescription=errorDescription
     )
+
+
+@planner_router.post(
+    "/reset_planning_window/",
+    summary="reset_planning_window.",
+)
+def reset_planning_window(
+    request_in: ResetPlanningWindowInput,
+    team_code: str = Query("1", alias="team_code"),
+    current_user: DispatchUser = Depends(get_current_user),
+    db_session: Session = Depends(get_db),
+):
+    org_code = current_user.org_code
+    team = team_service.get_by_code(db_session=db_session, code=request_in.team_code)
+    if team is None:
+        raise HTTPException(
+            status_code=400, detail=f"The team code you requested is not in your organization.",
+        )
+    if team.org_id != current_user.org_id:
+        raise HTTPException(
+            status_code=400, detail=f"The team code you requested is not in your organization...",
+        )
+    result_info = reset_planning_window_for_team(
+        org_code=org_code,
+        team_id=team.id,)
+
+    return JSONResponse(result_info)

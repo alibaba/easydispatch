@@ -1,3 +1,4 @@
+import logging
 import datetime
 import json
 import random
@@ -33,7 +34,6 @@ MAX_CONFLICT_LEVEL = 2
 MAX_CONFLICT_LEVEL = 2
 
 # import dispatch.plugins.kandbox_planner.config as config
-import logging
 
 log = logging.getLogger(__name__)
 
@@ -60,6 +60,8 @@ class KPlannerDBAdapter(KandboxDataAdapterPlugin):
 
             if team is None:
                 raise Exception("team_id is invalid")
+        self.workers_dict_by_id = {}  # Dictionary of dict
+        self.workers_by_code_dict = {}  # Dictionary of dict
 
     def reload_data_from_db(self):
         """This is only for RLLib automatic training, I have to seperate data loading from original reset()

@@ -79,7 +79,7 @@ def get_current_user(*, db_session: Session = Depends(get_db), request: Request)
         log.debug("No authentication provider. Default user will be used")
         user_email = DISPATCH_AUTHENTICATION_DEFAULT_USER
 
-    return get_or_create(db_session=db_session, user_in=UserRegister(email=user_email))
+    return get_by_email(db_session=db_session, email=user_email)  # _or_create  user_in=UserRegister(
 
 
 def get_active_principals(user: DispatchUser = Depends(get_current_user)) -> List[str]:
