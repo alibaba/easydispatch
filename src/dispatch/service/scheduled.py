@@ -48,9 +48,10 @@ def update_planning_window(db_session=None, start_minutes=-1, org_code="0", team
 
     kafka_server.trigger_update_planning_window(start_minutes=start_minutes)
 
-    log.error("Do Update Planning Window")
+    log.info("Done with Update Planning Window")
 
 
+"""
 @scheduler.add(every(1).day.at("17:00"), name="update-planning-window")
 @background_task
 def update_planning_window_scheduled(db_session=None):
@@ -93,7 +94,7 @@ def refresh_recommendation(db_session=None):
     log.error("Do Refresh Recommendation")
 
 
-"""@scheduler.add(every(SAY_HELLO_SLEEP_TIME).seconds, name="health-check")
+@scheduler.add(every(SAY_HELLO_SLEEP_TIME).seconds, name="health-check")
 @background_task
 def health_check(db_session=None):
     team_id = 2

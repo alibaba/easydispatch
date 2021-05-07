@@ -321,6 +321,7 @@ def reset_planning_window_for_team(org_code, team_id):
     ) as lock:
         for key in redis_conn.scan_iter(f"{team_env_key}/*"):
             redis_conn.delete(key)
+    log.info(f"All redis records are cleared for env = {team_env_key}")
 
     planner = get_active_planner(
         org_code=org_code,
