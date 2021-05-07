@@ -45,7 +45,7 @@ def login():
         print("login fail")
         return ""
 
-def clear_all_data():
+def clear_kafka():
     kafka_admin_client = KafkaAdminClient(
         bootstrap_servers=KAFKA_BOOTSTRAP_SERVERS,
     )
@@ -57,6 +57,8 @@ def clear_all_data():
     kafka_admin_client.delete_topics(list(kafka_consumer.topics()))
     print("--kafka cleared --")
 
+
+def clear_redis():
     if REDIS_PASSWORD == "":
         redis_conn = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, password=None)
     else:
@@ -64,6 +66,10 @@ def clear_all_data():
 
     redis_conn.flushdb()
     print("--redis cleared --")
+
+def clear_all_data():
+    clear_kafka()
+    clear_redis()
 
     if not database_exists(str(SQLALCHEMY_DATABASE_URI)):
         print("Failed, the database does not exist.")
@@ -97,24 +103,8 @@ def clear_all_data():
 
 
 def clear_data_for_redispatching():
-    kafka_admin_client = KafkaAdminClient(
-        bootstrap_servers=KAFKA_BOOTSTRAP_SERVERS,
-    )
-
-    kafka_consumer = KafkaConsumer(
-        bootstrap_servers=KAFKA_BOOTSTRAP_SERVERS.split(";"),
-    )
-
-    kafka_admin_client.delete_topics(list(kafka_consumer.topics()))
-    print("--kafka cleared --")
-
-    if REDIS_PASSWORD == "":
-        redis_conn = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, password=None)
-    else:
-        redis_conn = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, password=REDIS_PASSWORD)
-
-    redis_conn.flushdb()
-    print("--redis cleared --")
+    clear_kafka()
+    clear_redis()
 
     if not database_exists(str(SQLALCHEMY_DATABASE_URI)):
         print("Failed, the database does not exist.")
@@ -135,13 +125,8 @@ def clear_data_for_redispatching():
 def clear_all_worker_jobs():
     print("--Started removing jobs--")
 
-    if REDIS_PASSWORD == "":
-        redis_conn = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, password=None)
-    else:
-        redis_conn = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, password=REDIS_PASSWORD)
-
-    redis_conn.flushdb()
-    print("--redis cleared --")
+    clear_kafka()
+    clear_redis()
 
     if not database_exists(str(SQLALCHEMY_DATABASE_URI)):
         print("Failed, the database does not exist.")
