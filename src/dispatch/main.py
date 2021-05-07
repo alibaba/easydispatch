@@ -1,3 +1,4 @@
+from dispatch.service.planner_service import planners_dict, planners_dict_lock
 import time
 import logging
 from tabulate import tabulate
@@ -25,7 +26,7 @@ from .database import SessionLocal
 from .extensions import configure_extensions
 from .logging import configure_logging
 from .metrics import provider as metric_provider
-
+from dispatch.plugins.kandbox_planner.env.env_enums import JobPlanningStatus, ActionScoringResultType
 
 log = logging.getLogger(__name__)
 
@@ -153,9 +154,6 @@ for r in api_router.routes:
 log.debug("Available Endpoints \n" + tabulate(table, headers=["Path", "Authenticated", "Methods"]))
 
 
-from dispatch.service.planner_service import planners_dict, planners_dict_lock
-
-
 async def background_env_sync_all(refresh_count: int, interval_seconds: int) -> None:
 
     for r_i in range(refresh_count):
@@ -174,14 +172,42 @@ async def background_env_sync_all(refresh_count: int, interval_seconds: int) -> 
                     f"key = {key}, env offset = {rl_env.kafka_input_window_offset}, redis offset = {rl_env.get_env_window_replay_till_offset()}, input topic = {rl_env.kafka_server.get_env_window_topic_name()}"
                 )
                 rl_env.mutate_check_env_window_n_replay()
-            except RuntimeError as re:
-                print("RuntimeError: ", re)
-            except Exception as e:
-                print("Unknown: ", e)
+                for job in rl_env.jobs:
+                    if job.is_auto_planning and (job.planning_status == JobPlanningStatus.UNPLANNED):
+                        log.info(
+                            f"job {job.job_code} will be auto planned. job.is_auto_planning and (job.planning_status == JobPlanningStatus.UNPLANNED)"
+                        )
+                        rl_agent = planners_dict[key]["planner_agent"]
+                        res = rl_agent.predict_action_dict_list(job_code=job.job_code)
+                        if len(res) < 1:
+                            log.info(
+                                f"Failed to predict action for job {job.job_code}"
+                            )
+                        else:
+                            internal_result_info = rl_env.mutate_update_job_by_action_dict(
+                                a_dict=res[0].to_action_dict(rl_env), post_changes_flag=True
+                            )
+
+                            if internal_result_info.status_code == ActionScoringResultType.OK:
+                                log.info(
+                                    f"Successfully committed action for job {job.job_code}."
+                                )
+                            else:
+                                log.warn(
+                                    f"Failed to commit action for job {job.job_code}, action = {res[0]}, info = {internal_result_info}"
+                                )
+            except ValueError as re:
+                print("ValueError: ", re)
+
+            # except RuntimeError as re:
+            #     print("RuntimeError: ", re)
+            # except Exception as e:
+            #     print("Unknown: ", e)
 
         planners_dict_lock.release()
 
-        log.info(f"Done for work - hello r_i = {r_i}, len env = {len(planners_dict_keys)}, list of env = {planners_dict_keys}")
+        log.info(
+            f"Done for work - hello r_i = {r_i}, len env = {len(planners_dict_keys)}, list of env = {planners_dict_keys}")
     log.debug("background_env_sync_all is all done.")
 
 

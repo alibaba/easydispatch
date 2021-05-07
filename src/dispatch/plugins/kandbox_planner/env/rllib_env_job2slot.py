@@ -979,6 +979,7 @@ class KPlannerJob2SlotEnv(KandboxEnvPlugin):
             appointment_status=job_form["appointment_status"],
             #
             is_active=True,
+            is_auto_planning = False,
         )
         self.set_searching_worker_candidates(appt_job)
 
@@ -1192,6 +1193,7 @@ class KPlannerJob2SlotEnv(KandboxEnvPlugin):
             #
             is_active=job["is_active"],
             is_appointment_confirmed=is_appointment_confirmed,
+            is_auto_planning = job["auto_planning"],
         )
 
         self.set_searching_worker_candidates(final_job)
@@ -1267,6 +1269,7 @@ class KPlannerJob2SlotEnv(KandboxEnvPlugin):
             #
             is_active=True,
             is_replayed=False,
+            is_auto_planning = False,
             flex_form_data=job["flex_form_data"],
         )
 
@@ -2443,7 +2446,7 @@ class KPlannerJob2SlotEnv(KandboxEnvPlugin):
             print(f"pause for {a_dict.job_code}")
         if post_changes_flag:
             if PLANNER_SERVER_ROLE == "recommendation":
-                log.error(f"recommender should not post changes, setting to false")
+                log.warn(f"recommender should not post changes, setting to false")
                 # post_changes_flag = False
         # TODO If there is not enough capacities without considering travel and time slot, reject it
         if a_dict.job_code not in self.jobs_dict.keys():

@@ -59,7 +59,8 @@ class JobLocationBase(typing.NamedTuple):
 
     geo_longitude: float
     geo_latitude: float
-    location_type: LocationType  # H="Home", J=Job, E=Event, in future, it could be high building, internal room, etc.
+    # H="Home", J=Job, E=Event, in future, it could be high building, internal room, etc.
+    location_type: LocationType
     location_code: str
 
 
@@ -74,7 +75,8 @@ class JobLocation(typing.NamedTuple):
     location_type: LocationType  # H="Home", J=Job, E=Event
     location_code: str
     # location_info: LocationTuple  # maintain the position in env.workers. For compatibility, and also in action, it is based on worker's sequence.
-    historical_serving_worker_distribution: dict  # Key is  tuple (primary, secondary_1, secondary_2))  Caution: all service area code must be alphabetically sorted for secondary!.
+    # Key is  tuple (primary, secondary_1, secondary_2))  Caution: all service area code must be alphabetically sorted for secondary!.
+    historical_serving_worker_distribution: dict
 
     avg_actual_start_minutes: float
     avg_days_delay: float
@@ -116,9 +118,9 @@ class BaseJob:
     #
     requested_skills: dict
     requested_start_min_minutes: int
-    requested_start_max_minutes: int 
+    requested_start_max_minutes: int
     # The preferred time might nobe be avg(min,max). Min max are used to calculate the tolerance only. But the preferred time might be anywhre.
-    requested_start_minutes: int # In case of FT, this determines start hour only
+    requested_start_minutes: int  # In case of FT, this determines start hour only
     requested_time_slots: List[tuple]
     requested_primary_worker_code: str
     requested_duration_minutes: int
@@ -128,8 +130,9 @@ class BaseJob:
     flex_form_data: dict
     # The search candidate list for recommendations. Each element is a tuple [("CT12", "CT24")]
     searching_worker_candidates: List
-    available_slots: List  # list of [start,end] in linear scale 2021-02-20 10:19:25 . This is to replace location.available_slots
-    appointment_status: AppointmentStatus  #  = AppointmentStatus.UNKNOWN
+    # list of [start,end] in linear scale 2021-02-20 10:19:25 . This is to replace location.available_slots
+    available_slots: List
+    appointment_status: AppointmentStatus  # = AppointmentStatus.UNKNOWN
     #
     included_job_codes: List[str]
     new_job_codes: List[str]
@@ -138,6 +141,7 @@ class BaseJob:
     is_active: bool = True
     is_replayed: bool = False
     is_appointment_confirmed: bool = True
+    is_auto_planning: bool = False
     #
 
 
@@ -158,7 +162,8 @@ class Absence(BaseJob):
 class Worker:
     """The data class for holding worker information in the environment, not in the database"""
 
-    worker_index: int  # maintain the position in env.workers. For compatibility, and also in action, it is based on worker's sequence.
+    # maintain the position in env.workers. For compatibility, and also in action, it is based on worker's sequence.
+    worker_index: int
     worker_id: int  # For now worker_id is the ID in database table.
     worker_code: str  # This is the main primary key in ENV.
     flex_form_data: dict
@@ -265,7 +270,8 @@ class RecommendedAction:
             scoped_slot_code_list=rec_tuple[0],
             scheduled_start_minutes=rec_tuple[1],
             scheduled_duration_minutes=rec_tuple[2],
-            scheduled_worker_codes=[],  # First one is primary, and the rest are secondary, All secondary must be sorted.
+            # First one is primary, and the rest are secondary, All secondary must be sorted.
+            scheduled_worker_codes=[],
             score=0,
             score_detail=[],
         )
@@ -275,7 +281,7 @@ class RecommendedAction:
         a_dict = ActionDict(
             is_forced_action=False,
             job_code=self.job_code,
-            action_type=ActionType.JOB_FIXED,
+            action_type=ActionType.FLOATING,
             scheduled_worker_codes=self.scheduled_worker_codes,
             scheduled_start_minutes=self.scheduled_start_minutes,
             scheduled_duration_minutes=self.scheduled_duration_minutes,
@@ -382,7 +388,8 @@ class WorkingTimeSlot:
     end_overtime_minutes: int = 0
     available_free_minutes: int = 0
     total_job_minutes: int = 0
-    is_in_working_hour: bool = True  # If False, this work is over time and when released, it does not recover working slot.
+    # If False, this work is over time and when released, it does not recover working slot.
+    is_in_working_hour: bool = True
 
     env: InitVar[any] = None
 
@@ -448,7 +455,8 @@ if __name__ == "__main__":
         scoped_slot_code_list=["slot-1", "slot-2"],
         scheduled_start_minutes=12,
         scheduled_duration_minutes=22,
-        scheduled_worker_codes=[],  # First one is primary, and the rest are secondary, All secondary must be sorted.
+        # First one is primary, and the rest are secondary, All secondary must be sorted.
+        scheduled_worker_codes=[],
         score=0,
         score_detail=[],
         job_plan_in_scoped_slots=[],

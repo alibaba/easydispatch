@@ -697,10 +697,10 @@ export default {
             switch (params.seriesId) {
               case "jobsSeries":
                 let local_start = new Date(
-                  params.value(POS_JOB_INDEX_start_datetime)
+                  params.value[POS_JOB_INDEX_start_datetime]
                 ).getTime();
                 let local_end = new Date(
-                  params.value(POS_JOB_INDEX_end_datetime)
+                  params.value[POS_JOB_INDEX_end_datetime]
                 ).getTime();
 
                 jobInfo =
@@ -1413,10 +1413,10 @@ export default {
         });
 
         let local_start = new Date(
-          param.value(POS_JOB_INDEX_start_datetime)
+          param.value[POS_JOB_INDEX_start_datetime]
         ).getTime();
         let local_end = new Date(
-          param.value(POS_JOB_INDEX_end_datetime)
+          param.value[POS_JOB_INDEX_end_datetime]
         ).getTime();
 
         // Drag start

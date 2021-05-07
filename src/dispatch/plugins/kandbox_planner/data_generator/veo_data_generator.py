@@ -31,7 +31,7 @@ KANDBOX_DATE_FORMAT = config.KANDBOX_DATE_FORMAT  # '%Y%m%d'
 # London sample data is acquired from here:
 # http://www.nationalarchives.gov.uk/doc/open-government-licence/version/2/
 # https://data.london.gov.uk/dataset/gla-group-land-assets?q=gla%20asset
-# /Users/qiyangduan/git/kandbox/kandbox_dispatch/src/dispatch/plugins/kandbox_planner/util/sample_london_addreses.csv
+# https://github.com/qiyangduan/uk_address_convert_bng_longlat
 
 df = pd.read_csv(
     "{}/plugins/kandbox_planner/util/sample_london_addreses.csv".format(config.basedir),
@@ -303,16 +303,28 @@ def generate_all(opts):
         current_day = GENERATOR_START_DATE + timedelta(days=day_i)
         if current_day >= GENERATOR_END_DATE:
             break
-        order_list = generate_one_day_orders(
+        job_list = generate_one_day_orders(
             current_day, worker_list=worker_list
         )
-        kplanner_api.insert_all_orders(order_list)
+        kplanner_api.insert_all_orders(job_list)
         #
     # opts["dispatch_days"] = opts["dispatch_days"]
     # dispatch_jobs_batch_optimizer(opts)
     return
-    # pprint(res)
+    """
+    pprint(res)
 
+    with open('job_addr.json', 'w') as outfile:
+        json.dump(job_addr, outfile)
+
+    with open('job_addr.json', 'w') as outfile:
+        json.dump(job_addr, outfile)
+
+
+    with open('job_list.json', 'w') as outfile:
+        json.dump(job_list, outfile)
+
+        
     PREDICT_START_DATE = datetime.strptime(opts["start_day"], KANDBOX_DATE_FORMAT) + timedelta(
         days=opts["training_days"]
     )
@@ -347,10 +359,11 @@ def generate_all(opts):
 
     # This is to specifically train ppo agent
     """
+
+    """
     kandbox_agent_rllib_ppo_cls = plugins.get_class("kandbox_agent_rllib_ppo")(
         config=None
     )
-    """
     # ray.init(ignore_reinit_error=True, log_to_driver=False)
 
     db_session = SessionLocal()
@@ -418,6 +431,7 @@ def generate_all(opts):
             print("Finished regression for (DATE={}: AGENT slug={}) ".format(current_day, slug))
 
     db_session.close()
+        """
 
 
 if __name__ == "__main__":

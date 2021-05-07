@@ -483,15 +483,7 @@ def revision_database(
 def dispatch_scheduler():
     """Container for all dispatch scheduler commands."""
     # we need scheduled tasks to be imported
-    # from .document.scheduled import sync_document_terms  # noqa
-    # from .job.scheduled import daily_summary, auto_tagger  # noqa
-    # from .report.scheduled import job_report_reminders  # noqa
-    # from .tag.scheduled import sync_tags  # noqa
-    # from .task.scheduled import sync_tasks, create_task_reminders  # noqa
-    # from .term.scheduled import sync_terms  # noqa
-
-    # zhuhuan 删除visit
-    from .service.scheduled import refresh_recommendation, update_planning_window  # noqa
+    from .scheduler import daily_reload_data
 
 
 @dispatch_scheduler.command("list")
@@ -737,7 +729,8 @@ def start_repair(org_code, team_id):
             one_job_action_dict = ActionDict(
                 is_forced_action=True,
                 job_code=job_code,
-                action_type=ActionType.FLOATING,  # I assume that only in-planning jobs can appear here...
+                # I assume that only in-planning jobs can appear here...
+                action_type=ActionType.FLOATING,
                 scheduled_worker_codes=res[0].scheduled_worker_codes,
                 scheduled_start_minutes=res[0].scheduled_start_minutes,
                 scheduled_duration_minutes=res[0].scheduled_duration_minutes,

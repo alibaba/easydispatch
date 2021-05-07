@@ -82,7 +82,7 @@ export default {
   methods: {
     ...mapActions("gantt", [
       "getPlannerWorkerJobDataset",
-      "getPlannerScoreStats"
+      "getPlannerScoreStats",
     ]),
     setDialogFilterVisible(visibleFlag) {
       this.$store.commit("gantt/SET_DIALOG_FILTER_VISIBLE", visibleFlag);
@@ -109,7 +109,7 @@ export default {
       filterOptions = {
         team: { id: 2 },
         start_day: "20200901",
-        end_day: "20200902"
+        end_day: "20200902",
       };
       filterOptions.start_day = this.plannerFilters_windowDates[0]
         .replace("-", "")
@@ -138,14 +138,14 @@ export default {
         .toISOString()
         .substr(0, 10);
       return [startDateInTeam, endDateInTeam];
-    }
+    },
   },
 
   components: {
     // WorkerCombobox,
     // TagFilterCombobox,
     // JobTypeCombobox,
-    TeamSelect
+    TeamSelect,
   },
   mounted() {
     this.plannerFilters_windowDates = [this.defaultStart, this.defaultEnd];
@@ -153,12 +153,13 @@ export default {
     if (this.userInfo.default_team_id) {
       console.log("dialog mounted, then I am changing default_team_id");
       TeamApi.get(this.userInfo.default_team_id) //
-        .then(response => {
+        .then((response) => {
           that.plannerFilters_team = response.data;
 
           that.plannerFilters_windowDates = that.getPlannerWindowDateFromTeam(
             that.plannerFilters_team
           );
+          that.plannerWindowMinMax = that.plannerFilters_windowDates;
 
           that.fetchData();
 
@@ -186,8 +187,8 @@ export default {
         // team: null,
         tag: [],
         job_type: [],
-        job_priority: []
-      }
+        job_priority: [],
+      },
     };
   },
 
@@ -204,7 +205,7 @@ export default {
           newTeam
         );
       }
-    }
+    },
   },
 
   computed: {
@@ -215,7 +216,7 @@ export default {
       return sum([
         this.filters.job_type.length,
         this.filters.job_priority.length,
-        this.filters.tag.length
+        this.filters.tag.length,
       ]);
     },
     queryDates() {
@@ -238,7 +239,7 @@ export default {
     },
     dateRangeText() {
       return this.plannerFilters_windowDates.join(" ~ ");
-    }
-  }
+    },
+  },
 };
 </script>

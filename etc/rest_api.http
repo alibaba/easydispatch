@@ -210,7 +210,7 @@ Authorization: Bearer {{jwtoken}}
     "is_active": true
   },
   "flex_form_data": {
-    "env_start_day": "20210506",
+    "env_start_day": "20210505",
     "nbr_of_days_planning_window": 2
   },
   "id": 8

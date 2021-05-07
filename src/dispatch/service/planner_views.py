@@ -262,19 +262,7 @@ def generic_job_predict_actions(
     db_session: Session = Depends(get_db),
 ):
     """
-    Returns recommended slots for a given appointment.  The start time already excluded the initial travel time. Those slots will be locked for a few minutes .
-
-    Possible errorNumbers:
-    --------
-
-        0	Success
-    40001	Internal System Error
-    40002	The appointment id ({}) does not exist.
-    40003	Appointment status ({}) not Pending
-    40004	No slot found
-    40005	The specified slot is no longer available, either expired or not locked at all.
-    40006	requested date ({}) is out of planning window
-    40007	The idType ({}) is not supported.
+    Returns recommended slots for a given job.  The start time already excluded the initial travel time. Those slots will be locked for a few minutes .
 
     """
 
@@ -286,7 +274,8 @@ def generic_job_predict_actions(
     rl_env = planner["planner_env"]
     rl_agent = planner["planner_agent"]
     rl_agent.config["nbr_of_actions"] = 5
-    rl_agent.use_naive_search_for_speed = True
+    # TODO, check later.
+    # rl_agent.use_naive_search_for_speed = True
 
     if request_in.job_code not in rl_env.jobs_dict.keys():
         return GenericJobPredictActionOutput(

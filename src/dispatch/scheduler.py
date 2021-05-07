@@ -9,7 +9,7 @@
 """
 import logging
 import time
-
+import click
 import schedule
 
 log = logging.getLogger(__name__)
@@ -46,3 +46,8 @@ class Scheduler(object):
 
 
 scheduler = Scheduler()
+
+
+@scheduler.add(schedule.every(120).seconds, name="load-nightly-batch")
+def daily_reload_data(db_session=None):
+    click.secho("daily_reload_data Done...", fg="green")
