@@ -3,9 +3,6 @@ import json
 import time
 import click
 
-
-from dispatch.service.scheduled import update_planning_window, refresh_recommendation
-
 from kafka import KafkaAdminClient, KafkaConsumer
 
 import redis
@@ -80,7 +77,7 @@ def clear_all_data():
     session.execute("delete from event;")
     session.execute("delete from assoc_job_tags;")
     session.execute("delete from job_scheduled_secondary_workers;")
-    
+
 
     session.execute("delete from job;")
     # session.execute("delete from worker_absence;")
