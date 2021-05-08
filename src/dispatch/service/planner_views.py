@@ -273,9 +273,9 @@ def generic_job_predict_actions(
     planner = get_default_active_planner(org_code=org_code, team_id=team_id)
     rl_env = planner["planner_env"]
     rl_agent = planner["planner_agent"]
-    rl_agent.config["nbr_of_actions"] = 5
     # TODO, check later.
-    # rl_agent.use_naive_search_for_speed = True
+    rl_agent.config["nbr_of_actions"] = 5
+    rl_agent.use_naive_search_for_speed = True
 
     if request_in.job_code not in rl_env.jobs_dict.keys():
         return GenericJobPredictActionOutput(

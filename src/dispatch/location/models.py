@@ -43,7 +43,6 @@ class Location(Base):
 
 # Pydantic models...
 class LocationBase(DispatchBase):
-    # kandbox planner
     location_code: str
     geo_longitude: float
     geo_latitude: float

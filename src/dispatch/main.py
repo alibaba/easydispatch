@@ -178,6 +178,11 @@ async def background_env_sync_all(refresh_count: int, interval_seconds: int) -> 
                             f"job {job.job_code} will be auto planned. job.is_auto_planning and (job.planning_status == JobPlanningStatus.UNPLANNED)"
                         )
                         rl_agent = planners_dict[key]["planner_agent"]
+                        # TODO, use naive being/end to avoid re-arranging other inplanning jobs
+                        # In future, run all re-arrangement.
+                        rl_agent.use_naive_search_for_speed = True
+                        rl_agent.config["nbr_of_actions"] = 5
+
                         res = rl_agent.predict_action_dict_list(job_code=job.job_code)
                         if len(res) < 1:
                             log.info(

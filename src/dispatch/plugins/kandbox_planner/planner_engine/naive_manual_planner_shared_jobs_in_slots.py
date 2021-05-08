@@ -123,7 +123,10 @@ class NaivePlannerJobsInSlots:  # to fake OptimizerJobsInSlots
         for slot_i in range(num_slots):
             slot = working_time_slots[slot_i]
 
-            all_jobs_to_begin = [slot.assigned_job_codes[-1]] + slot.assigned_job_codes[:-1]
+            sorted_slot_assigned_job_codes = sorted(
+                slot.assigned_job_codes[:-1], key=lambda x: self.env.jobs_dict[x].scheduled_start_minutes)
+
+            all_jobs_to_begin = [slot.assigned_job_codes[-1]] + sorted_slot_assigned_job_codes
             (
                 prev_travel,
                 next_travel,
@@ -165,8 +168,9 @@ class NaivePlannerJobsInSlots:  # to fake OptimizerJobsInSlots
                 )
                 if max_start_from_begin > _new_start:
                     max_start_from_begin = _new_start
-
-            all_jobs_to_end = slot.assigned_job_codes
+            # slot.assigned_job_codes
+            all_jobs_to_end = sorted_slot_assigned_job_codes + \
+                [slot.assigned_job_codes[-1]]
             (
                 prev_travel,
                 next_travel,

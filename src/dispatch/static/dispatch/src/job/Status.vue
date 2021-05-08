@@ -137,7 +137,7 @@
     <!-- App Footer -->
     <v-footer height="auto" class="pa-3 app--footer">
       <span class="caption"
-        >Kandbox Planner &copy; {{ new Date().getFullYear() }}</span
+        >Easy Dispatch &copy; {{ new Date().getFullYear() }}</span
       >
       <v-spacer />
       <span class="caption mr-1">Dispatching by AI</span>
