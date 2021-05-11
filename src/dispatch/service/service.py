@@ -53,7 +53,9 @@ def delete(*, db_session, service_id: int):
 
     # TODO clear out other relationships
     # we clear out our associated items
+
     service.terms = []
     db_session.delete(service)
     db_session.commit()
+
     return service_id

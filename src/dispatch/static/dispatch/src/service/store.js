@@ -130,6 +130,7 @@ const actions = {
         );
       })
       .catch(err => {
+        dispatch("closeRemove");
         commit(
           "app/SET_SNACKBAR",
           {

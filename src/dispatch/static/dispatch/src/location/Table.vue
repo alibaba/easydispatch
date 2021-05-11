@@ -35,9 +35,6 @@
                 <v-icon small class="mr-2" @click="createEditShow(item)">
                   mdi-pencil
                 </v-icon>
-                <v-icon small @click="deleteItem(item)">
-                  mdi-delete
-                </v-icon>
               </template>
               <template v-slot:item.data-table-actions="{ item }">
                 <v-menu bottom left>

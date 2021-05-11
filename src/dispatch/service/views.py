@@ -6,12 +6,13 @@ from fastapi import APIRouter, Body, Depends, HTTPException, Query
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
-from dispatch import  config
+from dispatch import config
 from dispatch.auth.models import DispatchUser
 from dispatch.auth.service import get_current_user
 from dispatch.database import get_db, search_filter_sort_paginate
 from dispatch.plugins.kandbox_planner.util.kandbox_date_util import get_current_day_string
 from dispatch.service.planner_service import get_active_planner
+from sqlalchemy.exc import IntegrityError
 
 
 from .service import (  # , get_recommendation_slots_single_job
@@ -122,4 +123,8 @@ def delete_service(*, db_session: Session = Depends(get_db), service_id: int):
     service = get(db_session=db_session, service_id=service_id)
     if not service:
         raise HTTPException(status_code=404, detail="The service with this id does not exist.")
-    delete(db_session=db_session, service_id=service_id)
+    try:
+        delete(db_session=db_session, service_id=service_id)
+    except IntegrityError:
+        raise HTTPException(
+            status_code=400, detail="The service is used by a team and can not be deleted.")
