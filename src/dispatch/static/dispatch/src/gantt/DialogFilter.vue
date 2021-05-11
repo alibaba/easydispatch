@@ -201,9 +201,20 @@ export default {
     plannerFilters_team(newTeam) {
       if (newTeam) {
         console.log(`plannerFilters_team is changed to ${newTeam.code}`);
-        this.plannerFilters_windowDates = this.getPlannerWindowDateFromTeam(
-          newTeam
-        );
+        try {
+          this.plannerFilters_windowDates = this.getPlannerWindowDateFromTeam(
+            newTeam
+          );
+        } catch (err) {
+          this.$store.commit(
+            "app/SET_SNACKBAR",
+            {
+              text:
+                "This team has no valid plannign window. Please choose a different one.",
+            },
+            { root: true }
+          );
+        }
       }
     },
   },
