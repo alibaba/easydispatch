@@ -31,7 +31,7 @@ const state = {
       q: "",
       page: 1,
       itemsPerPage: 10,
-      sortBy: ["view_order"],
+      sortBy: ["location_code"],
       descending: [false]
     },
     loading: false

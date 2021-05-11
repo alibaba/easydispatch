@@ -70,7 +70,7 @@ config = Config(".env")
 LOG_LEVEL = config("LOG_LEVEL", default=logging.WARNING)
 
 module_levels = {
-    "dispatch.main": logging.DEBUG,
+    "dispatch.main": logging.ERROR,
     "rllib_env_job2slot": logging.DEBUG,
 }
 

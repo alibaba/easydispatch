@@ -1,7 +1,13 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
+
 from sqlalchemy.orm import Session
 
 from dispatch.database import get_db, paginate
+
+from dispatch.database import get_db, search_filter_sort_paginate
+from typing import List
+
+
 from dispatch.search.service import search
 
 from .models import (
@@ -18,18 +24,31 @@ router = APIRouter()
 
 @router.get("/", response_model=LocationPagination)
 def get_locations(
-    db_session: Session = Depends(get_db), page: int = 1, itemsPerPage: int = 5, q: str = None
+    db_session: Session = Depends(get_db),  # page: int = 1, itemsPerPage: int = 5, q: str = None
+    page: int = 1,
+    items_per_page: int = Query(5, alias="itemsPerPage"),
+    query_str: str = Query(None, alias="q"),
+    sort_by: List[str] = Query(None, alias="sortBy[]"),
+    descending: List[bool] = Query(None, alias="descending[]"),
+    fields: List[str] = Query(None, alias="field[]"),
+    ops: List[str] = Query(None, alias="op[]"),
+    values: List[str] = Query(None, alias="value[]"),
 ):
     """
     Get all locations.
     """
-    if q:
-        query = search(db_session=db_session, query_str=q, model=Location)
-    else:
-        query = get_all(db_session=db_session)
-
-    items, total = paginate(query=query, page=page, items_per_page=itemsPerPage)
-    return {"items": items, "total": total}
+    return search_filter_sort_paginate(
+        db_session=db_session,
+        model="Location",
+        query_str=query_str,
+        page=page,
+        items_per_page=items_per_page,
+        sort_by=sort_by,
+        descending=descending,
+        fields=fields,
+        values=values,
+        ops=ops,
+    )
 
 
 @router.get("/{location_id}", response_model=LocationRead)
