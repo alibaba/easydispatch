@@ -2,7 +2,7 @@
   <v-layout wrap>
     <new-edit-sheet />
     <delete-dialog />
-    <div class="headline">Service Plugins</div>
+    <div class="headline">Plugins in Planner Services</div>
     <v-spacer />
     <v-btn color="primary" dark class="mb-2" @click="createEditShow()"
       >New</v-btn
@@ -60,8 +60,8 @@ export default {
   data() {
     return {
       headers: [
-        { text: "ID", value: "id", sortable: true },
-        { text: "Service", value: "service.name", sortable: false },
+        // { text: "ID", value: "id", sortable: true },
+        { text: "Planner Service", value: "service.name", sortable: false },
         { text: "Plugin Type", value: "plugin.type", sortable: false },
         { text: "Plugin Slug", value: "plugin.slug", sortable: false },
         { text: "", value: "data-table-actions", sortable: false, align: "end" }
