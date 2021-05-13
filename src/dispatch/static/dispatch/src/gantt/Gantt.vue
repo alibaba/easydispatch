@@ -186,7 +186,7 @@ export default {
     return {
       // plannerFilters: null,
       planning_status_list: ["P", "I", "U"],
-      job_type_list: ["appt", "event", "P", "U", "I", "other"],
+      job_type_list: [ "P", "U", "I"], // "appt", "event",, "other"
       search: null,
       job_code_filter: null,
       job_type_filter: "U",

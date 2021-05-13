@@ -703,8 +703,8 @@ export default {
                   params.value[POS_JOB_INDEX_end_datetime]
                 ).getTime();
 
-                jobInfo =
-                  params.marker +
+                jobInfo = 
+                  params.marker + "Job: " +
                   params.value[POS_JOB_INDEX_job_code] +
                   "( " +
                   params.value[POS_JOB_INDEX_worker_code] +
@@ -731,7 +731,7 @@ export default {
               //break
               case "workersSeries":
                 //console.log(params)
-                jobInfo =
+                jobInfo = params.marker + "Worker: " +
                   params.value[POS_WORKER_INDEX_name] +
                   `, Skills =(${params.value[
                     POS_WORKER_INDEX_skills

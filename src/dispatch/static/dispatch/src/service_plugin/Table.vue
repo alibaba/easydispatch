@@ -61,7 +61,7 @@ export default {
     return {
       headers: [
         // { text: "ID", value: "id", sortable: true },
-        { text: "Planner Service", value: "service.name", sortable: false },
+        { text: "Planner Service Code", value: "service.code", sortable: false },
         { text: "Plugin Role", value: "planning_plugin_type", sortable: false },
         { text: "Plugin Slug", value: "plugin.slug", sortable: false },
         { text: "", value: "data-table-actions", sortable: false, align: "end" }
