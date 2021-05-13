@@ -15,7 +15,7 @@ Content-Type: application/json
 POST {{hostUrl}}/auth/register
 Content-Type: application/json
 
-{"email": "demo2", "password": "demo2"}
+{"email": "demo", "password": "demo"}
 
 
 ###
@@ -217,6 +217,15 @@ Authorization: Bearer {{jwtoken}}
 }
 
 
+###
+# @name reset_planning_window
+
+POST {{hostUrl}}/planner_service/reset_planning_window/   HTTP/1.1
+Content-Type: application/json
+Authorization: Bearer {{jwtoken}}
+
+{"team_code": "london_t1"}
+
 
 ###
 # @name veo_create_worker
@@ -237,12 +246,3 @@ Authorization: Bearer {{jwtoken}}
 "job_type": "visit",
 "name": "0429-1-Access_Control-1006", "flex_form_data": {"requested_min_level": 1, "requested_skills": ["electric_1", "mechanic_1"], "job_schedule_type": "N", "mandatory_minutes_minmax_flag": 0, "tolerance_start_minutes": -1440, "tolerance_end_minutes": 2880, "min_number_of_workers": 1, "max_number_of_workers": 1, "priority": 1}, "team": {"code": "london_t1", "name": "london_t1"}, "location": {"geo_latitude": 51.548083471965725, "geo_longitude": -0.4738164885896168, "geo_address_text": "York Road, Uxbridge", "geo_json": {"postcode": "UB8 1QN", "formatted_address_text": "York Road, Uxbridge"}, "location_code": "job_loc_1006"}, "planning_status": "U", "requested_duration_minutes": 45, "scheduled_duration_minutes": 45, "requested_start_datetime": "2021-04-29T00:00:00", "scheduled_start_datetime": "2021-04-29T00:00:00", "requested_primary_worker": {"code": "Alexia", "team": {"code": "london_t1", "name": "london_t1"}}, "scheduled_primary_worker": {"code": "Alexia", "team": {"code": "london_t1", "name": "london_t1"}}, "auto_planning": true, "team_code": "london_t1"}
 
-
-###
-# @name reset_planning_window
-
-POST {{hostUrl}}/planner_service/reset_planning_window/   HTTP/1.1
-Content-Type: application/json
-Authorization: Bearer {{jwtoken}}
-
-{"team_code": "london_t1"}

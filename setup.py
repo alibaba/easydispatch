@@ -181,7 +181,7 @@ class BaseBuildCommand(Command):
             for dirname, _, filenames in os.walk(os.path.abspath(path)):
                 for filename in filenames:
                     filename = os.path.join(dirname, filename)
-                    files.append(filename[len(base) :].lstrip(os.path.sep))
+                    files.append(filename[len(base):].lstrip(os.path.sep))
 
         for file in self.get_manifest_additions():
             files.append(file)
@@ -405,7 +405,6 @@ setup(
         "dispatch.plugins": [
             "kandbox_rllib_env_proxy = dispatch.plugins.kandbox_planner.env.rllib_env_job2slot:KPlannerJob2SlotEnvProxy",
             "kandbox_heuristic_realtime_agent = dispatch.plugins.kandbox_planner.agent.kandbox_heuristic_realtime_agent:KandboxHeuristicRealtimeAgentPlugin",
-            "kandbox_agent_rllib_ppo = dispatch.plugins.kandbox_planner.agent.kprl_agent_rllib_ppo:KandboxAgentRLLibPPO",
             "kandbox_rule_working_hour = dispatch.plugins.kandbox_planner.rule.working_hour:KandboxRulePluginWithinWorkingHour",
             "kandbox_rule_travel_time = dispatch.plugins.kandbox_planner.rule.travel_time:KandboxRulePluginSufficientTravelTime",
             "kandbox_rule_requested_skills = dispatch.plugins.kandbox_planner.rule.requested_skills:KandboxRulePluginRequestedSkills",
