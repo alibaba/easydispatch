@@ -1,3 +1,23 @@
+from dispatch.plugins.kandbox_planner.util.kandbox_json_util import generic_json_encoder
+from dataclasses import asdict as python_asdict
+import socket
+from dispatch.config import KAFKA_BOOTSTRAP_SERVERS, PLANNER_SERVER_ROLE, TESTING_MODE  #
+from dispatch.plugins.kandbox_planner.env.env_models import (
+    KafkaEnvMessage,
+    Appointment,
+    Job,
+    Worker,
+    JobLocationBase,
+)
+from dispatch.plugins.kandbox_planner.env.env_enums import (
+    KafkaMessageType,
+    KafkaRoleType,
+    KandboxMessageSourceType,
+    KandboxMessageTopicType,
+    JobType,
+    AppointmentStatus,
+)
+from kafka import KafkaProducer, KafkaConsumer, TopicPartition
 from datetime import datetime
 import json
 from typing import List
@@ -9,34 +29,6 @@ import time
 import copy
 
 log = logging.getLogger("kandbox_kafka_adapter")
-
-from kafka import KafkaProducer, KafkaConsumer, TopicPartition
-
-from dispatch.plugins.kandbox_planner.env.env_enums import (
-    KafkaMessageType,
-    KafkaRoleType,
-    KandboxMessageSourceType,
-    KandboxMessageTopicType,
-    JobType,
-    AppointmentStatus,
-)
-
-
-from dispatch.plugins.kandbox_planner.env.env_models import (
-    KafkaEnvMessage,
-    Appointment,
-    Job,
-    Worker,
-    JobLocationBase,
-)
-
-from dispatch.config import KAFKA_BOOTSTRAP_SERVERS, PLANNER_SERVER_ROLE, TESTING_MODE  #
-
-import socket
-
-from dataclasses import asdict as python_asdict
-
-from dispatch.plugins.kandbox_planner.util.kandbox_json_util import generic_json_encoder
 
 
 class KafkaAdapter:
@@ -254,7 +246,6 @@ class KafkaAdapter:
         future = self.producer.send(self.get_env_window_topic_name(), value=msg)
         return future.get().offset
 
-
     def post_workers(self, planner, message_type, worker_codes):
         workers = [
             planner.workers_by_email_dict[w]
@@ -272,7 +263,7 @@ class KafkaAdapter:
                     message_type=message_type,
                     message_source_type=KandboxMessageSourceType.BATCH_INPUT,
                     message_source_code=self.env.env_inst_code,
-                    payload=workers[index * step : (index + 1) * step],
+                    payload=workers[index * step: (index + 1) * step],
                 )
 
                 # m.payload = works
@@ -319,7 +310,7 @@ class KafkaAdapter:
                     message_type=message_type,
                     message_source_type=KandboxMessageSourceType.BATCH_INPUT,
                     message_source_code=self.env.env_inst_code,
-                    payload=appointments[index * step : (index + 1) * step],
+                    payload=appointments[index * step: (index + 1) * step],
                 )
 
                 msg_dict = python_asdict(m)
@@ -392,7 +383,7 @@ class KafkaAdapter:
                     message_type=message_type,
                     message_source_type=KandboxMessageSourceType.BATCH_INPUT,
                     message_source_code=self.env.env_inst_code,
-                    payload=absences[index * step : (index + 1) * step],
+                    payload=absences[index * step: (index + 1) * step],
                 )
 
                 msg_dict = python_asdict(m)
@@ -578,7 +569,6 @@ class KafkaAdapter:
             #     log.warn(
             #         f"_update_job_metadata: The planning changes from OSS are detected and applied for job={new_job.job_code} "
             #     )
-
 
             _update_job_reschedule(obj_dict)
             self.env.mutate_update_job_metadata(new_job)
@@ -881,7 +871,7 @@ class KafkaAdapter:
                             obj_dict["requested_start_datetime"] = datetime.strptime(
                                 obj_dict["requested_start_datetime"], "%Y-%m-%d %H:%M:%S"
                             )
-                except Exception as e:  #  ValueError
+                except Exception as e:  # ValueError
                     log.error(
                         f"Error decoding scheduled_start_datetime and requested_start_datetime. The message is skipped. obj_dict= {obj_dict}, error = {str(e)}"
                     )
@@ -916,7 +906,7 @@ class KafkaAdapter:
         try:
             for msg in self.consumer:
                 i += 1
-                if i % 20 == 1:  #  True:  #
+                if i % 20 == 1:  # True:  #
                     log.info(
                         "Received {}-th new env messages in one refresh request:env={}, topic= {}, timestamp= {},partition {}, offset = {}".format(
                             i,
@@ -968,7 +958,7 @@ class KafkaAdapter:
         i = 0
         for msg in self.consumer:
             i += 1
-            if i % 20 == 1:  #  True:  #
+            if i % 20 == 1:  # True:  #
                 log.info(
                     "Received {}-th new env messages in one refresh request:env={}, topic= {}, timestamp= {},partition {}, offset = {}".format(
                         i,

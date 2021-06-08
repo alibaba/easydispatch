@@ -5,7 +5,7 @@
     class="ma-0 pa-0"
     app
     color="white"
-    height="75"
+    height="70"
   >
     <v-card class="ma-0 pa-0" max-width="240">
       <v-list-item class="ma-0" dense>
@@ -120,13 +120,13 @@ export default {
         "DateTime Tolerance": "mdi-ray-start-end",
         "Retain Tech": "mdi-pin",
         "Shared Visit": "mdi-calendar-multiple",
-        "Permanent Pair": "mdi-account-multiple-check"
+        "Permanent Pair": "mdi-account-multiple-check",
       },
       ruleOverallStatusStyle: {
         OK: { icon: "mdi-checkbox-marked-circle", color: "green" },
         Warning: { icon: "mdi-information-outline", color: "rgb(255, 193, 7)" },
-        Error: { icon: "mdi-close-circle", color: "red" }
-      }
+        Error: { icon: "mdi-close-circle", color: "red" },
+      },
     };
   },
   components: {},
@@ -138,7 +138,7 @@ export default {
       "singleJobDropCheckResult",
       "singleJobDropCheckOptions",
       "plannerFilters",
-      "global_loaded_data"
+      "global_loaded_data",
     ]),
     ...mapState("auth", ["userInfo"]),
     toolbarColor() {
@@ -153,7 +153,7 @@ export default {
           0
         );
         return changedJobCount_;
-      }
+      },
     },
     localFilterDate: {
       get() {
@@ -165,7 +165,7 @@ export default {
         } else {
           return `N/A`;
         }
-      }
+      },
     },
     localFilterTeamEmail: {
       get() {
@@ -174,7 +174,7 @@ export default {
         } else {
           return `N/A`;
         }
-      }
+      },
     },
 
     queryString: {
@@ -183,8 +183,8 @@ export default {
       },
       get() {
         return this.$store.state.query;
-      }
-    }
+      },
+    },
   },
   methods: {
     getResultByScore(score) {
@@ -214,8 +214,8 @@ export default {
     ...mapActions("search", ["setQuery"]),
     ...mapMutations("search", ["SET_QUERY"]),
     ...mapActions("gantt", ["commitChangedJobs"]),
-    ...mapMutations("gantt", ["SET_JOB_HEALTH_CHECK_RESULT_SHOW_FLAG"])
-  }
+    ...mapMutations("gantt", ["SET_JOB_HEALTH_CHECK_RESULT_SHOW_FLAG"]),
+  },
 };
 </script>
 

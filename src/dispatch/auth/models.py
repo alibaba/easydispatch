@@ -7,7 +7,7 @@ from datetime import datetime, timedelta, date
 import bcrypt
 from jose import jwt
 from typing import Optional
-from pydantic import validator
+from pydantic import validator, Field
 from sqlalchemy import Column, String, Binary, Integer, Boolean
 
 from dispatch.database import Base
@@ -93,7 +93,8 @@ class DispatchUser(Base, TimeStampMixin):
 
 
 class UserBase(DispatchBase):
-    email: str
+    email: str = Field(
+        default=None, title="username or email", description="The username to login. Though name is email, it may not be email format.",)
 
     @validator("email")
     def email_required(cls, v):
@@ -114,7 +115,8 @@ class UserLogin(UserBase):
 
 class UserRegister(UserLogin):
     password: Optional[str]
-    role: UserRoles = UserRoles.user
+    role: UserRoles = Field(
+        default=UserRoles.user, title="user role", description="in current version, all users have user roles",)
 
     """
     org_code: Optional[str]

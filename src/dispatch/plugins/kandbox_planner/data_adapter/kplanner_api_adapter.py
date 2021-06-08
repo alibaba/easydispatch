@@ -118,8 +118,8 @@ class KPlannerAPIAdapter:
         for myobj in jobs_list:
             myobj["team_code"] = self.team_code
 
-            log.debug(url)
-            log.debug(myobj)
+            # log.debug(url)
+            # log.debug(myobj)
             response = requests.post(
                 url,
                 json=myobj,

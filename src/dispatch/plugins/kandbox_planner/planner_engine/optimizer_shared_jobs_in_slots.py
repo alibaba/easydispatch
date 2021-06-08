@@ -34,7 +34,7 @@ class OptimizerJobsInSlots:
     author_url = "https://github.com/alibaba/easydispatch"
     description = "Batch Optimizer - opti1day."
     version = "0.1.0"
-    default_config = {"log_search_progress": False, "max_exec_time": 5}
+    default_config = {"log_search_progress": False, "max_exec_seconds": 5}
     config_form_spec = {
         "type": "object",
         "properties": {},
@@ -46,8 +46,8 @@ class OptimizerJobsInSlots:
         self.config = config or self.default_config
         # self.kandbox_env = kandbox_env
         # self.kandbox_env.reset()
-        # if max_exec_time is not None:
-        #    self.max_exec_time = max_exec_time
+        # if max_exec_seconds is not None:
+        #    self.max_exec_seconds = max_exec_seconds
 
     def _get_travel_time_from_location_to_job(self, location, job_code_2):
         # y_1,x_1= site1.split(':')
@@ -375,7 +375,7 @@ class OptimizerJobsInSlots:
         solver.parameters.log_search_progress = self.config["log_search_progress"]
         # solver.parameters.num_search_workers = 4
         # https://developers.google.com/optimization/cp/cp_tasks
-        solver.parameters.max_time_in_seconds = self.config["max_exec_time"]  # two minutes
+        solver.parameters.max_time_in_seconds = self.config["max_exec_seconds"]  # two minutes
         status = solver.Solve(model)
 
         if status != cp_model.OPTIMAL and status != cp_model.FEASIBLE:  #

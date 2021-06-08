@@ -222,7 +222,7 @@ async def startup_event():
     log.debug(f"")
     refresh_task = asyncio.create_task(
         background_env_sync_all(
-            refresh_count=1300,
+            refresh_count=999999999999,
             interval_seconds=5,
         )
     )

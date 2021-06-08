@@ -34,7 +34,7 @@ class NaivePlannerJobsInSlots:  # to fake OptimizerJobsInSlots
     author_url = "https://github.com/alibaba/easydispatch"
     description = "Batch Optimizer - opti1day."
     version = "0.1.0"
-    default_config = {"log_search_progress": True, "max_exec_time": 3}
+    default_config = {"log_search_progress": True, "max_exec_seconds": 3}
     config_form_spec = {
         "type": "object",
         "properties": {},
@@ -46,8 +46,8 @@ class NaivePlannerJobsInSlots:  # to fake OptimizerJobsInSlots
         self.config = config or self.default_config
         # self.kandbox_env = kandbox_env
         # self.kandbox_env.reset()
-        # if max_exec_time is not None:
-        #    self.max_exec_time = max_exec_time
+        # if max_exec_seconds is not None:
+        #    self.max_exec_seconds = max_exec_seconds
 
     def _get_travel_time_from_location_to_job(self, location, job_code_2):
         # y_1,x_1= site1.split(':')

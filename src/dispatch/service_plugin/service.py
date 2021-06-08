@@ -96,7 +96,8 @@ def create(*, db_session, service_plugin_in: ServicePluginCreate) -> ServicePlug
 
     plugin = Plugin()
     if service_plugin_in.plugin:
-        plugin = plugin_service.get_by_slug(db_session=db_session, slug=service_plugin_in.plugin.slug)
+        plugin = plugin_service.get_by_slug(
+            db_session=db_session, slug=service_plugin_in.plugin.slug)
 
     if service is None or plugin is None:
         raise HTTPException(status_code=204, detail="service is None or plugin is None.")
@@ -127,13 +128,13 @@ def update(
     """
 
     if service_plugin_in.service:
-        service = service_service.get(
-            db_session=db_session, service_id=service_plugin_in.service.id
-        )
+        service = service_service.get_by_code(
+            db_session=db_session, code=service_plugin_in.service.code)
         service_plugin.service = service
 
     if service_plugin_in.plugin:
-        plugin = plugin_service.get(db_session=db_session, plugin_id=service_plugin_in.plugin.id)
+        plugin = plugin_service.get_by_slug(
+            db_session=db_session, slug=service_plugin_in.plugin.slug)
         service_plugin.plugin = plugin
 
     service_plugin_data = jsonable_encoder(service_plugin)

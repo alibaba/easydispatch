@@ -12,44 +12,48 @@ const getDefaultSelectedState = () => {
     name: null,
     description: null,
 
+    flex_form_data: {
+      env_start_day: "20210524",
+      nbr_of_days_planning_window: 1,
+    },
     created_at: null,
     updated_at: null,
-    loading: false
+    loading: false,
   };
 };
 
 const state = {
   selected: {
-    ...getDefaultSelectedState()
+    ...getDefaultSelectedState(),
   },
   dialogs: {
     showCreateEdit: false,
-    showRemove: false
+    showRemove: false,
   },
   table: {
     rows: {
       items: [],
-      total: null
+      total: null,
     },
     options: {
       q: "",
       page: 1,
       itemsPerPage: 10,
       sortBy: ["name"],
-      descending: [true]
+      descending: [true],
     },
-    loading: false
-  }
+    loading: false,
+  },
 };
 
 const getters = {
-  getField
+  getField,
 };
 
 const actions = {
   getAll: debounce(({ commit, state }) => {
     commit("SET_TABLE_LOADING", true);
-    return TeamApi.getAll(state.table.options).then(response => {
+    return TeamApi.getAll(state.table.options).then((response) => {
       commit("SET_TABLE_LOADING", false);
       commit("SET_TABLE_ROWS", response.data);
     });
@@ -84,12 +88,12 @@ const actions = {
             { root: true }
           );
         })
-        .catch(err => {
+        .catch((err) => {
           commit(
             "app/SET_SNACKBAR",
             {
               text: "Team not created. Reason: " + err.response.data.detail,
-              color: "red"
+              color: "red",
             },
             { root: true }
           );
@@ -105,12 +109,12 @@ const actions = {
             { root: true }
           );
         })
-        .catch(err => {
+        .catch((err) => {
           commit(
             "app/SET_SNACKBAR",
             {
               text: "Team not updated. Reason: " + err.response.data.detail,
-              color: "red"
+              color: "red",
             },
             { root: true }
           );
@@ -128,17 +132,17 @@ const actions = {
           { root: true }
         );
       })
-      .catch(err => {
+      .catch((err) => {
         commit(
           "app/SET_SNACKBAR",
           {
             text: "Team not deleted. Reason: " + err.response.data.detail,
-            color: "red"
+            color: "red",
           },
           { root: true }
         );
       });
-  }
+  },
 };
 
 const mutations = {
@@ -160,7 +164,7 @@ const mutations = {
   },
   RESET_SELECTED(state) {
     state.selected = Object.assign(state.selected, getDefaultSelectedState());
-  }
+  },
 };
 
 export default {
@@ -168,5 +172,5 @@ export default {
   state,
   getters,
   actions,
-  mutations
+  mutations,
 };

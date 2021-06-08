@@ -24,11 +24,11 @@
               <l-map
                 ref="myRoutingMap"
                 :zoom="zoom"
-                :center="center"
-                style="height: 400px; width: 800px"
+                :center="latLongCenter"
+                style="height: 650px; width: 800px"
               >
                 <l-tile-layer :url="osmUrl" :attribution="attribution" />
-                <l-routing-machine :waypoints="waypoints" />
+                <l-routing-machine :waypoints="latLongWayPoints" />
               </l-map>
             </v-col>
           </v-row>
@@ -52,7 +52,7 @@ import "leaflet/dist/leaflet.css";
 import LRoutingMachine from "./LRoutingMachine";
 
 const attribution =
-  '&copy; <a href="http://osm.org/copyright">OpenStreetMap</a> contributors';
+  '&copy; <a href="http://osm.org/copyright">OpenStreetMap</a>';
 const osmUrl = "http://{s}.tile.osm.org/{z}/{x}/{y}.png";
 
 // https://stackoverflow.com/questions/49305901/leaflet-and-mapbox-in-modal-not-displaying-properly
@@ -65,19 +65,14 @@ export default {
   data() {
     return {
       zoom: 6,
-      center: { lat: 38.7436056, lng: -5.2304153 },
       osmUrl,
       attribution,
-      waypoints: [
-        { lat: 38.7436056, lng: -9.2304153 },
-        { lat: 38.7436056, lng: -0.131281 }
-      ]
     };
   },
   // https://cn.vuejs.org/v2/guide/components-edge-cases.html
   provide: function() {
     return {
-      getMap: this.getMap
+      getMap: this.getMap,
     };
   },
   methods: {
@@ -96,49 +91,17 @@ export default {
         }
       }
       checkForMap();
-    }
+    },
   },
 
   computed: {
     ...mapFields("gantt", [
       "dialogs.dialogMapRouteVisible",
-      "selected.latLongRouteArray",
-      "selected.job"
+      "selected.latLongWayPoints",
+      "selected.latLongCenter",
+      "selected.job",
     ]),
-    ...mapGetters("gantt", [
-      "getPlannerFilters"
-      // ...
-    ])
+    ...mapGetters("gantt", ["getPlannerFilters"]),
   },
-
-  watch: {
-    latLongRouteArray(newValue, oldValue) {
-      // https://dev.to/viniciuskneves/watch-for-vuex-state-changes-2mgj
-      console.log(`latLongRouteArray Updating from ${oldValue} to ${newValue}`);
-      if (newValue) {
-        console.log(newValue[0], newValue[1]);
-        let from_latlng = newValue[0];
-        let to_latlng = newValue[1];
-
-        this.center.lat = (from_latlng[0] + to_latlng[0]) / 2;
-        this.center.lng = (from_latlng[1] + to_latlng[1]) / 2 + 0.2;
-
-        this.waypoints = [
-          { lat: from_latlng[0], lng: from_latlng[1] },
-          { lat: to_latlng[0], lng: to_latlng[1] }
-          //	{ lat: 38.7436056, lng: -9.2304153 },
-          // { lat: 38.7436056, lng: -0.131281 }
-        ];
-
-        //global_map_obj.invalidateSize()
-        //global_map_obj.setView(global_center_latlong, 10)
-        // call show mutation.
-        /*
-
-        // Do whatever makes sense now
-        */
-      }
-    }
-  }
 };
 </script>

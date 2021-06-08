@@ -41,7 +41,7 @@ class Opti1DayPlanner(KandboxBatchOptimizerPlugin):
     author_url = "https://github.com/alibaba/easydispatch"
     description = "Batch Optimizer - opti1day."
     version = "0.1.0"
-    default_config = {"log_search_progress": True, "max_exec_time": 10}
+    default_config = {"log_search_progress": True, "max_exec_seconds": 10}
     config_form_spec = {
         "type": "object",
         "properties": {},
@@ -612,7 +612,7 @@ class Opti1DayPlanner(KandboxBatchOptimizerPlugin):
         solver.parameters.log_search_progress = self.config["log_search_progress"]
         # solver.parameters.num_search_workers = 4
         # https://developers.google.com/optimization/cp/cp_tasks
-        solver.parameters.max_time_in_seconds = self.config["max_exec_time"]  # two minutes
+        solver.parameters.max_time_in_seconds = self.config["max_exec_seconds"]  # two minutes
         status = solver.Solve(model)
 
         if status != cp_model.OPTIMAL and status != cp_model.FEASIBLE:  #
@@ -701,7 +701,7 @@ class Opti1DayPlanner(KandboxBatchOptimizerPlugin):
 
 if __name__ == "__main__":
 
-    opti = Opti1DayPlanner(max_exec_time=config.KANDBOX_OPTI1DAY_EXEC_SECONDS)  # 0*60*24
+    opti = Opti1DayPlanner(max_exec_seconds=config.KANDBOX_OPTI1DAY_EXEC_SECONDS)  # 0*60*24
     ss = config.KANDBOX_TEST_OPTI1DAY_START_DAY
     ee = config.KANDBOX_TEST_OPTI1DAY_END_DAY
     opti.kandbox_env.purge_planner_job_status(
@@ -714,7 +714,7 @@ if __name__ == "__main__":
 
     # from dispatch.plugins.kandbox_planner.travel_time_plugin  import  TaxicabTravelTime as TravelTime
     """
-    opti = Opti1DayPlanner( max_exec_time = 20)
+    opti = Opti1DayPlanner( max_exec_seconds = 20)
     from dispatch.plugins.kandbox_planner.travel_time_plugin  import  TaxicabTravelTime
     opti.travel_router = TaxicabTravelTime()
     # [index, type = 'FS', location = '7:12', start_time: 110, end_time = 60 (not used), duration = 32]

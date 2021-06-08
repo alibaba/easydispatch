@@ -32,6 +32,7 @@ class RoutingPyRedisTravelTime(KandboxTravelTimePlugin):
         if travel_minutes is None:
             travel_minutes = self.routing_router.get_travel_minutes_2locations(loc_1, loc_2)
             self.redis_conn.set(travel_time_key, travel_minutes)
+            self.routing_router_hit += 1
             self.all_hit += 1
             log.debug(f"travel time loaded for  ={loc_1} -> {loc_2}")
             return travel_minutes

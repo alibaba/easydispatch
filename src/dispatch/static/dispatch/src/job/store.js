@@ -25,27 +25,28 @@ const getDefaultSelectedState = () => {
     requested_primary_worker: null,
     scheduled_primary_worker: null,
     scheduled_secondary_workers: null,
+    auto_planning: false,
     created_at: null,
     events: null,
     planning_status: null,
     tags: [],
-    loading: false
+    loading: false,
   };
 };
 
 const state = {
   selected: {
-    ...getDefaultSelectedState()
+    ...getDefaultSelectedState(),
   },
   dialogs: {
     showEditSheet: false,
     showNewSheet: false,
-    showRemove: false
+    showRemove: false,
   },
   table: {
     rows: {
       items: [],
-      total: null
+      total: null,
     },
     options: {
       filters: {
@@ -54,16 +55,16 @@ const state = {
         job_type: [],
         job_priority: [],
         status: [],
-        tag: []
+        tag: [],
       },
       q: "",
       page: 1,
       itemsPerPage: 10,
       sortBy: ["code"],
-      descending: [true]
+      descending: [true],
     },
-    loading: false
-  }
+    loading: false,
+  },
 };
 
 const getters = {
@@ -71,7 +72,7 @@ const getters = {
   tableOptions({ state }) {
     // format our filters
     return state.table.options;
-  }
+  },
 };
 
 const actions = {
@@ -98,7 +99,7 @@ const actions = {
       });
     });
     return JobApi.getAll(tableOptions)
-      .then(response => {
+      .then((response) => {
         commit("SET_TABLE_LOADING", false);
         commit("SET_TABLE_ROWS", response.data);
       })
@@ -107,7 +108,7 @@ const actions = {
       });
   }, 200),
   get({ commit, state }) {
-    return JobApi.get(state.selected.id).then(response => {
+    return JobApi.get(state.selected.id).then((response) => {
       commit("SET_SELECTED", response.data);
     });
   },
@@ -158,16 +159,18 @@ const actions = {
         "app/SET_SNACKBAR",
         {
           text: "Please select a team. ",
-          color: "red"
+          color: "red",
         },
         { root: true }
       );
       return;
     }
+    // commit("SET_SELECTED", { flex_form_data: value });
+
     if (!state.selected.id) {
       commit("SET_SELECTED_LOADING", true);
       return JobApi.create(state.selected)
-        .then(response => {
+        .then((response) => {
           commit("SET_SELECTED", response.data);
           commit("SET_SELECTED_LOADING", false);
           this.interval = setInterval(function() {
@@ -176,7 +179,7 @@ const actions = {
             }
           }, 5000);
         })
-        .catch(err => {
+        .catch((err) => {
           commit("SET_SELECTED_LOADING", false);
           commit(
             "app/SET_SNACKBAR",
@@ -184,7 +187,7 @@ const actions = {
               text:
                 "Job not saved. Reasons: " +
                 JSON.stringify(err.response.data.detail),
-              color: "red"
+              color: "red",
             },
             { root: true }
           );
@@ -201,12 +204,12 @@ const actions = {
             { root: true }
           );
         })
-        .catch(err => {
+        .catch((err) => {
           commit(
             "app/SET_SNACKBAR",
             {
               text: "Job not updated. Reason: " + err.response.data.detail,
-              color: "red"
+              color: "red",
             },
             { root: true }
           );
@@ -224,12 +227,12 @@ const actions = {
           { root: true }
         );
       })
-      .catch(err => {
+      .catch((err) => {
         commit(
           "app/SET_SNACKBAR",
           {
             text: "Job not deleted. Reason: " + err.response.data.detail,
-            color: "red"
+            color: "red",
           },
           { root: true }
         );
@@ -246,7 +249,7 @@ const actions = {
         { root: true }
       );
     });
-  }
+  },
 };
 
 const mutations = {
@@ -278,7 +281,7 @@ const mutations = {
   },
   SET_SELECTED_LOADING(state, value) {
     state.selected.loading = value;
-  }
+  },
 };
 
 export default {
@@ -286,5 +289,5 @@ export default {
   state,
   getters,
   actions,
-  mutations
+  mutations,
 };

@@ -1,6 +1,6 @@
 <template>
-  <div style="display: none">
-    <slot v-if="ready"></slot>
+  <div>
+    <slot></slot>
   </div>
 </template>
 
@@ -20,64 +20,64 @@ delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
   iconRetinaUrl,
   iconUrl,
-  shadowUrl
+  shadowUrl,
 });
 
 const props = {
   visible: {
     type: Boolean,
-    default: true
+    default: true,
   },
   waypoints: {
     type: Array,
-    required: true
+    required: true,
   },
   router: {
-    type: IRouter
+    type: IRouter,
   },
   plan: {
-    type: L.Routing.Plan
+    type: L.Routing.Plan,
   },
   geocoder: {
-    type: IGeocoder
+    type: IGeocoder,
   },
   fitSelectedRoutes: {
     type: [String, Boolean],
-    default: "smart"
+    default: "smart",
   },
   lineOptions: {
-    type: LineOptions
+    type: LineOptions,
   },
   routeLine: {
-    type: Function
+    type: Function,
   },
   autoRoute: {
     type: Boolean,
-    default: true
+    default: true,
   },
   routeWhileDragging: {
     type: Boolean,
-    default: false
+    default: false,
   },
   routeDragInterval: {
     type: Number,
-    default: 500
+    default: 500,
   },
   waypointMode: {
     type: String,
-    default: "connect"
+    default: "connect",
   },
   useZoomParameter: {
     type: Boolean,
-    default: false
+    default: false,
   },
   showAlternatives: {
     type: Boolean,
-    default: false
+    default: false,
   },
   altLineOptions: {
-    type: LineOptions
-  }
+    type: LineOptions,
+  },
 };
 
 // const optionTestNames = [
@@ -97,7 +97,7 @@ export default {
     return {
       parentContainer: null,
       ready: false,
-      layer: null
+      layer: null,
     };
   },
   mounted() {
@@ -129,44 +129,46 @@ export default {
       );
       this.delete();
       //this.add()
-      var vm = this;
-      vm.getMap(function(mapObject) {
-        vm.add2MapObject(mapObject);
-      });
-    }
-  },
-  methods: {
-    add() {
-      if (this.parentContainer._isMounted) {
-        const {
-          waypoints,
-          fitSelectedRoutes,
-          autoRoute,
-          routeWhileDragging,
-          routeDragInterval,
-          waypointMode,
-          useZoomParameter,
-          showAlternatives
-        } = this;
-
-        const options = {
-          waypoints,
-          fitSelectedRoutes,
-          autoRoute,
-          routeWhileDragging,
-          routeDragInterval,
-          waypointMode,
-          useZoomParameter,
-          showAlternatives
-        };
-
-        const routingLayer = L.Routing.control(options);
-        // routingLayer.addTo(this.parentContainer.$refs.myRoutingMap.mapObject)
-        const { mapObject } = this.parentContainer;
-        routingLayer.addTo(mapObject);
-        this.layer = routingLayer;
+      if (newVal) {
+        var vm = this;
+        vm.getMap(function(mapObject) {
+          vm.add2MapObject(mapObject);
+        });
       }
     },
+  },
+  methods: {
+    // add() {
+    //   if (this.parentContainer._isMounted) {
+    //     const {
+    //       waypoints,
+    //       fitSelectedRoutes,
+    //       autoRoute,
+    //       routeWhileDragging,
+    //       routeDragInterval,
+    //       waypointMode,
+    //       useZoomParameter,
+    //       showAlternatives,
+    //     } = this;
+
+    //     const options = {
+    //       waypoints,
+    //       fitSelectedRoutes,
+    //       autoRoute,
+    //       routeWhileDragging,
+    //       routeDragInterval,
+    //       waypointMode,
+    //       useZoomParameter,
+    //       showAlternatives,
+    //     };
+
+    //     const routingLayer = L.Routing.control(options);
+    //     // routingLayer.addTo(this.parentContainer.$refs.myRoutingMap.mapObject)
+    //     const { mapObject } = this.parentContainer;
+    //     routingLayer.addTo(mapObject);
+    //     this.layer = routingLayer;
+    //   }
+    // },
 
     add2MapObject(mapObject) {
       if (this.parentContainer._isMounted) {
@@ -178,10 +180,12 @@ export default {
           routeDragInterval,
           waypointMode,
           useZoomParameter,
-          showAlternatives
+          showAlternatives,
         } = this;
 
         const options = {
+          // serviceUrl: "https://kerrypoc.dispatch.kandbox.com/route/v1",
+          serviceUrl: "https://londondemo1.dispatch.kandbox.com/route/v1",
           waypoints,
           fitSelectedRoutes,
           autoRoute,
@@ -189,23 +193,30 @@ export default {
           routeDragInterval,
           waypointMode,
           useZoomParameter,
-          showAlternatives
+          showAlternatives,
         };
+
+        // mapObject.invalidateSize();
+        // mapObject.setView(global_center_latlong, 8);
 
         const routingLayer = L.Routing.control(options);
         routingLayer.addTo(mapObject);
         this.layer = routingLayer;
 
-        var global_center_latlong = [
-          (options.waypoints[0].lat + options.waypoints[1].lat) / 2,
-          (options.waypoints[0].lng + options.waypoints[1].lng) / 2 + 0.2
-        ];
+        // mapObject.setView(
+        //   new L.LatLng(global_center_latlong[0], global_center_latlong[1]),
+        //   8
+        // );
 
+        // mapObject.flyTo(global_center_latlong, 8);
         mapObject.invalidateSize();
-        console.log(
-          `latLongRouteArray Updating, resized to ${global_center_latlong}`
-        );
-        mapObject.setView(global_center_latlong, 10);
+        // var global_center_latlong = [
+        //   (options.waypoints[0].lat + options.waypoints[1].lat) / 2,
+        //   (options.waypoints[0].lng + options.waypoints[1].lng) / 2 + 0.2,
+        // ];
+        // console.log(
+        //   `latLongWayPoints Updating, resized to ${global_center_latlong}`
+        // );
       }
     },
     delete() {
@@ -215,11 +226,11 @@ export default {
         this.layer = null;
       }
     },
-    refresh() {
-      this.delete();
-      this.add();
-    }
-  }
+    // refresh() {
+    //   this.delete();
+    //   this.add();
+    // },
+  },
 };
 </script>
 

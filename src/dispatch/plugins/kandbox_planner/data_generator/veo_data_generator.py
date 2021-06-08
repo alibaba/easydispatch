@@ -159,7 +159,7 @@ def generate_all_workers():
     return list_to_insert
 
 
-def generate_one_day_orders(current_day, worker_list):
+def generate_one_day_orders(current_day, worker_list, nbr_jobs, job_start_index, auto_planning_flag):
 
     job_df = pd.read_csv(
         "{}/plugins/kandbox_planner/util/job_spec_veo.csv".format(config.basedir),
@@ -167,8 +167,11 @@ def generate_one_day_orders(current_day, worker_list):
         sep=";",
         encoding="utf_8",
     )
-    loc_job_index = -1
+    loc_job_index = job_start_index
     list_to_insert = []
+    inserted_jobs = 0
+    if nbr_jobs < job_df.count().max():
+        job_df = job_df.sample(n=nbr_jobs)
     for _, job_schedule_type in job_df.iterrows():
 
         skills = [
@@ -232,9 +235,12 @@ def generate_one_day_orders(current_day, worker_list):
                         "name": "london_t1",
                     },
                 },
-                "auto_planning": False,
+                "auto_planning": auto_planning_flag,
             }
             list_to_insert.append(myobj)
+            inserted_jobs += 1
+            if inserted_jobs >= nbr_jobs:
+                return list_to_insert
 
     return list_to_insert
 
@@ -297,14 +303,19 @@ def generate_all(opts):
         team_code=opts["team_code"],
     )
     worker_list = generate_all_workers()
-    kplanner_api.insert_all_workers(worker_list)
+    if opts["generate_worker"] == 1:
+        kplanner_api.insert_all_workers(worker_list)
+    else:
+        print("worker data not saved.")
 
     for day_i in range(999):
         current_day = GENERATOR_START_DATE + timedelta(days=day_i)
         if current_day >= GENERATOR_END_DATE:
             break
         job_list = generate_one_day_orders(
-            current_day, worker_list=worker_list
+            current_day=current_day, worker_list=worker_list, nbr_jobs=opts[
+                "nbr_jobs"], job_start_index=opts["job_start_index"],
+            auto_planning_flag=opts["auto_planning_flag"]
         )
         kplanner_api.insert_all_orders(job_list)
         #

@@ -5,6 +5,7 @@
     :license: Apache, see LICENSE for more details.
 .. moduleauthor:: qiyang duan
 """
+import copy
 from dispatch.plugins.base import Plugin
 from dispatch.models import PluginOptionModel
 
@@ -17,7 +18,6 @@ from enum import Enum
 import logging
 
 log = logging.getLogger(__file__)
-import copy
 
 
 class KandboxPlannerPluginType(str, Enum):
@@ -57,6 +57,8 @@ class KandboxDataAdapterPlugin(Plugin):
 
 # 2021-02-24 07:40:28 I tried to call different functions by kafka message, but this is useless
 # It should be combined with kafka_adapter.process_env_out_message.
+
+
 class KandboxKafkaOutputHandlerPlugin(Plugin):
     type = KandboxPlannerPluginType.kandbox_batch_optimizer
     _schema = PluginOptionModel
@@ -73,7 +75,8 @@ class KandboxEnvProxyPlugin(Plugin):
     _schema = PluginOptionModel
 
     def get_env(self, config, kp_data_adapter=None):
-        return self.env_class(kp_data_adapter=kp_data_adapter, env_config=config)
+        # kp_data_adapter=kp_data_adapter,
+        return self.env_class(config=config)
 
 
 class KandboxEnvPlugin(gym.Env):
@@ -90,8 +93,8 @@ class KandboxEnvPlugin(gym.Env):
         n = np.zeros(len(self.workers) + 4)
         worker_index = self.workers_dict[a_dict.scheduled_primary_worker_id].worker_index
         n[worker_index] = 1
-        n[-4] = a_dict.scheduled_duration_minutes  #  * self.env.config['minutes_per_day']  +
-        n[-3] = a_dict["scheduled_start_day"]  #  * self.env.config['minutes_per_day']  +
+        n[-4] = a_dict.scheduled_duration_minutes  # * self.env.config['minutes_per_day']  +
+        n[-3] = a_dict["scheduled_start_day"]  # * self.env.config['minutes_per_day']  +
         n[-2] = a_dict.scheduled_start_minutes  # / 1600 # 288
         n[-1] = len(a_dict.scheduled_secondary_worker_ids) + 1  # / 200 # 60 - shared count
 
@@ -106,7 +109,7 @@ class KandboxEnvPlugin(gym.Env):
         """
         raise ValueError("# DO NOT USE")
         new_act = action.copy()
-        max_i = np.argmax(new_act[0 : len(self.workers)])
+        max_i = np.argmax(new_act[0: len(self.workers)])
         worker_code = self.workers[max_i].worker_code
         action_day = int(new_act[-3])
         job_start_time = (
@@ -116,7 +119,7 @@ class KandboxEnvPlugin(gym.Env):
         scheduled_secondary_worker_ids = []
         for i in range(1, shared_count):
             new_act[max_i] = 0
-            max_i = np.argmax(new_act[0 : len(self.workers)])
+            max_i = np.argmax(new_act[0: len(self.workers)])
             scheduled_secondary_worker_ids.append(self.workers[max_i].worker_code)
 
         a_dict = {
@@ -246,7 +249,6 @@ class KandboxRulePlugin(Plugin):
     def evalute_normal_single_worker_n_job(self, env=None, job=None):  # worker = None,
         raise NotImplementedError
 
-
     def generate_virtual_job_from_action(self, env=None, a_dict=None):
 
         all_jobs = []
@@ -267,6 +269,7 @@ class KandboxRulePlugin(Plugin):
         res = self.evalute_normal_single_worker_n_job(env=env, job=job_copy)
 
         return res
+
 
 class KandboxTravelTimePlugin(Plugin):
     """

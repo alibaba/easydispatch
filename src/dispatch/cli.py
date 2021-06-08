@@ -65,10 +65,14 @@ def plugins_group():
 )
 @click.option("--start_day", default="2020112", help="start_day in format yyyymmdd")
 @click.option("--end_day", default="20201014", help="end_day in format yyyymmdd")
-@click.option("--team_code", default="t", help="end_day in format yyyymmdd")
-@click.option("--dispatch_days", default=10, help="end_day in format yyyymmdd")
-@click.option("--dataset", default="veo", help="end_day in format yyyymmdd")
-def populate_data(username, password, start_day, end_day, team_code, dispatch_days, dataset):
+@click.option("--team_code", default="t", help="team code")
+@click.option("--dispatch_days", default=10, help="number of days in integer")
+@click.option("--dataset", default="veo", help="dataset, for example veo")
+@click.option("--generate_worker", default=0, help="whether to create worker or not")
+@click.option("--nbr_jobs", default=1, help="how many jobs to generate")
+@click.option("--job_start_index", default=20, help="how many jobs to generate")
+@click.option("--auto_planning_flag", default=1, help="auto or not, 1 is yes/true")
+def populate_data(username, password, start_day, end_day, team_code, dispatch_days, dataset, generate_worker, nbr_jobs, job_start_index, auto_planning_flag):
     """Shows all available plugins"""
     log.debug(f"Populating sample data wtih username={username}, dataset = {dataset}...")
 
@@ -83,7 +87,7 @@ def populate_data(username, password, start_day, end_day, team_code, dispatch_da
     org_engine = engine
     ORG_SQLALCHEMY_DATABASE_URI = config.SQLALCHEMY_DATABASE_URI
 
-    print("org_engine .SQLALCHEMY_DATABASE_URI=", config.SQLALCHEMY_DATABASE_URI)
+    # print("org_engine .SQLALCHEMY_DATABASE_URI=", config.SQLALCHEMY_DATABASE_URI)
     from sqlalchemy_utils import database_exists, create_database
 
     if not database_exists(str(ORG_SQLALCHEMY_DATABASE_URI)):  #
@@ -99,6 +103,10 @@ def populate_data(username, password, start_day, end_day, team_code, dispatch_da
             "end_day": end_day,
             "dispatch_days": dispatch_days,
             "team_code": team_code,
+            "generate_worker": generate_worker,
+            "nbr_jobs": nbr_jobs,
+            "job_start_index": job_start_index,
+            "auto_planning_flag": True if auto_planning_flag == 1 else False
         }
     )
 
@@ -664,7 +672,7 @@ def start_rec(org_code, team_id, reset_window, start_day, end_day):
 @click.option(
     "--org_code", default="0", help="Organization Code, for multi tenancy, internal usage only."
 )
-@click.option("--team_id", default=2, help="end_day in format yyyymmdd")
+@click.option("--team_id", default=1, help="team_id")
 # @click.option("--agent_slug", default="2", help="slug")
 def start_train(org_code, team_id):
     """Train the PPO rl agent:

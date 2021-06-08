@@ -27,7 +27,8 @@ from dispatch.plugins.kandbox_planner.util.kandbox_date_util import get_current_
 from dispatch.service.planner_service import (
     get_default_active_planner,
     get_appt_dict_from_redis,
-    reset_planning_window_for_team
+    reset_planning_window_for_team,
+    run_batch_optimizer
 )
 from dispatch.team.models import Team
 from dispatch.service.planner_models import (
@@ -385,7 +386,34 @@ def reset_planning_window(
         raise HTTPException(
             status_code=400, detail=f"The team code you requested is not in your organization...",
         )
-    result_info = reset_planning_window_for_team(
+    result_info, _ = reset_planning_window_for_team(
+        org_code=org_code,
+        team_id=team.id,)
+
+    return JSONResponse(result_info)
+
+
+@planner_router.post(
+    "/run_batch_optimizer/",
+    summary="run_batch_optimizer.",
+)
+def run_batch_optimizer_view(
+    request_in: ResetPlanningWindowInput,
+    team_code: str = Query("1", alias="team_code"),
+    current_user: DispatchUser = Depends(get_current_user),
+    db_session: Session = Depends(get_db),
+):
+    org_code = current_user.org_code
+    team = team_service.get_by_code(db_session=db_session, code=request_in.team_code)
+    if team is None:
+        raise HTTPException(
+            status_code=400, detail=f"The team code you requested is not in your organization.",
+        )
+    if team.org_id != current_user.org_id:
+        raise HTTPException(
+            status_code=400, detail=f"The team code you requested is not in your organization...",
+        )
+    result_info = run_batch_optimizer(
         org_code=org_code,
         team_id=team.id,)
 

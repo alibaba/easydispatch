@@ -8,10 +8,11 @@ from sqlalchemy_utils import TSVectorType
 
 from dispatch.database import Base
 from dispatch.models import DispatchBase, TermReadNested, TimeStampMixin
-
-
+from pydantic import validator, Field
 
 # SQLAlchemy models...
+
+
 class Service(TimeStampMixin, Base):
     id = Column(Integer, primary_key=True)
     service_type = Column(String, default="realtime_heuristic_planner")  # RL, batch
@@ -20,11 +21,19 @@ class Service(TimeStampMixin, Base):
     name = Column(String)
     description = Column(String)
 
-    search_vector = Column(TSVectorType("code","name","description"))
+    search_vector = Column(TSVectorType("code", "name", "description"))
 
 
 # Pydantic models...
 class ServiceBase(DispatchBase):
+    """ One planner service is consisted of at least three elements:
+    \n - One environment, with a plugin type of kandbox_env_proxy
+    \n - One or multiple business rules, each rule plugin must have a plugin type of kandbox_rule
+    \n - One realtime agent, with a plugin type of kandbox_agent
+    \n
+    \n It may also optinally include one batch optimizer which can be executed periodically to re-arrange all jobs. The plugin type should be kandbox_batch_optimizer
+
+    """
     code: str
     name: Optional[str] = None
     service_type: str = "realtime_heuristic_planner"
@@ -34,7 +43,6 @@ class ServiceBase(DispatchBase):
 
 class ServiceCreate(ServiceBase):
     pass
-
 
 
 class ServiceUpdate(ServiceBase):

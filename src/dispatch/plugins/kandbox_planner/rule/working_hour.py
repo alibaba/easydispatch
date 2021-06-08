@@ -2,6 +2,13 @@ import dispatch.plugins.kandbox_planner.util.kandbox_date_util as date_util
 
 
 from dispatch.plugins.bases.kandbox_planner import KandboxRulePlugin
+from dispatch.plugins.kandbox_planner.env.env_models import (
+    Worker,
+    Job,
+    Appointment,
+    Absence,
+    ActionEvaluationScore,
+)
 
 
 class KandboxRulePluginWithinWorkingHour(KandboxRulePlugin):
@@ -18,7 +25,11 @@ class KandboxRulePluginWithinWorkingHour(KandboxRulePlugin):
 
     # rule_code = "within_working_hour"
     # rule_name = "Job is between start and end time of the worker"
-    message_template = "Job time ({}-{}) is out of working hour"
+    message_template = "Job time ({}-{}) ({}-{}) is out of working hour, available overtime = {} minutes "
+    success_message_template = "Job time ({}-{}) ({}-{}) is within working hour"
+    overtime_allowed_message_template = (
+        "Job time ({}-{}) ({}-{}) is not in working hour, but overtime ({} mins) allows it"
+    )
 
     default_config = {
         "allow_overtime": False,
@@ -37,49 +48,98 @@ class KandboxRulePluginWithinWorkingHour(KandboxRulePlugin):
     }
 
     def evalute_normal_single_worker_n_job(self, env=None, job=None):  # worker = None,
-        worker = env.workers_dict[job["scheduled_primary_worker_id"]]
-        result = {
-            "score": 0,
-            "message": "Job is between start and end time of the worker",
-        }
+        overall_message = ""
+        score = 1
+        metrics_detail = {"status_code": "OK"}
 
-        # return score, violated_rules (negative values)
-        # return self.weight * 1
-        for day_i, working_slot in enumerate(worker["working_minutes"]):
-            working_slot_with_day = [
-                working_slot[0] + (24 * 60 * day_i),
-                working_slot[1] + (24 * 60 * day_i),
+        for worker_code in job.scheduled_worker_codes:
+            worker = env.workers_dict[worker_code]
+
+            day_seq = int(job.scheduled_start_minutes / 1440)
+            weekday_i = env.env_encode_day_seq_to_weekday(day_seq)
+
+            working_slot_in_the_day = [
+                worker.weekly_working_slots[weekday_i][0] + (24 * 60 * day_seq),
+                worker.weekly_working_slots[weekday_i][1] + (24 * 60 * day_seq),
             ]
             cliped_slot = date_util.clip_time_period(
-                p1=working_slot_with_day,
+                p1=working_slot_in_the_day,
                 p2=[
-                    job["assigned_start_minutes"],
-                    job["assigned_start_minutes"] + job["scheduled_duration_minutes"],
+                    job.scheduled_start_minutes,
+                    job.scheduled_start_minutes + job.scheduled_duration_minutes,
                 ],
             )
             if len(cliped_slot) > 1:
-                if (cliped_slot[0] == job["assigned_start_minutes"]) & (
-                    cliped_slot[1] ==
-                    job["assigned_start_minutes"] + job["scheduled_duration_minutes"]
+                if (cliped_slot[0] == job.scheduled_start_minutes) & (
+                    cliped_slot[1] == job.scheduled_start_minutes + job.scheduled_duration_minutes
                 ):
-                    result["score"] = 1
-                    return result
-                # Partial fit, reject for now #TODO
-                result["score"] = -1
-                result["message"] = self.message_template.format(
-                    date_util.minutes_to_time_string(job["assigned_start_minutes"]),
-                    date_util.minutes_to_time_string(
-                        job["assigned_start_minutes"] + job["scheduled_duration_minutes"]
-                    ),
-                )
-                return result
+                    overall_message = self.success_message_template.format(
+                        date_util.minutes_to_time_string(job.scheduled_start_minutes),
+                        date_util.minutes_to_time_string(
+                            job.scheduled_start_minutes + job.scheduled_duration_minutes
+                        ),
+                        job.scheduled_start_minutes,
+                        job.scheduled_start_minutes + job.scheduled_duration_minutes,
+                    )
+                    # move on to next worker
+                    continue
 
-            else:
-                continue
-        # If the start time does not fall in working hour, reject it.
-        result["score"] = -1
-        result["message"] = self.message_template.format(
-            job["assigned_start_minutes"],
-            job["assigned_start_minutes"] + job["scheduled_duration_minutes"],
+            available_overtime = env.get_worker_available_overtime_minutes(
+                worker_code=worker_code, day_seq=day_seq
+            )
+            # if self.config["allow_overtime"]:
+            if available_overtime > 0:
+                if (
+                    (
+                        working_slot_in_the_day[0] - available_overtime
+                        < job.scheduled_start_minutes
+                    )
+                    & (
+                        working_slot_in_the_day[1] + available_overtime
+                        > job.scheduled_start_minutes + job.scheduled_duration_minutes
+                    )
+                    & (
+                        working_slot_in_the_day[1]
+                        - working_slot_in_the_day[0]
+                        + available_overtime
+                        > job.scheduled_duration_minutes
+                    )
+                ):
+                    score = 0
+                    overall_message = self.overtime_allowed_message_template.format(
+                        date_util.minutes_to_time_string(job.scheduled_start_minutes),
+                        date_util.minutes_to_time_string(
+                            job.scheduled_start_minutes + job.scheduled_duration_minutes
+                        ),
+                        job.scheduled_start_minutes,
+                        job.scheduled_start_minutes + job.scheduled_duration_minutes,
+                        available_overtime,
+                    )
+                    # move on to next worker
+                    print(overall_message)
+                    continue
+
+            # If the start time does not fully fall in one working slot for any worker, reject it instantly.
+            score = -1
+            overall_message = self.message_template.format(
+                date_util.minutes_to_time_string(job.scheduled_start_minutes),
+                date_util.minutes_to_time_string(
+                    job.scheduled_start_minutes + job.scheduled_duration_minutes
+                ),
+                job.scheduled_start_minutes,
+                job.scheduled_start_minutes + job.scheduled_duration_minutes,
+                available_overtime,
+            )
+            return ActionEvaluationScore(
+                score=score,
+                score_type=self.title,
+                message=overall_message,
+                metrics_detail={"status_code": "ERROR"},
+            )
+
+        return ActionEvaluationScore(
+            score=score,
+            score_type=self.title,
+            message=overall_message,
+            metrics_detail=metrics_detail,
         )
-        return result

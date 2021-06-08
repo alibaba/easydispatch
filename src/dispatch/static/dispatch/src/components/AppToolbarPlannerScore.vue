@@ -5,9 +5,9 @@
     class="ma-0 pa-0"
     app
     color="white"
-    height="75"
+    height="70"
   >
-    <v-card class="ma-0" max-width="200" max-height="60">
+    <v-card class="ma-0" max-width="200" height="55">
       <v-list-item class="ma-0" dense>
         <v-list-item-content>
           <v-list-item-title>
@@ -21,12 +21,11 @@
         </v-list-item-content>
       </v-list-item>
     </v-card>
-    <v-card class="ml-1 pr-1" width="210" max-height="60">
+    <v-card class="ma-0" min-width="130"  max-width="130" height="55">
       <v-tooltip bottom>
         <template v-slot:activator="{ on, attrs }">
           <v-card-title v-bind="attrs" v-on="on">
-            <v-icon size="30px" color="indigo" class="mr-3">mdi-finance</v-icon>
-            Score:
+            <v-icon size="30px" color="indigo" class="mr-3">mdi-finance</v-icon> 
             <div>
               <span
                 class="font-weight-black"
@@ -44,13 +43,11 @@
       </v-tooltip>
     </v-card>
 
-    <v-card class="ma-1  pa-1" width="550" max-height="60">
+    <v-card class="ma-1  pa-1"  min-width="300"  max-width="600"  height="55" 	d-xs-none>
       <p class="text--primary">
-        Travel Minutes: {{ plannerScoresStats.total_travel_minutes }}, Onsite
-        Working Minutes:{{ plannerScoresStats.onsite_working_minutes }},
-        Inplanning Count: {{ plannerScoresStats.inplanning_job_count }},
-        Unplanned Count:{{ plannerScoresStats.unplanned_job_count }}, Overtime
-        Minutes: {{ plannerScoresStats.total_overtime_minutes }}
+        Travel: {{ plannerScoresStats.total_travel_minutes }} min, Onsite:{{ plannerScoresStats.onsite_working_minutes }} min,
+        Inplanning: {{ plannerScoresStats.inplanning_job_count }},
+        Unplanned:{{ plannerScoresStats.unplanned_job_count }}, Overtime: {{ plannerScoresStats.total_overtime_minutes }} min
       </p>
     </v-card>
 
@@ -87,20 +84,20 @@ export default {
         "DateTime Tolerance": "mdi-ray-start-end",
         "Retain Tech": "mdi-pin",
         "Shared Visit": "mdi-calendar-multiple",
-        "Permanent Pair": "mdi-account-multiple-check"
+        "Permanent Pair": "mdi-account-multiple-check",
       },
       ruleOverallStatusStyle: {
         OK: { icon: "mdi-checkbox-marked-circle", color: "green" },
         Warning: { icon: "mdi-information-outline", color: "yellow" },
-        Error: { icon: "info", color: "red" }
-      }
+        Error: { icon: "info", color: "red" },
+      },
     };
   },
   computed: {
     ...mapState("gantt", [
       "plannerScoresAPICallInProgressFlag",
       "plannerFilters",
-      "plannerScoresStats"
+      "plannerScoresStats",
     ]),
     ...mapState("auth", ["userInfo"]),
     toolbarColor() {
@@ -117,7 +114,7 @@ export default {
         } else {
           return `N/A`;
         }
-      }
+      },
     },
     localFilterTeamEmail: {
       get() {
@@ -126,7 +123,7 @@ export default {
         } else {
           return `N/A`;
         }
-      }
+      },
     },
 
     queryString: {
@@ -135,8 +132,8 @@ export default {
       },
       get() {
         return this.$store.state.query;
-      }
-    }
+      },
+    },
   },
   methods: {
     getResultByScore(score) {
@@ -166,8 +163,8 @@ export default {
     ...mapActions("search", ["setQuery"]),
     ...mapMutations("search", ["SET_QUERY"]),
     ...mapActions("gantt", ["commitChangedJobs"]),
-    ...mapMutations("gantt", ["SET_JOB_HEALTH_CHECK_RESULT_SHOW_FLAG"])
-  }
+    ...mapMutations("gantt", ["SET_JOB_HEALTH_CHECK_RESULT_SHOW_FLAG"]),
+  },
 };
 </script>
 

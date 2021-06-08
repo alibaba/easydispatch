@@ -18,6 +18,9 @@ from dispatch.plugins.kandbox_planner.rule.travel_time import KandboxRulePluginS
 from dispatch.plugins.kandbox_planner.rule.working_hour import KandboxRulePluginWithinWorkingHour
 from dispatch.plugins.kandbox_planner.rule.requested_skills import KandboxRulePluginRequestedSkills
 from dispatch.plugins.kandbox_planner.travel_time_plugin import HaversineTravelTime
+
+# from dispatch.plugins.kandbox_planner.routing.travel_time_routingpy_redis import RoutingPyRedisTravelTime
+
 from dispatch.config import (
     REDIS_HOST,
     REDIS_PORT,
@@ -30,8 +33,12 @@ from dispatch.config import (
     MIN_START_MINUTES_FROM_NOW,
     TESTING_MODE,
 )
+from dispatch import config
 from dispatch.service.planner_models import SingleJobDropCheckOutput
-
+from dispatch.plugins.kandbox_planner.env.env_enums import (
+    EnvRunModeType,
+    JobPlanningStatus,
+)
 from dispatch.plugins.kandbox_planner.env.env_enums import *
 from dispatch.plugins.kandbox_planner.env.env_models import (
     WorkingTimeSlot,
@@ -125,7 +132,7 @@ class KPlannerJob2SlotEnv(KandboxEnvPlugin):
     # but it is bigger value space for algorithm to decide.
     """
 
-    code = "Kandbox Environment Job2Slot"
+    title = "Kandbox Environment Job2Slot"
     slug = "kprl_env_job2slot"
     author = "Kandbox"
     author_url = "https://github.com/qiyangduan"
@@ -143,13 +150,12 @@ class KPlannerJob2SlotEnv(KandboxEnvPlugin):
         except:
             log.warn("rl_env: Error when releasing kp_data_adapter.")
 
-    def __init__(self, config=None, kp_data_adapter=None, env_config=None):
+    def __init__(self, config=None):
         #
         # each worker and job is a dataclass object, internally transformed
         #
-        if env_config is None:
-            env_config = config
-
+        env_config = config
+        kp_data_adapter = None
         reset_cache = False
         self.workers_dict = {}  # Dictionary of all workers, indexed by worker_code
         self.workers = []  # List of Workers, pointing to same object in self.workers_dict
@@ -193,7 +199,7 @@ class KPlannerJob2SlotEnv(KandboxEnvPlugin):
             "nbr_of_observed_workers": NBR_OF_OBSERVED_WORKERS,
             "minutes_per_day": MINUTES_PER_DAY,
             "max_nbr_of_jobs_per_day_worker": MAX_NBR_OF_JOBS_PER_DAY_WORKER,
-            "travel_speed_km_hour": 40,
+            "travel_speed_km_hour": 25,
             # in minutes, 100 - travel / 1000 as the score
             "scoring_factor_standard_travel_minutes": SCORING_FACTOR_STANDARD_TRAVEL_MINUTES,
             "flex_form_data": {
@@ -201,7 +207,7 @@ class KPlannerJob2SlotEnv(KandboxEnvPlugin):
                 "weekly_rest_day": "0",
                 "travel_speed_km_hour": 40,
                 "travel_min_minutes": 10,
-                "planning_working_days": 2,
+                "planning_working_days": 1,
             },
         }
 
@@ -316,7 +322,7 @@ class KPlannerJob2SlotEnv(KandboxEnvPlugin):
     def reset(self, shuffle_jobs=False):
         # print("env reset")
         self._reset_data()
-        self._reset_gym_appt_data()
+        # self._reset_gym_appt_data()
         self.slot_server.reset()
 
         self.trial_count += 1
@@ -431,7 +437,7 @@ class KPlannerJob2SlotEnv(KandboxEnvPlugin):
             self.jobs_dict[job.job_code] = job
             job.job_index = ji
 
-        log.info("env _reset_data finished")
+        log.debug("env _reset_data finished")
 
     # This is a key to map job_code to its sorted set of all recommendations (RecommendedAction)
     def get_recommendation_job_key(self, job_code: str, action_day: int) -> str:
@@ -488,7 +494,7 @@ class KPlannerJob2SlotEnv(KandboxEnvPlugin):
     def get_env_planning_horizon_end_minutes(self) -> int:
         #  worker_id, start_minutes, end_minutes, slot_type,  worker_id,start_minutes, end_minutes, slot_type
         return 1440 * (
-            self.config["nbr_of_days_planning_window"]
+            int(self.config["nbr_of_days_planning_window"])
             + int(self.get_env_planning_horizon_start_minutes() / 1440)
         )
 
@@ -601,6 +607,11 @@ class KPlannerJob2SlotEnv(KandboxEnvPlugin):
             travel_speed=self.config["travel_speed_km_hour"],
             min_minutes=self.config["travel_min_minutes"],
         )
+        # self.travel_router = RoutingPyRedisTravelTime(
+        #     travel_speed=self.config["travel_speed_km_hour"],
+        #     min_minutes=self.config["travel_min_minutes"],
+        #     redis_conn=self.redis_conn, travel_mode="car"
+        # )
 
     def reload_env_from_redis(self):
         # observation = self.reset(shuffle_jobs=False)
@@ -733,6 +744,8 @@ class KPlannerJob2SlotEnv(KandboxEnvPlugin):
         self.replay_worker_absence_to_redis()
         self.replay_appointment_to_redis()
 
+        self.run_mode = EnvRunModeType.PREDICT
+
     def replay_appointment_to_redis(self):
         # local_loader.load_batch_local_appointment_TODO(env=self)
         for appt_code, value in self.kp_data_adapter.appointment_db_dict.items():
@@ -789,6 +802,9 @@ class KPlannerJob2SlotEnv(KandboxEnvPlugin):
         # I need to lock it to protect kafka,  generator not threadsafe.
         # ValueError: generator already executing
         # with lock:
+        if PLANNER_SERVER_ROLE == "trainer":
+            return
+
         self.kafka_server.consume_env_messages()
 
     def env_encode_single_worker(self, worker=None):
@@ -979,7 +995,7 @@ class KPlannerJob2SlotEnv(KandboxEnvPlugin):
             appointment_status=job_form["appointment_status"],
             #
             is_active=True,
-            is_auto_planning = False,
+            is_auto_planning=False,
         )
         self.set_searching_worker_candidates(appt_job)
 
@@ -1027,15 +1043,15 @@ class KPlannerJob2SlotEnv(KandboxEnvPlugin):
     def _convert_lists_to_slots(self, input_list: list, job):
         orig_loc = self.locations_dict[job["location_code"]]
 
-        CONSTANT_JOB_LOCATION = JobLocation(
+        CONSTANT_JOB_LOCATION = JobLocationBase(
             geo_longitude=orig_loc.geo_longitude,
             geo_latitude=orig_loc.geo_latitude,
             location_type=LocationType.HOME,
             location_code=orig_loc.location_code,
-            historical_serving_worker_distribution=None,
-            avg_actual_start_minutes=0,
-            avg_days_delay=0,
-            stddev_days_delay=0,
+            # historical_serving_worker_distribution=None,
+            # avg_actual_start_minutes=0,
+            # avg_days_delay=0,
+            # stddev_days_delay=0,
             # available_slots=tuple(),  # list of [start,end] in linear scale
             # rejected_slots=job["rejected_slots"],
         )
@@ -1049,8 +1065,8 @@ class KPlannerJob2SlotEnv(KandboxEnvPlugin):
                 end_minutes=slot[1],
                 prev_slot_code=None,
                 next_slot_code=None,
-                start_location=CONSTANT_JOB_LOCATION[0:4],
-                end_location=CONSTANT_JOB_LOCATION[0:4],
+                start_location=CONSTANT_JOB_LOCATION,
+                end_location=CONSTANT_JOB_LOCATION,
                 worker_id="_",
                 available_free_minutes=0,
                 assigned_job_codes=[],
@@ -1147,10 +1163,13 @@ class KPlannerJob2SlotEnv(KandboxEnvPlugin):
 
         job_available_slots = self._convert_lists_to_slots(net_avail_slots, job)
         # job_location.available_slots = sorted(list(net_avail_slots), key=lambda x: x[0])
-
-        requested_skills = {
-            "skills": set(flex_form_data["requested_skills"]),
-        }
+        if "requested_skills" in flex_form_data.keys():
+            requested_skills = {
+                "skills": set(flex_form_data["requested_skills"]),
+            }
+        else:
+            requested_skills = set()
+            log.error(f"job({job['code']}) has no requested_skills")
 
         the_final_status_type = job["planning_status"]
         is_appointment_confirmed = False
@@ -1193,7 +1212,7 @@ class KPlannerJob2SlotEnv(KandboxEnvPlugin):
             #
             is_active=job["is_active"],
             is_appointment_confirmed=is_appointment_confirmed,
-            is_auto_planning = job["auto_planning"],
+            is_auto_planning=job["auto_planning"],
         )
 
         self.set_searching_worker_candidates(final_job)
@@ -1269,7 +1288,7 @@ class KPlannerJob2SlotEnv(KandboxEnvPlugin):
             #
             is_active=True,
             is_replayed=False,
-            is_auto_planning = False,
+            is_auto_planning=False,
             flex_form_data=job["flex_form_data"],
         )
 
@@ -1508,7 +1527,9 @@ class KPlannerJob2SlotEnv(KandboxEnvPlugin):
             planned_jobs_data = new_planned_job_df[jobs_dimensions].values.tolist()
 
         all_jobs_in_env_df = pd.DataFrame(all_jobs_in_env).fillna(0)
-        all_jobs_in_env = all_jobs_in_env_df.to_dict(orient="record")
+        # /Users/qiyangduan/temp/nlns_env/lib/python3.7/site-packages/pandas/core/frame.py:1490: FutureWarning: Using short name for 'orient' is deprecated. Only the options: ('dict', list, 'series', 'split', 'records', 'index')
+        # all_jobs_in_env = all_jobs_in_env_df.to_dict(orient="record")
+        all_jobs_in_env = all_jobs_in_env_df.to_dict("record")
 
         print(datetime.now(), "worker_job_dataset_json: Finished.")
         # https://echarts.apache.org/en/option.html#series-custom.dimensions
@@ -1794,9 +1815,9 @@ class KPlannerJob2SlotEnv(KandboxEnvPlugin):
                     )
                     continue
                 else:
-                    log.error(f"Why not in slots? job_code = {job_code}")
+                    log.error(f"Why not in slots? PLANNED, job_code = {job_code}")
             else:
-                log.error(f"Why not in sltos? job_code = {job_code}")
+                log.error(f"Why not in slots? INPLANNING, job_code = {job_code}")
         onsite_working_minutes = sum(
             [assigned_job_stats[j]["requested_duration_minutes"] for j in assigned_job_stats]
         )
@@ -2639,7 +2660,7 @@ class KPlannerJob2SlotEnv(KandboxEnvPlugin):
         job_commit_output.status_code = ActionScoringResultType.OK
         job_commit_output.nbr_changed_jobs = nbr_changed_jobs
 
-        log.info(
+        log.debug(
             f"JOB:{curr_job.job_code}:WORKER:{a_dict.scheduled_worker_codes}:START_MINUTES:{a_dict.scheduled_start_minutes}: job is commited successfully. "
         )
 
@@ -2746,14 +2767,14 @@ class KPlannerJob2SlotEnv(KandboxEnvPlugin):
 
             # print(f"Env Error: trail={self.trial_count}, step={self.trial_step_count}")
 
-        if self.trial_step_count > len(self.jobs) * 1.5:
-            done = True
-            reward = -5
-            if self.trial_count % 10 == 0:
-                # print("No more unplanned jobs, done. internal error? It should be handled by has_next!") )
-                print(
-                    f"Env done with Failure: travel_time={self.total_travel_time:.2f}, trial={self.trial_count}, step={self.trial_step_count}, nbr_inplanning={self.nbr_inplanning} ... "
-                )
+        # if self.trial_step_count > len(self.jobs) * 0.3:
+        #     done = True
+        #     reward = -5
+        #     if self.trial_count % 1 == 0:
+        #         # print("No more unplanned jobs, done. internal error? It should be handled by has_next!") )
+        #         log.info(
+        #             f"Env done with Failure: travel_time={self.total_travel_time:.2f}, trial={self.trial_count}, trial_step_count={self.trial_step_count}, nbr_inplanning={self.nbr_inplanning} ... "
+        #         )
         self.nbr_inplanning = sum(
             [
                 1 if self.jobs_dict[j_i].planning_status != "U" else 0
@@ -2761,14 +2782,16 @@ class KPlannerJob2SlotEnv(KandboxEnvPlugin):
             ]
         )
         if self.nbr_inplanning >= len(self.jobs):
+            overall_score = self.get_planner_score_stats()["overall_score"]
             done = True
-            reward += 10  # 20
+            reward = 4 * overall_score
 
-        if (done == True) & (self.trial_count % 10 == 0):  # trial_count
-            # print("No more unplanned jobs, done. internal error? It should be handled by has_next!") )
-            print(
-                f"Env done with Success: self.inplanning_job_count = {self.inplanning_job_count}, trial={self.trial_count}, step={self.trial_step_count}, reward={reward:.2f}, travel_time={self.total_travel_time:.2f}, nbr_inplanning={self.nbr_inplanning}, travel_worker_job_count = {self.total_travel_worker_job_count}"
-            )
+        # if (done == True) & (self.trial_count % 1 == 0):  # trial_count
+        #     # print("No more unplanned jobs, done. internal error? It should be handled by has_next!") )
+        #     # self.get_planner_score_stats()["overall_score"]
+        #     log.info(
+        #         f"Env done with Success: self.inplanning_job_count = {self.inplanning_job_count}, trial_step_count = {self.trial_step_count},  reward={reward:.2f}, travel_time={self.total_travel_time:.2f}, nbr_inplanning={self.nbr_inplanning}, travel_worker_job_count = {self.total_travel_worker_job_count}, trial={self.trial_count}"
+        #     )
 
         obs = self._get_observation()
         if ((len(obs["jobs"]) < 1) or (len(obs["slots"]) < 1)) and (not done):
@@ -2894,6 +2917,9 @@ class KPlannerJob2SlotEnv(KandboxEnvPlugin):
 
     def step(self, action):
         self.trial_step_count += 1
+        if len(self.internal_obs_slot_list) < 1:
+            log.error("len(self.internal_obs_slot_list) < 1, not ready... Reset not called yet?")
+            return self._get_observation(), -1, False, {}
         # action [1, 0, 0 ]. One hot coding, 1 means this worker take the job.
         new_act = action.copy()
         max_i = np.argmax(new_act[0: len(self.internal_obs_slot_list)])  #
@@ -2905,43 +2931,51 @@ class KPlannerJob2SlotEnv(KandboxEnvPlugin):
         shared_time_slots_optimized = [temp_slot]
         obs, reward, done, info = self.step_naive_search_and_plan_job(shared_time_slots_optimized)
 
-        if (not done) & (self.trial_step_count > 1.5 * len(self.jobs)):
-            done = True
-            reward = -5
-            info = {
-                "message": f"Env done as Failed: travel_time={self.total_travel_time:.2f}, trial={self.trial_count}, step={self.trial_step_count}, nbr_inplanning={self.nbr_inplanning} ... "
-            }
+        if (not done):
+            if (self.trial_step_count > 0.3 * len(self.jobs)):
+                done = True
+                reward = -5
+                msg = f"Env done as Failure:  inplanning = {self.inplanning_job_count}, trial_step_count = {self.trial_step_count},  reward={reward:.2f}, travel_time={self.total_travel_time:.2f}, nbr_inplanning={self.nbr_inplanning}, travel_worker_job_count = {self.total_travel_worker_job_count}, trial={self.trial_count},  when steps reaches maximum"
+                info = {
+                    "message": msg
+                }
+                log.info(msg)
+        else:
+            if (self.trial_count % 1 == 0):
+                log.info(
+                    f"Env done as Success:  inplanning = {self.inplanning_job_count}, trial_step_count = {self.trial_step_count},  reward={reward:.2f}, travel_time={self.total_travel_time:.2f}, nbr_inplanning={self.nbr_inplanning}, travel_worker_job_count = {self.total_travel_worker_job_count}, trial={self.trial_count}, good"
+                )
 
         return obs, reward, done, info
 
-        try:
-            action_dict = self.decode_action_into_dict_native(action)
-            if self.run_mode == EnvRunModeType.REPLAY:
-                log.error(f"No more replays")
-                action_dict.is_forced_action = True
-            else:
-                action_dict.is_forced_action = False
-        except LookupError:
-            print("LookupError: failed to parse action")
+        # try:
+        #     action_dict = self.decode_action_into_dict_native(action)
+        #     if self.run_mode == EnvRunModeType.REPLAY:
+        #         log.error(f"No more replays")
+        #         action_dict.is_forced_action = True
+        #     else:
+        #         action_dict.is_forced_action = False
+        # except LookupError:
+        #     print("LookupError: failed to parse action")
 
-            # add_result = False
-            info = {"message": f"LookupError: failed to parse action into acction_dict {action}"}
+        #     # add_result = False
+        #     info = {"message": f"LookupError: failed to parse action into acction_dict {action}"}
 
-            obs = self._get_observation()
-            if self.trial_step_count > len(self.appts) * 2:
-                done = True
-            else:
-                done = False
-            reward = -1
-            return (obs, reward, done, info)
+        #     obs = self._get_observation()
+        #     if self.trial_step_count > len(self.appts) * 2:
+        #         done = True
+        #     else:
+        #         done = False
+        #     reward = -1
+        #     return (obs, reward, done, info)
 
-        obs, reward, done, info = self.step_recommend_and_plan_job(action_dict)
+        # obs, reward, done, info = self.step_recommend_and_plan_job(action_dict)
 
     def step_naive_search_and_plan_job(self, shared_time_slots_optimized):
 
         job_code = self.jobs[self.current_job_i].job_code
         res = self.naive_opti_slot.dispatch_jobs_in_slots(shared_time_slots_optimized)
-        if res["planning_status"] == OptimizerSolutionStatus.SUCCESS:
+        if res["status"] == OptimizerSolutionStatus.SUCCESS:
             selected_action = res["changed_action_dict_by_job_code"][job_code]
 
             obs, reward, done, result_info = self.step_by_action_dict(action_dict=selected_action)
@@ -2958,11 +2992,15 @@ class KPlannerJob2SlotEnv(KandboxEnvPlugin):
         reward = -1.5
         # reward = -6
         result_info = {"message": f"found no action in the specified slots"}
-        # done = not self._move_to_next_unplanned_job()
-        done = True
+        done = not self._move_to_next_unplanned_job()
+        # done = True
+
+        # if (self.trial_count % 1 == 0):
+        #     log.info(
+        #         f"Env done with Failure: self.inplanning_job_count = {self.inplanning_job_count}, trial_step_count = {self.trial_step_count},  reward={reward:.2f},  nbr_inplanning={self.nbr_inplanning}, trial={self.trial_count}"
+        #     )
 
         obs = self._get_observation()
-
         return (obs, reward, done, result_info)
 
     def step_future_for_job_actions_TODO(self, action):
@@ -3063,8 +3101,14 @@ class KPlannerJob2SlotEnv(KandboxEnvPlugin):
             shared_worker_count.add(len(curr_job.scheduled_worker_codes))
 
         # scheduled_duration_minutes = job.requested_duration_minutes
-        min_number_of_workers = int(curr_job.flex_form_data["min_number_of_workers"])
-        max_number_of_workers = int(curr_job.flex_form_data["max_number_of_workers"])
+        min_number_of_workers = max_number_of_workers = 1
+        try:
+            min_number_of_workers = int(curr_job.flex_form_data["min_number_of_workers"])
+            max_number_of_workers = int(curr_job.flex_form_data["max_number_of_workers"])
+        except:
+            log.error(
+                f"job {final_job.job_code} has no min_number_of_workers or max_number_of_workers and we assumed as 1")
+            pass
 
         for nbr_worker in range(
             min_number_of_workers,
@@ -3338,10 +3382,444 @@ class KPlannerJob2SlotEnv(KandboxEnvPlugin):
         if self.nbr_inplanning == len(self.jobs):
             reward = reward + 2  # Additional points
 
-    def _get_observation(self): 
+    def _get_observation(self):
+        # return self._get_observation_numerical()
+        return self._get_observation_slot_list_dict()
 
-        return {} 
+        # return self._get_observation_slot_list_tuple()
 
+        # return self._get_observation_slot_list_tuple_toy()
+        try:
+            return self._get_observation_numerical()
+        except:
+            log.error("Error in _get_observation_numerical , returning empty observation {}")
+            return rl_env.action_space.sample()
+            # return {}
+
+    def _get_observation_numerical(self):
+        # agent_vector is current observation.
+        obs_dict = {}
+
+        if (len(self.jobs) < 1) | (len(self.workers) < 1):
+            log.error(
+                "Error, no workers or no jobs , returning empty observation (obs_dict = empty)"
+            )
+            # raise LookupError("Error, Env has no workers or no jobs , returning obs_dict = empty")
+            return obs_dict
+
+        self.config["NBR_FEATURE_PER_TECH"] = 19
+        # NBR_FEATURE_WORKER_ONLY = self.config['NBR_FEATURE_WORKER_ONLY']
+        # NBR_FEATURE_CUR_JOB_n_OVERALL  = self.config['NBR_FEATURE_CUR_JOB_n_OVERALL']
+        # NBR_WORK_TIME_SLOT_PER_DAY = self.config['NBR_FEATURE_CUR_JOB_n_OVERALL'] # 1
+
+        self.current_observed_worker_list = self._get_sorted_worker_code_list(self.current_job_i)
+
+        curr_work_time_slots = []
+
+        agent_vector = np.zeros(
+            self.config["NBR_FEATURE_PER_TECH"]
+            * self.config["nbr_of_days_planning_window"]
+            * len(self.current_observed_worker_list)
+        )
+
+        o_start_longitude = np.zeros(
+            self.config["nbr_of_observed_workers"] * self.config["nbr_of_days_planning_window"]
+        )
+        o_start_latitude = np.zeros(
+            self.config["nbr_of_observed_workers"] * self.config["nbr_of_days_planning_window"]
+        )
+        # o_max_available_working_slot_duration = np.zeros(self.config['nbr_of_observed_workers']* self.config['nbr_of_days_planning_window'])
+
+        o_end_longitude = np.zeros(
+            self.config["nbr_of_observed_workers"] * self.config["nbr_of_days_planning_window"]
+        )
+        o_end_latitude = np.zeros(
+            self.config["nbr_of_observed_workers"] * self.config["nbr_of_days_planning_window"]
+        )
+        o_average_longitude = np.zeros(
+            self.config["nbr_of_observed_workers"] * self.config["nbr_of_days_planning_window"]
+        )
+        o_average_latitude = np.zeros(
+            self.config["nbr_of_observed_workers"] * self.config["nbr_of_days_planning_window"]
+        )
+        #                                         =
+        o_nbr_of_jobs_per_worker_day = np.zeros(
+            self.config["nbr_of_observed_workers"] * self.config["nbr_of_days_planning_window"]
+        )
+        o_total_travel_minutes = np.zeros(
+            self.config["nbr_of_observed_workers"] * self.config["nbr_of_days_planning_window"]
+        )
+        o_first_job_start_minutes = np.zeros(
+            self.config["nbr_of_observed_workers"] * self.config["nbr_of_days_planning_window"]
+        )
+        o_total_occupied_duration = np.zeros(
+            self.config["nbr_of_observed_workers"] * self.config["nbr_of_days_planning_window"]
+        )
+        o_total_unoccupied_duration = np.zeros(
+            self.config["nbr_of_observed_workers"] * self.config["nbr_of_days_planning_window"]
+        )
+        #                                         =
+        o_max_available_working_slot_duration = np.zeros(
+            self.config["nbr_of_observed_workers"] * self.config["nbr_of_days_planning_window"]
+        )
+        o_max_available_working_slot_start = np.zeros(
+            self.config["nbr_of_observed_workers"] * self.config["nbr_of_days_planning_window"]
+        )
+        o_max_available_working_slot_end = np.zeros(
+            self.config["nbr_of_observed_workers"] * self.config["nbr_of_days_planning_window"]
+        )
+        o_max_unoccupied_rest_slot_duration = np.zeros(
+            self.config["nbr_of_observed_workers"] * self.config["nbr_of_days_planning_window"]
+        )
+        o_total_available_working_slot_duration = np.zeros(
+            self.config["nbr_of_observed_workers"] * self.config["nbr_of_days_planning_window"]
+        )
+
+        # + NBR_FEATURE_WORKER_ONLY + NBR_FEATURE_CUR_JOB_n_OVERALL ) # .tolist()
+
+        # Firstly the assigned job stats
+        for current_job_worker_index in range(len(self.current_observed_worker_list)):
+            # setup home (start,end) GPS
+            # x,y = get_normalized_location(self.workers_dict[worker_index]['home_gps'])
+            worker = self.workers_dict[self.current_observed_worker_list[current_job_worker_index]]
+            worker_index = worker.worker_index
+
+            # assigned time slots for each worker in agent_vector
+            # curr_total_free_duration = self.workers_dict[worker_index]['total_free_duration']
+
+            for day_i in range(self.config["nbr_of_days_planning_window"]):
+
+                # Features for this worker_day_assignment
+                f_start_longlat = self.get_start_gps_for_worker_day(worker, day_i)
+                f_end_longlat = self.get_end_gps_for_worker_day(worker, day_i)
+                f_average_longlat = self.get_start_gps_for_worker_day(worker, day_i)
+
+                f_nbr_of_jobs = 0
+                f_total_travel_minutes = 0
+                # I use 0--24 hours for each day. Do not accumulate.
+                f_first_job_start_minutes = self.config["minutes_per_day"]
+                f_last_job_end_minutes = self.config["minutes_per_day"]  # (day_i + 1) *
+
+                f_total_occupied_duration = 0  # Sum up from assigned_jobs
+                f_total_unoccupied_duration = self.config["minutes_per_day"] * 1
+
+                f_max_available_working_slot_duration = 0
+                f_max_available_working_slot_start = 0
+                f_max_available_working_slot_end = 0
+
+                f_min_available_working_slot_duration = 0  # kandbox_config.KANDBOX_MAXINT
+                f_min_available_working_slot_start = 0
+                f_min_available_working_slot_end = 0
+
+                f_max_unoccupied_rest_slot_duration = 0
+                f_total_available_working_slot_duration = 0  # Sum up from free_slots
+
+                last_job_end = day_i * self.config["minutes_per_day"]
+
+                # for assigned_job_index_info in worker[  "assigned_jobs"  ]:  # TODO, performance, already sorted, not necessary to loop through all.
+                # for day_i in range(self.config["nbr_of_days_planning_window"]):
+                job_code_list_today = []
+                travel_minutes_list_today = []
+                overlap_slots = self.slot_server.get_overlapped_slots(
+                    worker_id=worker.worker_code,
+                    start_minutes=day_i * 1440,
+                    end_minutes=(day_i + 1) * 1440,
+                )
+
+                job_slot_prev_travel_minutes = 0
+
+                for a_slot in overlap_slots:
+                    if a_slot.slot_type == TimeSlotType.JOB_FIXED:
+                        assigned_job_code = a_slot.assigned_job_codes[0]
+                        job_code_list_today.append(a_slot.assigned_job_codes[0])
+                        travel_minutes_list_today.append(job_slot_prev_travel_minutes)
+
+                    # TODO, performance, already sorted, not necessary to loop through all.
+                    elif a_slot.slot_type == TimeSlotType.FLOATING:
+                        (
+                            prev_travel,
+                            next_travel,
+                            inside_travel,
+                        ) = self.get_travel_time_jobs_in_slot(a_slot, a_slot.assigned_job_codes)
+
+                        free_minutes = (
+                            a_slot.end_minutes
+                            - a_slot.end_minutes
+                            - (prev_travel + next_travel + sum(inside_travel))
+                        )
+
+                        f_total_available_working_slot_duration += free_minutes
+                        if free_minutes > f_max_available_working_slot_duration:
+                            f_max_available_working_slot_duration = free_minutes
+                            f_max_available_working_slot_start = a_slot.start_minutes
+                            f_max_available_working_slot_end = a_slot.end_minutes
+
+                        if f_min_available_working_slot_duration == 0:
+                            f_min_available_working_slot_duration = free_minutes
+                            f_min_available_working_slot_start = a_slot.start_minutes
+                            f_min_available_working_slot_end = a_slot.end_minutes
+                        elif free_minutes < f_min_available_working_slot_duration:
+                            f_min_available_working_slot_duration = free_minutes
+                            f_min_available_working_slot_start = a_slot.start_minutes
+                            f_min_available_working_slot_end = a_slot.end_minutes
+
+                        if len(a_slot.assigned_job_codes) > 0:
+                            job_code_list_today += list(a_slot.assigned_job_codes)
+                            travel_minutes_list_today += [prev_travel] + inside_travel
+                        job_slot_prev_travel_minutes = (
+                            next_travel  # Here i assume that it is leading to next job/ or home
+                        )
+
+                for job_seq, assigned_job_code in enumerate(job_code_list_today):  #
+                    try:
+                        the_job = self.jobs_dict[assigned_job_code]
+                    except KeyError:
+                        log.error(f"JOB:{assigned_job_code} is not found in ENV->self.jobs_dict")
+                        continue
+
+                    # This job is assigned to this day.
+                    if f_first_job_start_minutes < the_job.scheduled_start_minutes:
+                        f_first_job_start_minutes = the_job.scheduled_start_minutes
+                        f_start_longlat = [
+                            the_job.location.geo_longitude,
+                            the_job.location.geo_latitude,
+                        ]  #
+                    if (
+                        the_job.scheduled_start_minutes + the_job.scheduled_duration_minutes
+                        < f_last_job_end_minutes
+                    ):
+                        f_last_job_end_minutes = (
+                            the_job.scheduled_start_minutes + the_job.scheduled_duration_minutes
+                        )
+                        f_end_longlat = [
+                            the_job.location.geo_longitude,
+                            the_job.location.geo_latitude,
+                        ]  #
+
+                    f_average_longlat = [
+                        ((f_average_longlat[0] * f_nbr_of_jobs) + the_job.location.geo_longitude)
+                        / (f_nbr_of_jobs + 1),
+                        ((f_average_longlat[1] * f_nbr_of_jobs) + the_job.location.geo_latitude)
+                        / (f_nbr_of_jobs + 1),
+                    ]
+
+                    f_nbr_of_jobs += 1
+                    f_total_travel_minutes += travel_minutes_list_today[job_seq]
+
+                    f_total_occupied_duration += the_job.scheduled_duration_minutes
+                    f_total_unoccupied_duration -= (
+                        the_job.scheduled_duration_minutes + travel_minutes_list_today[job_seq]
+                    )
+
+                    curr_rest_duration_before_job = (
+                        the_job.scheduled_start_minutes
+                        - travel_minutes_list_today[job_seq]
+                        - last_job_end
+                    )
+                    if curr_rest_duration_before_job > f_max_unoccupied_rest_slot_duration:
+                        f_max_unoccupied_rest_slot_duration = curr_rest_duration_before_job
+
+                if f_total_available_working_slot_duration < 0:
+                    # log.debug("Error: f_total_available_working_slot_duration < 0")
+                    f_total_available_working_slot_duration = 0
+
+                curr_worker_day_i = (
+                    current_job_worker_index * self.config["nbr_of_days_planning_window"] + day_i
+                )
+
+                o_start_longitude[curr_worker_day_i] = f_start_longlat[
+                    0
+                ]  # current_job_worker_index, day_i
+                o_start_latitude[curr_worker_day_i] = f_start_longlat[1]
+
+                o_end_longitude[curr_worker_day_i] = f_end_longlat[0]
+                o_end_latitude[curr_worker_day_i] = f_end_longlat[1]
+                o_average_longitude[curr_worker_day_i] = f_average_longlat[0]
+                o_average_latitude[curr_worker_day_i] = f_average_longlat[1]
+                #
+                o_nbr_of_jobs_per_worker_day[curr_worker_day_i] = f_nbr_of_jobs
+                o_total_travel_minutes[curr_worker_day_i] = f_total_travel_minutes
+                o_first_job_start_minutes[curr_worker_day_i] = f_first_job_start_minutes
+                o_total_occupied_duration[curr_worker_day_i] = f_total_occupied_duration
+                o_total_unoccupied_duration[curr_worker_day_i] = f_total_unoccupied_duration
+                #
+                o_max_available_working_slot_duration[
+                    curr_worker_day_i
+                ] = f_max_available_working_slot_duration
+                o_max_available_working_slot_start[
+                    curr_worker_day_i
+                ] = f_max_available_working_slot_start
+                o_max_available_working_slot_end[
+                    curr_worker_day_i
+                ] = f_max_available_working_slot_end
+                o_max_unoccupied_rest_slot_duration[
+                    curr_worker_day_i
+                ] = f_max_unoccupied_rest_slot_duration
+                o_total_available_working_slot_duration[
+                    curr_worker_day_i
+                ] = f_total_available_working_slot_duration
+                # Not useful, deprecated. Use obs_tuple instead 2020-09-18 08:29:37
+                agent_vector[
+                    current_job_worker_index
+                    * self.config["NBR_FEATURE_PER_TECH"]
+                    * self.config["nbr_of_days_planning_window"]
+                    + day_i
+                    * self.config["NBR_FEATURE_PER_TECH"]: current_job_worker_index
+                    * self.config["NBR_FEATURE_PER_TECH"]
+                    * self.config["nbr_of_days_planning_window"]
+                    + (day_i + 1) * self.config["NBR_FEATURE_PER_TECH"]
+                ] = [
+                    f_start_longlat[0],
+                    f_start_longlat[1],
+                    f_end_longlat[0],
+                    f_end_longlat[1],
+                    f_average_longlat[0],
+                    f_average_longlat[1],
+                    f_nbr_of_jobs,
+                    f_total_travel_minutes,
+                    f_first_job_start_minutes,
+                    f_total_occupied_duration,
+                    f_total_unoccupied_duration,
+                    f_max_available_working_slot_duration,
+                    f_max_available_working_slot_start,
+                    f_max_available_working_slot_end,
+                    f_min_available_working_slot_duration,
+                    f_min_available_working_slot_start,
+                    f_min_available_working_slot_end,
+                    f_max_unoccupied_rest_slot_duration,
+                    f_total_available_working_slot_duration,
+                ]
+
+            # worker_feature_begin_offset = NBR_FEATURE_PER_TECH*worker_index + NBR_DAYS*MAX_ASSIGNED_TIME_SLOT_PER_DAY*NBR_WORK_TIME_SLOT_PER_DAY + NBR_DAYS
+            # agent_vector[ worker_feature_begin_offset + 2] = curr_total_free_duration
+            # agent_vector[worker_feature_begin_offset + 3] = curr_max_free_slot_duration
+
+        """
+    # Secondary all worker statistics
+    for current_job_worker_index in self.current_observed_worker_list:
+      # setup home (start,end) GPS
+      # x,y = get_normalized_location(self.workers_dict[worker_index]['home_gps'])
+      worker = self.workers_dict[self.current_observed_worker_list[current_job_worker_index]]
+
+      worker_index = worker['worker_index']
+      agent_vector[NBR_FEATURE_PER_TECH*worker_index   + 0: \
+                   NBR_FEATURE_PER_TECH*worker_index + NBR_WORK_TIME_SLOT_PER_DAY] \
+          =  [ 0, 0 , worker['geo_longitude'] , worker['geo_latitude'] ]
+      agent_vector[NBR_FEATURE_PER_TECH*(worker_index+1) - 4: \
+                   NBR_FEATURE_PER_TECH*(worker_index+1) - 0 ] \
+          =  [ 0, 0 , x,y]
+
+    for worker_index in range(len(self.workers_dict)):
+      # Historical customer visit GPS Gaussian , Sigma, Gamma, 2 DIMENSIONAL
+      # and others 4
+      agent_vector[len(self.workers_dict)*NBR_FEATURE_PER_TECH + worker_index] \
+        = self.workers_dict[worker_index]['level'] / 5
+    """
+        # Thirdly  the job statistics
+
+        # Now append the visit information AS THE 2nd half.
+        # job_feature_start_index = len(self.workers_dict)*NBR_FEATURE_PER_TECH + NBR_FEATURE_WORKER_ONLY
+
+        if self.current_job_i >= len(self.jobs):
+            new_job_i = len(self.jobs) - 1
+        else:
+            new_job_i = self.current_job_i
+
+        # obs_dict['worker_job_assignment_matrix'] = agent_vector
+        obs_dict["assignment.start_longitude"] = o_start_longitude
+        obs_dict["assignment.start_latitude"] = o_start_latitude
+        obs_dict[
+            "assignment.max_available_working_slot_duration"
+        ] = o_max_available_working_slot_duration
+
+        # obs_dict['job.features'] = np.zeroes(3)
+        # obs_dict['job.mandatory_minutes_minmax_flag'] = np.zeros(1)
+        obs_dict[
+            "job.mandatory_minutes_minmax_flag"
+        ] = 1  # self.jobs[new_job_i][ "mandatory_minutes_minmax_flag"  ]
+        obs_dict["job.requested_start_minutes"] = np.zeros(1)
+        obs_dict["job.requested_start_minutes"][0] = self.jobs[
+            new_job_i
+        ].requested_start_min_minutes
+        if obs_dict["job.requested_start_minutes"][0] < 0:
+            obs_dict["job.requested_start_minutes"][0] = 0
+        elif (
+            obs_dict["job.requested_start_minutes"][0]
+            >= self.config["minutes_per_day"] * self.config["nbr_of_days_planning_window"] * 2
+        ):
+            obs_dict["job.requested_start_minutes"][0] = (
+                self.config["minutes_per_day"] * self.config["nbr_of_days_planning_window"] * 2 - 1
+            )
+
+        obs_dict["job.requested_duration_minutes"] = np.zeros(1)
+        obs_dict["job.requested_duration_minutes"][0] = self.jobs[
+            new_job_i
+        ].requested_duration_minutes
+
+        obs_dict["job.geo_longitude"] = np.zeros(1)
+        obs_dict["job.geo_longitude"][0] = self.jobs[new_job_i].location.geo_longitude
+        obs_dict["job.geo_latitude"] = np.zeros(1)
+        obs_dict["job.geo_latitude"][0] = self.jobs[new_job_i].location.geo_latitude
+
+        obs_tuple = (
+            o_start_longitude,
+            o_start_latitude,
+            o_end_longitude,
+            o_end_latitude,
+            o_average_longitude,
+            o_average_latitude,
+            #
+            o_nbr_of_jobs_per_worker_day,
+            o_total_travel_minutes,
+            o_first_job_start_minutes,
+            o_total_occupied_duration,
+            o_total_unoccupied_duration,
+            #
+            o_max_available_working_slot_duration,
+            o_max_available_working_slot_start,
+            o_max_available_working_slot_end,
+            o_max_unoccupied_rest_slot_duration,
+            o_total_available_working_slot_duration,
+            #
+            1,  # self.jobs[new_job_i]["mandatory_minutes_minmax_flag"],
+            obs_dict["job.requested_start_minutes"],
+            obs_dict["job.requested_duration_minutes"],
+            obs_dict["job.geo_longitude"],
+            obs_dict["job.geo_latitude"],
+        )
+
+        """
+f_start_longlat[0], f_start_longlat[1], f_end_longlat[0], f_end_longlat[1], f_average_longlat[0],
+          f_average_longlat[1],  f_nbr_of_jobs, f_total_travel_minutes, f_first_job_start_minutes,
+          f_total_occupied_duration, f_total_unoccupied_duration, f_max_available_working_slot_duration, f_max_available_working_slot_start, f_max_available_working_slot_end,
+          f_min_available_working_slot_duration, f_min_available_working_slot_start, f_min_available_working_slot_end, f_max_unoccupied_rest_slot_duration, f_total_available_working_slot_duration
+
+    """
+
+        """
+    visit_vector = list(range(5))
+    # Location of the new job is added to the end of agent_vector.
+    visit_vector[0] = self.jobs[self.current_job_i]['requested_duration_minutes']
+
+    visit_vector[1] = self.jobs[self.current_job_i]['mandatory_minutes_minmax_flag']
+    # visit_vector[2] = self.jobs[self.current_job_i]['preferred_minutes_minmax_flag']
+    visit_vector[3] = self.jobs[self.current_job_i]['requested_start_minutes']
+    visit_vector[4] = self.jobs[self.current_job_i]['requested_start_minutes']
+    """
+
+        # obs_dict['job.requested_start_max_minutes'] =  self.jobs[self.current_job_i]['requested_start_minutes']
+
+        # agent_vector[job_feature_start_index +3] = self.jobs[self.current_job_i]['expected_job_day'] / 30
+        # agent_vector[job_feature_start_index +4] = self.jobs[self.current_job_i]['tolerated_day_min']  /10
+        # agent_vector[job_feature_start_index +5] = self.jobs[self.current_job_i]['tolerated_day_max']  /10
+
+        # visit_vector[ 5] = 0 # self.jobs[self.current_job_i]['customer_level']
+        # visit_vector[ 6] = 0 # self.jobs[self.current_job_i]['product_level']
+
+        # obs_dict['current_job_vector'] = visit_vector
+
+        # Finished looping through all workers
+        return obs_tuple  # OrderedDict(obs_dict)
 
     # ***************************************************************
     # # Internal functions
@@ -3365,7 +3843,54 @@ class KPlannerJob2SlotEnv(KandboxEnvPlugin):
             high=np.array(obs_slot_high),
             # shape=(len(obs_slot_high),),
             dtype=np.float32,
-        ) 
+        )
+
+        # self.obs_slot_space = spaces.Tuple(
+        #     (
+        #         # start_loc, end_loc, avg_loc
+        #         spaces.Box(
+        #             low=self.config["geo_longitude_min"],
+        #             high=self.config["geo_longitude_max"],
+        #             shape=(4,),
+        #             dtype=np.float32,
+        #         ),
+        #         spaces.Box(
+        #             low=self.config["geo_latitude_min"],
+        #             high=self.config["geo_latitude_max"],
+        #             shape=(4,),
+        #             dtype=np.float32,
+        #         ),
+        #         # f_nbr_of_jobs,
+        #         spaces.Box(
+        #             low=0,
+        #             high=self.config["max_nbr_of_jobs_per_day_worker"] + 1,
+        #             shape=(1,),
+        #             dtype=np.float32,
+        #         ),
+        #         # f_slot_duration, f_total_travel_minutes,f_total_occupied_duration, #  f_total_unoccupied_duration, f_max_available_working_slot_duration
+        #         spaces.Box(
+        #             low=0,
+        #             high=self.config["minutes_per_day"],
+        #             shape=(3,),
+        #             dtype=np.float32,
+        #         ),
+        #         # f_slot_start_minutes, f_first_job_start_minutes, # f_max_available_working_slot_start, f_max_available_working_slot_end,
+        #         spaces.Box(
+        #             low=0,
+        #             high=self.config["minutes_per_day"]
+        #             * self.config["nbr_of_days_planning_window"],
+        #             shape=(3,),
+        #             dtype=np.float32,
+        #         ),
+        #         # f_max_unoccupied_rest_slot_duration --- Looks like current RL can only do working hour dispatching.
+        #         # f_min_available_working_slot_duration,
+        #         # f_min_available_working_slot_start,
+        #         # f_min_available_working_slot_end,
+        #         # spaces.Discrete(2),  # Mandatory start time or not
+        #         spaces.Discrete(2),  # valid slot indicator. ==1
+        #         spaces.Discrete(self.config["nbr_of_observed_workers"]),  # technician ID
+        #     )
+        # )
         obs_job_low = (
             [self.config["geo_longitude_min"]]
             + [self.config["geo_latitude_min"]]
@@ -3387,7 +3912,52 @@ class KPlannerJob2SlotEnv(KandboxEnvPlugin):
             # shape=(len(obs_job_high),),
             dtype=np.float32,
         )
- 
+
+        # self.obs_job_space = spaces.Tuple(
+        #     (
+        #         # start_loc, end_loc, avg_loc
+        #         spaces.Box(
+        #             low=self.config["geo_longitude_min"],
+        #             high=self.config["geo_longitude_max"],
+        #             shape=(1,),
+        #             dtype=np.float32,
+        #         ),
+        #         spaces.Box(
+        #             low=self.config["geo_latitude_min"],
+        #             high=self.config["geo_latitude_max"],
+        #             shape=(1,),
+        #             dtype=np.float32,
+        #         ),
+        #         # f_job_duration,
+        #         spaces.Box(
+        #             low=0,
+        #             high=self.config["minutes_per_day"],
+        #             shape=(1,),
+        #             dtype=np.float32,
+        #         ),
+        #         # min, max,  f_job_start_minutes
+        #         spaces.Box(
+        #             low=0 - (self.PLANNING_WINDOW_LENGTH * 5),
+        #             high=self.PLANNING_WINDOW_LENGTH * 5,
+        #             shape=(3,),
+        #             dtype=np.float32,
+        #         ),
+        #         #  # min  max nbr of share
+        #         spaces.Box(
+        #             low=0,
+        #             high=self.config["nbr_of_observed_workers"],
+        #             shape=(2,),
+        #             dtype=np.float32,
+        #         ),
+        #         # f_max_unoccupied_rest_slot_duration --- Looks like current RL can only do working hour dispatching.
+        #         # f_min_available_working_slot_duration,
+        #         # f_min_available_working_slot_start,
+        #         # f_min_available_working_slot_end,
+        #         # spaces.Discrete(2),  # Mandatory start time or not
+        #         spaces.Discrete(2),  # valid slot indicator. ==1
+        #         spaces.Discrete(2),  # fixed time requirements
+        #     )
+        # )
         self.observation_space = spaces.Dict(
             {
                 "slots": Repeated(self.obs_slot_space, max_len=self.MAX_OBSERVED_SLOTS),
@@ -3404,6 +3974,524 @@ class KPlannerJob2SlotEnv(KandboxEnvPlugin):
             low=0, high=1, shape=(self.MAX_OBSERVED_SLOTS,), dtype=np.float32
         )
         # self.action_space = spaces.Discrete(self.MAX_OBSERVED_SLOTS)
+
+    def _get_observation_slot_list_tuple(self):
+        if (len(self.jobs) < 1) | (len(self.workers) < 1):
+            log.error(
+                "Error, no workers or no jobs , returning empty observation (obs_dict = empty)"
+            )
+            # raise LookupError("Error, Env has no workers or no jobs , returning obs_dict = empty")
+            return (0, 0)
+
+        if self.current_job_i >= len(self.jobs):
+            self.current_job_i = 0
+        # new_job_i = self.current_job_i
+        current_capable_worker_set = self._get_sorted_worker_code_list(self.current_job_i)
+
+        sorted_slot_codes = sorted(list(self.slot_server.time_slot_dict.keys()))
+        slot_dict = self.slot_server.time_slot_dict
+
+        curr_work_time_slots = []
+        max_available_working_slot_duration = 0
+        viewed_slots = []
+
+        for slot_code in sorted_slot_codes:
+            # for work_time_i in  range(len( self.workers_dict[worker_code]['assigned_jobs'] ) ): # nth assigned job time unit.
+            if slot_code in config.DEBUGGING_SLOT_CODE_SET:
+                log.debug(f"_get_observation_slot_list debug {slot_code}")
+
+            # if a_slot.slot_type in (TimeSlotType.JOB_FIXED, TimeSlotType.FLOATING):
+            try:
+                a_slot = self.slot_server.get_slot(self.redis_conn.pipeline(), slot_code)
+                if a_slot.worker_id not in current_capable_worker_set:
+                    continue
+                the_assigned_codes = sorted(
+                    a_slot.assigned_job_codes,
+                    key=lambda jc: self.jobs_dict[jc].scheduled_start_minutes,
+                )
+            except KeyError as ke:
+                log.error(
+                    f"unknown worker code, or unknown job codes to the env. slot_code = {slot_code}, error = {str(ke)}"
+                )
+                print(ke)
+                continue
+            except MissingSlotException as mse:
+                log.error(
+                    f"MissingSlotException - unknow slot_code = {slot_code}, error = {str(mse)}"
+                )
+                print(mse)
+                continue
+
+            (
+                prev_travel,
+                next_travel,
+                inside_travel,
+            ) = self.get_travel_time_jobs_in_slot(a_slot, a_slot.assigned_job_codes)
+            #  , what if there is no job?  you get 0,[],0
+            all_travels = [prev_travel] + inside_travel + [next_travel]
+
+            f_total_travel_minutes = sum(all_travels)
+            f_max_travel_minutes_index = sum(all_travels[:-1])
+
+            slot_vector = np.zeros(self.NBR_FEATURE_PER_SLOT)
+
+            slot_vector[0:2] = [
+                self.normalize(a_slot.start_location[0], "longitude"),
+                self.normalize(a_slot.start_location[1], "latitude"),
+            ]
+            slot_vector[2] = 0 if a_slot.start_location[2] == "H" else 1
+
+            slot_vector[3:5] = [
+                self.normalize(a_slot.end_location[0], "longitude"),
+                self.normalize(a_slot.end_location[1], "latitude"),
+            ]
+            slot_vector[5] = 0 if a_slot.end_location[2] == "H" else 1
+
+            slot_vector[6] = self.normalize(
+                len(a_slot.assigned_job_codes), "max_job_in_slot"
+            )  # f_nbr_of_jobs = 0
+            slot_vector[7] = self.normalize(f_total_travel_minutes, "day_minutes_1440")
+            if len(a_slot.assigned_job_codes) < 1:
+                slot_vector[8:10] = slot_vector[0:2]
+                slot_vector[10:12] = slot_vector[3:5]
+                # all_location_0 = [a_slot.start_location[0], a_slot.end_location[0]]
+                # all_location_1 = [a_slot.start_location[1], a_slot.end_location[1]]
+                #   [
+                #     sum(all_location_0) / len(all_location_0),
+                #     sum(all_location_1) / len(all_location_1),
+                #     sum(all_location_0) / len(all_location_0),
+                #     sum(all_location_1) / len(all_location_1),
+                # ]
+            else:
+                slot_vector[8:10] = [
+                    self.normalize(
+                        self.jobs_dict[a_slot.assigned_job_codes[0]].location[0], "longitude"
+                    ),
+                    self.normalize(
+                        self.jobs_dict[a_slot.assigned_job_codes[0]].location[1], "latitude"
+                    ),
+                ]
+                slot_vector[10:12] = [
+                    self.normalize(
+                        self.jobs_dict[a_slot.assigned_job_codes[-1]].location[0], "longitude"
+                    ),
+                    self.normalize(
+                        self.jobs_dict[a_slot.assigned_job_codes[-1]].location[1], "latitude"
+                    ),
+                ]
+
+                # all_location_0 = [
+                #     self.jobs_dict[a_slot.assigned_job_codes[j]].location[0]
+                #     for j in range(len(a_slot.assigned_job_codes))
+                # ]
+                # all_location_1 = [
+                #     self.jobs_dict[a_slot.assigned_job_codes[j]].location[1]
+                #     for j in range(len(a_slot.assigned_job_codes))
+                # ]
+                # slot_vector[10:12] = [
+                #     sum(all_location_0) / len(all_location_0),
+                #     sum(all_location_1) / len(all_location_1),
+                # ]
+
+            # f_total_occupied_duration  # Sum up from assigned_jobs
+            f_total_occupied_duration = sum(
+                self.jobs_dict[a_slot.assigned_job_codes[j]].scheduled_duration_minutes
+                for j in range(len(a_slot.assigned_job_codes))
+            )
+            slot_vector[12] = self.normalize(f_total_occupied_duration, "day_minutes_1440")
+            if (
+                a_slot.end_minutes - a_slot.start_minutes - slot_vector[12]
+                > max_available_working_slot_duration
+            ):
+                max_available_working_slot_duration = (
+                    a_slot.end_minutes - a_slot.start_minutes - slot_vector[12]
+                )
+
+            slot_vector[13] = self.normalize(a_slot.start_minutes, "start_minutes")
+            slot_vector[14] = self.normalize(a_slot.end_minutes, "start_minutes")
+            # Start time within a day
+            slot_vector[15] = self.normalize(a_slot.start_minutes % 1440, "day_minutes_1440")
+            slot_vector[16] = self.normalize(a_slot.end_minutes % 1440, "day_minutes_1440")
+            available_free_minutes = (
+                a_slot.end_minutes - a_slot.start_minutes - slot_vector[12] - f_total_travel_minutes
+            )
+            slot_vector[17] = self.normalize(available_free_minutes, "day_minutes_1440")
+            slot_vector[18] = self.normalize(a_slot.start_overtime_minutes, "duration")
+            slot_vector[19] = self.normalize(a_slot.end_overtime_minutes, "duration")
+            # Secondary tech
+            slot_vector[20] = 0
+            # (  0 if self.workers_dict[a_slot.worker_id].flex_form_data["is_assistant"] else 1 )
+
+            slot_vector[21] = 0  # self.workers_dict[a_slot.worker_id].worker_index
+            slot_vector[22] = (
+                1 if self.workers_dict[a_slot.worker_id].belongs_to_pair is not None else 0
+            )
+            slot_vector[23] = 0  # Future
+
+            curr_work_time_slots.append(slot_vector)
+            viewed_slots.append(a_slot)
+
+        # Secondary overall statistics about workers, inplanning jobs, including un-planed visits
+        unplanned_job_list = []
+        current_job_list = []
+        target_unplanned_job_i = None
+
+        for job_code, new_job in self.jobs_dict.items():
+            if not new_job.is_active:  # events and appt can not be U anyway
+                continue
+            if new_job.planning_status != JobPlanningStatus.UNPLANNED:
+                continue
+
+            unplanned_job_vector = np.zeros(self.NBR_FEATURE_PER_UNPLANNED_JOB)
+            unplanned_job_vector[0] = self.normalize(new_job.requested_duration_minutes, "duration")
+            unplanned_job_vector[1] = self.normalize(
+                new_job.requested_start_min_minutes, "start_minutes"
+            )
+            unplanned_job_vector[2] = self.normalize(
+                new_job.requested_start_max_minutes, "start_minutes"
+            )
+            # in case FS, FT, requested_start_min_minutes == requested_start_max_minutes. But they might mean other day - FT.
+            unplanned_job_vector[3] = self.normalize(
+                new_job.requested_start_minutes, "start_minutes"
+            )
+            unplanned_job_vector[4] = self.normalize(
+                new_job.requested_start_min_minutes % 1440, "day_minutes_1440"
+            )
+            unplanned_job_vector[5] = 0  # 1 if new_job.flex_form_data["ServiceType"] == "FS" else 0
+            unplanned_job_vector[6] = 0  # 1 if new_job.flex_form_data["ServiceType"] == "FT" else 0
+
+            unplanned_job_vector[7:9] = [
+                self.normalize(new_job.location[0], "longitude"),
+                self.normalize(new_job.location[1], "latitude"),
+            ]
+            # Min shared tech
+            unplanned_job_vector[9] = self.normalize(
+                new_job.flex_form_data["min_number_of_workers"], "max_nbr_shared_workers"
+            )
+            unplanned_job_vector[10] = self.normalize(
+                new_job.flex_form_data["max_number_of_workers"], "max_nbr_shared_workers"
+            )
+
+            unplanned_job_vector[
+                11
+            ] = 0  # self.workers_dict[  new_job.requested_primary_worker_code ].worker_index
+
+            if new_job.job_code == self.jobs[self.current_job_i].job_code:
+                target_unplanned_job_i = len(unplanned_job_list) - 1
+                current_job_list.append(unplanned_job_vector)
+            else:
+                unplanned_job_list.append(unplanned_job_vector)
+
+        if len(unplanned_job_list) + len(current_job_list) < 1:
+            log.error("No jobs to observe, done?")
+            return None  # (0, 0, 0)
+        if len(curr_work_time_slots) < 1:
+            log.error("No slots to observe, done?")
+            return None  # (0, 0, 0)
+
+        # Thirdly the current job being dispatched
+        overview_vector = np.zeros(self.NBR_FEATURE_OVERVIEW)
+        overview_vector[0] = 0  # target_unplanned_job_i
+        overview_vector[1] = max_available_working_slot_duration
+        overview_vector[2] = len(self.workers_dict.keys())
+        overview_vector[3] = len(curr_work_time_slots)
+        overview_vector[4] = len(self.jobs_dict.keys())
+        overview_vector[5] = len(unplanned_job_list)
+        overview_vector[6] = self.get_env_planning_horizon_start_minutes()
+        overview_vector[7] = int(self.get_env_planning_horizon_start_minutes() / 1440) * 1440
+        # Work, Rest days as one-hot
+        # Overtime usage?
+        #
+        obs_tuple = [
+            np.stack(curr_work_time_slots, axis=0),
+            np.stack(current_job_list + current_job_list, axis=0),  # TODO   + unplanned_job_list
+            # np.stack(, axis=0),
+            overview_vector,
+            viewed_slots,
+        ]
+
+        return obs_tuple  # OrderedDict(obs_dict)
+
+    def _get_observation_slot_list_tuple_toy(self):
+        curr_work_time_slots = self.curr_work_time_slots
+        current_job_list = [self.unplanned_job_list[self.trial_step_count]]
+        temp_merged = np.concatenate((
+            self.curr_work_time_slots,
+            self.unplanned_job_list[self.trial_step_count:] +
+            self.unplanned_job_list[:self.trial_step_count]
+        ), axis=1)
+
+        obs_tuple = [
+            np.stack(curr_work_time_slots, axis=0),
+            np.stack(current_job_list + current_job_list, axis=0),
+            np.stack(temp_merged, axis=0),
+        ]
+
+        return obs_tuple  # OrderedDict(obs_dict)
+
+    def _get_observation_slot_list_dict(self):
+        if (len(self.jobs) < 1) | (len(self.workers) < 1):
+            log.error(
+                "Error, no workers or no jobs , returning empty observation (obs_dict = empty)"
+            )
+            # raise LookupError("Error, Env has no workers or no jobs , returning obs_dict = empty")
+            return (0, 0)
+
+        if self.current_job_i >= len(self.jobs):
+            self.current_job_i = 0
+        # new_job_i = self.current_job_i
+        current_capable_worker_set = self._get_sorted_worker_code_list(self.current_job_i)
+
+        sorted_slot_codes = sorted(list(self.slot_server.time_slot_dict.keys()))
+        slot_dict = self.slot_server.time_slot_dict
+
+        curr_work_time_slots = []
+        max_available_working_slot_duration = 0
+        viewed_slots = []
+        obs_dict = {
+            "slots": [],
+            "jobs": [],
+        }
+
+        for slot_code in sorted_slot_codes:
+            # for work_time_i in  range(len( self.workers_dict[worker_code]['assigned_jobs'] ) ): # nth assigned job time unit.
+            if slot_code in kandbox_config.DEBUGGING_SLOT_CODE_SET:
+                log.debug(f"_get_observation_slot_list debug {slot_code}")
+
+            # if a_slot.slot_type in (TimeSlotType.JOB_FIXED, TimeSlotType.FLOATING):
+            try:
+                a_slot = self.slot_server.get_slot(self.redis_conn.pipeline(), slot_code)
+                if a_slot.worker_id not in current_capable_worker_set:
+                    continue
+                the_assigned_codes = sorted(
+                    a_slot.assigned_job_codes,
+                    key=lambda jc: self.jobs_dict[jc].scheduled_start_minutes,
+                )
+            except KeyError as ke:
+                log.error(
+                    f"unknown worker code, or unknown job codes to the env. slot_code = {slot_code}, error = {str(ke)}"
+                )
+                print(ke)
+                continue
+            except MissingSlotException as mse:
+                log.error(
+                    f"MissingSlotException - unknow slot_code = {slot_code}, error = {str(mse)}"
+                )
+                print(mse)
+                continue
+
+            (
+                prev_travel,
+                next_travel,
+                inside_travel,
+            ) = self.get_travel_time_jobs_in_slot(a_slot, a_slot.assigned_job_codes)
+            #  , what if there is no job?  you get 0,[],0
+            all_travels = [prev_travel] + inside_travel + [next_travel]
+
+            f_total_travel_minutes = sum(all_travels)
+            f_max_travel_minutes_index = sum(all_travels[:-1])
+
+            longitude_vector = np.zeros(4)
+            longitude_vector[0] = a_slot.start_location[0]
+            longitude_vector[1] = a_slot.end_location[0]
+
+            latitude_vector = np.zeros(4)
+            latitude_vector[0] = a_slot.start_location[1]
+            latitude_vector[1] = a_slot.end_location[1]
+
+            if len(a_slot.assigned_job_codes) < 1:
+                longitude_vector[2] = (longitude_vector[0] + longitude_vector[1]) / 2
+                latitude_vector[2] = (latitude_vector[0] + latitude_vector[1]) / 2
+
+                longitude_vector[3] = (longitude_vector[0] + longitude_vector[1]) / 2
+                latitude_vector[3] = (latitude_vector[0] + latitude_vector[1]) / 2
+
+            else:
+                longitude_vector[2] = self.jobs_dict[a_slot.assigned_job_codes[0]].location[0]
+                latitude_vector[2] = self.jobs_dict[a_slot.assigned_job_codes[0]].location[1]
+
+                longitude_vector[3] = self.jobs_dict[a_slot.assigned_job_codes[-1]].location[0]
+                latitude_vector[3] = self.jobs_dict[a_slot.assigned_job_codes[-1]].location[1]
+
+            f_nbr_of_jobs = np.zeros(1)
+            f_nbr_of_jobs[0] = len(a_slot.assigned_job_codes)
+
+            slot_duration_vector = np.zeros(3)
+            # f_slot_duration, f_total_travel_minutes,f_total_occupied_duration, # f_total_unoccupied_duration ### , f_max_available_working_slot_duration
+            slot_duration_vector[0] = a_slot.end_minutes - a_slot.start_minutes
+            slot_duration_vector[1] = f_total_travel_minutes
+            slot_duration_vector[2] = f_total_occupied_duration = sum(
+                self.jobs_dict[a_slot.assigned_job_codes[j]].scheduled_duration_minutes
+                for j in range(len(a_slot.assigned_job_codes))
+            )
+
+            start_minutes_vector = np.zeros(3)
+            # f_slot_start_minutes, f_first_job_start_minutes,  f_last_job_end_minutes  # f_max_available_working_slot_start, f_max_available_working_slot_end,
+            start_minutes_vector[0] = (
+                a_slot.start_minutes - self.get_env_planning_horizon_start_minutes()
+            )
+            start_minutes_vector[1] = start_minutes_vector[0]
+            start_minutes_vector[2] = start_minutes_vector[0]
+
+            if len(a_slot.assigned_job_codes) >= 1:
+                start_minutes_vector[1] = (
+                    self.jobs_dict[a_slot.assigned_job_codes[0]].scheduled_start_minutes
+                    - a_slot.start_minutes
+                )
+                start_minutes_vector[2] = (
+                    self.jobs_dict[a_slot.assigned_job_codes[-1]].scheduled_start_minutes
+                    + self.jobs_dict[a_slot.assigned_job_codes[-1]].scheduled_duration_minutes
+                    - a_slot.start_minutes
+                )
+                if start_minutes_vector[1] < 0:
+                    start_minutes_vector[1] = 0
+                if start_minutes_vector[2] < 0:
+                    start_minutes_vector[2] = 0
+
+                if start_minutes_vector[1] >= self.PLANNING_WINDOW_LENGTH:
+                    start_minutes_vector[1] = self.PLANNING_WINDOW_LENGTH - 1
+                if start_minutes_vector[2] >= self.PLANNING_WINDOW_LENGTH:
+                    start_minutes_vector[2] = self.PLANNING_WINDOW_LENGTH - 1
+
+            # (  0 if self.workers_dict[a_slot.worker_id].flex_form_data["is_assistant"] else 1 )
+            # 1 if self.workers_dict[a_slot.worker_id].belongs_to_pair is not None else 0
+            slot_obs = np.concatenate(
+                (
+                    np.array(longitude_vector),
+                    np.array(latitude_vector),
+                    np.array(f_nbr_of_jobs),
+                    np.array(slot_duration_vector),
+                    np.array(start_minutes_vector),
+                    #   # valid slot, worker id
+                    np.array([1, self.workers_dict[a_slot.worker_id].worker_index]),
+                ),
+                axis=0,
+            )
+            # (
+            #     np.array(longitude_vector),
+            #     np.array(latitude_vector),
+            #     np.array(f_nbr_of_jobs),
+            #     np.array(slot_duration_vector),
+            #     np.array(start_minutes_vector),
+            #     1,
+            #     self.workers_dict[a_slot.worker_id].worker_index,
+            # )
+
+            obs_dict["slots"].append(slot_obs)
+
+            viewed_slots.append(a_slot)
+            if len(obs_dict["slots"]) >= self.MAX_OBSERVED_SLOTS:
+                break
+
+        # Secondary overall statistics about workers, inplanning jobs, including un-planed visits
+        unplanned_job_list = []
+        current_job_list = []
+        target_unplanned_job_i = None
+
+        for job_code, new_job in self.jobs_dict.items():
+            if not new_job.is_active:  # events and appt can not be U anyway
+                continue
+            if new_job.planning_status != JobPlanningStatus.UNPLANNED:
+                continue
+
+            longitude_vector = np.zeros(1)
+            longitude_vector[0] = new_job.location[0]
+
+            latitude_vector = np.zeros(1)
+            latitude_vector[0] = new_job.location[1]
+
+            duration_vector = np.zeros(1)
+            # f_slot_duration
+            duration_vector[0] = new_job.requested_duration_minutes
+
+            start_minutes_vector = np.zeros(3)
+            start_minutes_vector[0] = (
+                new_job.requested_start_min_minutes - self.get_env_planning_horizon_start_minutes()
+            )
+            start_minutes_vector[1] = (
+                new_job.requested_start_max_minutes - self.get_env_planning_horizon_start_minutes()
+            )
+            start_minutes_vector[2] = (
+                new_job.requested_start_minutes - self.get_env_planning_horizon_start_minutes()
+            )
+
+            for ii in range(3):
+                if start_minutes_vector[ii] >= self.PLANNING_WINDOW_LENGTH * 5:
+                    start_minutes_vector[ii] = self.PLANNING_WINDOW_LENGTH * 5 - 1
+                if start_minutes_vector[ii] <= -self.PLANNING_WINDOW_LENGTH * 5:
+                    start_minutes_vector[ii] = -self.PLANNING_WINDOW_LENGTH * 5 + 1
+
+            share_vector = np.ones(2)
+            # Min shared tech
+            try:
+                share_vector[0] = new_job.flex_form_data["min_number_of_workers"]
+                share_vector[1] = new_job.flex_form_data["max_number_of_workers"]
+            except:
+                log.warn(f"job {new_job.job_code} has no min_number_of_workers")
+                pass
+            job_obs = np.concatenate(
+                (
+                    np.array(longitude_vector),
+                    np.array(latitude_vector),
+                    np.array(duration_vector),
+                    np.array(start_minutes_vector),
+                    np.array(share_vector),
+                    #   # valid job,  NOT FS
+                    np.array([1, 0]),
+                ),
+                axis=0,
+            )
+            # (
+            #     np.array(longitude_vector),
+            #     np.array(latitude_vector),
+            #     np.array(duration_vector),
+            #     np.array(start_minutes_vector),
+            #     np.array(share_vector),
+            #     1,  # valid job
+            #     0,  # NOT FS
+            # )
+
+            if new_job.job_code == self.jobs[self.current_job_i].job_code:
+                obs_dict["jobs"] = [job_obs] + obs_dict["jobs"]
+            else:
+                obs_dict["jobs"].append(job_obs)
+
+            if len(obs_dict["jobs"]) >= self.MAX_OBSERVED_SLOTS:
+                break
+
+        if len(obs_dict["jobs"]) < 1:
+            log.debug("No jobs to observed, done?")
+            return obs_dict  # (0, 0, 0)
+        if len(obs_dict["slots"]) < 1:
+            log.debug("No slots to observed, done?")
+            return obs_dict  # (0, 0, 0)
+
+        # Thirdly the current job being dispatched
+        # overview_vector = np.zeros(self.NBR_FEATURE_OVERVIEW)
+        # overview_vector[0] = 0  # target_unplanned_job_i
+        # overview_vector[1] = max_available_working_slot_duration
+        # overview_vector[2] = len(self.workers_dict.keys())
+        # overview_vector[3] = len(curr_work_time_slots)
+        # overview_vector[4] = len(self.jobs_dict.keys())
+        # overview_vector[5] = len(unplanned_job_list)
+        # overview_vector[6] = self.get_env_planning_horizon_start_minutes()
+        # overview_vector[7] = int(self.get_env_planning_horizon_start_minutes() / 1440) * 1440
+        # Work, Rest days as one-hot
+        # Overtime usage?
+        #
+        self.internal_obs_slot_list = viewed_slots
+        # obs_tuple = [
+        #     np.stack(curr_work_time_slots, axis=0),
+        #     np.stack(current_job_list + current_job_list, axis=0),
+        #     # overview_vector,
+        # ]
+        # if not self.observation_space.contains(obs_dict):
+        #     print("obs is not Good: {}".format(obs_dict))
+
+        # if not self.observation_space.contains(obs_dict):
+        #     print("obs is not Good: {}".format(obs_dict))
+
+        return obs_dict  # OrderedDict(obs_dict)
 
     def encode_dict_into_action(self, a_dict: ActionDict):
         MAX_OBSERVED_SLOTS = (

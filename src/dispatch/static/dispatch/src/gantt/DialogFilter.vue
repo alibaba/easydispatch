@@ -77,7 +77,7 @@ import { mapFields } from "vuex-map-fields";
 import TeamApi from "@/team/api";
 
 export default {
-  name: "GanttFilterBar",
+  name: "DialogFilterGantt",
 
   methods: {
     ...mapActions("gantt", [
@@ -133,7 +133,7 @@ export default {
         d.substr(0, 4) + "-" + d.substr(4, 2) + "-" + d.substr(6, 2);
       let endDateInTeam = this.addDays(
         startDateInTeam,
-        team.flex_form_data.nbr_of_days_planning_window
+        parseInt(team.flex_form_data.nbr_of_days_planning_window)
       )
         .toISOString()
         .substr(0, 10);

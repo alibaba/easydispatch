@@ -164,6 +164,16 @@
       <v-flex xs12>
         <tag-filter-combobox label="Tags" v-model="tags" />
       </v-flex>
+
+      <v-flex xs12>
+        <v-switch
+          v-model="auto_planning"
+          hint="Each plugin type can only ever have one enabled plugin. Existing enabled plugins will be de-activated."
+          :label="
+            auto_planning ? 'Dispatch Automatically' : 'Dispatch Manually'
+          "
+        />
+      </v-flex>
     </v-layout>
   </v-container>
 </template>
@@ -182,7 +192,7 @@ import LocationSelect from "@/location/LocationSelect.vue";
 
 extend("required", {
   ...required,
-  message: "This field is required"
+  message: "This field is required",
 });
 
 export default {
@@ -196,13 +206,13 @@ export default {
     TagFilterCombobox,
     TimePickerMenu,
     DatePickerMenu,
-    LocationSelect
+    LocationSelect,
   },
 
   data() {
     return {
       statuses: ["Active", "Stable", "Closed"],
-      visibilities: ["Open", "Restricted"]
+      visibilities: ["Open", "Restricted"],
     };
   },
 
@@ -227,8 +237,10 @@ export default {
       "selected.scheduled_start_datetime",
       "selected.scheduled_duration_minutes",
       "selected.scheduled_primary_worker",
-      "selected.scheduled_secondary_workers"
-    ])
-  }
+      "selected.scheduled_secondary_workers",
+      //
+      "selected.auto_planning",
+    ]),
+  },
 };
 </script>

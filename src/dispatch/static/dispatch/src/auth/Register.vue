@@ -1,7 +1,7 @@
 <template>
   <v-card class="mx-auto" max-width="500" style="margin-top: -64px;">
     <v-card-title>
-      Dispatch - Register
+      Register a New User
     </v-card-title>
     <v-card-text>
       <v-form>
@@ -27,7 +27,7 @@
       <v-list-item two-line>
         <v-list-item-content>
           <v-list-item-subtitle>
-            Have a account? <router-link to="/login">Login</router-link>
+            Already have an account? <router-link to="/login">Login</router-link>
           </v-list-item-subtitle>
         </v-list-item-content>
         <v-row align="center" justify="end">

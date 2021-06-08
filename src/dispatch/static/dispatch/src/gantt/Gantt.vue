@@ -16,10 +16,10 @@
         v-model="plannerHealthCheckResultShowFlag"
         class="mx-2"
         label="Rules"
+        :disabled="!singleJobDropCheckOptions"
       ></v-switch>
     </v-flex>
 
-    <v-spacer />
     <v-flex class="mb-0 pa-0 d-flex justify-end" lg1 sm4 xs6>
       <v-switch v-model="chartDraggable" class="mx-2" label="Drag"></v-switch>
     </v-flex>
@@ -28,7 +28,6 @@
         v-model="chartClickShowMapFlag"
         class="mx-2"
         label="map"
-        disabled
       ></v-switch>
     </v-flex>
 
@@ -42,7 +41,11 @@
     </v-flex>
     <v-spacer />
 
-    <v-flex class="d-flex justify-end" lg1 sm2 xs3>
+    <v-flex class="d-flex justify-end" lg2 sm3 xs3>
+      <v-btn @click="runBatchOptimizer()">Run Batch</v-btn>
+    </v-flex>
+
+    <v-flex class="d-flex justify-end" lg2 sm3 xs3>
       <v-btn color="primary" dark @click="setDialogFilterVisible(true)"
         >Load Data</v-btn
       >
@@ -186,7 +189,7 @@ export default {
     return {
       // plannerFilters: null,
       planning_status_list: ["P", "I", "U"],
-      job_type_list: [ "P", "U", "I"], // "appt", "event",, "other"
+      job_type_list: ["appt", "event", "P", "U", "I", "other"],
       search: null,
       job_code_filter: null,
       job_type_filter: "U",
@@ -270,7 +273,10 @@ export default {
   },
 
   methods: {
-    ...mapActions("gantt", ["showActionWithRecommendation"]),
+    ...mapActions("gantt", [
+      "showActionWithRecommendation",
+      "runBatchOptimizer",
+    ]),
     ...mapMutations("gantt", ["SET_PLANNER_FILTERS"]),
     defaultTeam() {},
     setDialogFilterVisible(visibleFlag) {
@@ -364,7 +370,7 @@ export default {
       "plannerHealthCheckResultShowFlag",
       "plannerScoresShowFlag",
       //"plannerFilters.forceReloadFlag"
-      //"plannerFilters"
+      "singleJobDropCheckOptions",
     ]),
   },
 };

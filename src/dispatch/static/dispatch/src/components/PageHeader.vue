@@ -16,13 +16,13 @@
       </template>
     </v-breadcrumbs>
     <v-spacer />
-    <div class="page-header-right">
+    <!-- <div class="page-header-right">
       <v-btn icon @click="refresh">
         <v-icon class="text--secondary">
           refresh
         </v-icon>
       </v-btn>
-    </div>
+    </div> -->
   </v-layout>
 </template>
 
@@ -31,13 +31,13 @@ export default {
   data() {
     return {
       title: "Home",
-      breadcrumbs: []
+      breadcrumbs: [],
     };
   },
   watch: {
     "$route.path": function() {
       this.computeBreadcrumbs();
-    }
+    },
   },
   created() {
     this.computeBreadcrumbs();
@@ -51,20 +51,20 @@ export default {
         {
           text: "Home",
           href: "/",
-          disabled: false
-        }
+          disabled: false,
+        },
       ];
       let appends = [];
-      appends = this.$route.matched.map(item => {
+      appends = this.$route.matched.map((item) => {
         return {
           text: item.meta.title || "",
           href: item.path || "/",
-          disabled: item.path === this.$route.path
+          disabled: item.path === this.$route.path,
         };
       });
       this.breadcrumbs = breadcrumbs.concat(appends);
-    }
-  }
+    },
+  },
 };
 </script>
 <style lang="stylus" scoped>

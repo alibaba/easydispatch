@@ -64,8 +64,7 @@ export default {
     JobPlannerDetailsTab, //a
     JobTimelineTab,
     JobFlexForm
-  },
-
+  }, 
   data() {
     return {
       tab: null,
@@ -75,21 +74,44 @@ export default {
         properties: {
           job_schedule_type: {
             type: "string",
+            default: "N",
             title: "Job Type",
             description: "This affects timing, N=Normal, FS=Fixed Schedule.",
             enum: ["N", "FS"]
           },
           requested_min_level: {
             type: "number",
+            default: 1,
             title: "requested min level (integer)"
           },
           requested_skills: {
             type: "array",
+            default: ["level_1"],
             title: "requested_skills",
             items: {
               type: "string"
             }
-          }
+          },
+          tolerance_start_minutes: {
+            type: "number",
+            default: -1440,
+            title: "requested min tolerance minutes backward, in minutes. One day is 1440 minutes"
+          },
+          tolerance_end_minutes: {
+            type: "number",
+            default: 1440,
+            title: "requested max tolerance minutes forward, in minutes. One day is 1440 minutes"
+          },
+          min_number_of_workers: {
+            type: "number",
+            default: 1,
+            title: "Min number of workers. Bigger than one means shared job among multiple workers"
+          },
+          max_number_of_workers: {
+            type: "number",
+            default: 1,
+            title: "Max number of workers. Bigger than one means shared job among multiple workers"
+          },
         }
       }
     };

@@ -15,7 +15,7 @@
               <v-text-field
                 v-model="q"
                 append-icon="search"
-                label="Search by code, name"
+                label="Search by code, name, description"
                 single-line
                 hide-details
                 clearable
@@ -87,7 +87,7 @@ export default {
         // { text: "ID", value: "id", sortable: true },
         { text: "Code", value: "code", sortable: true },
         { text: "Name", value: "name", sortable: true },
-        // { text: "Description", value: "description", sortable: true },
+        { text: "Description", value: "description", sortable: true },
         { text: "team", value: "team.code", sortable: true },
         { text: "Active", value: "is_active", sortable: true },
         // { text: "Linked Username", value: "username", sortable: true },

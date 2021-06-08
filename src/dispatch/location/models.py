@@ -43,6 +43,9 @@ class Location(Base):
 
 # Pydantic models...
 class LocationBase(DispatchBase):
+    """ A location is where a worker or a job is positioned on a map. The longitude and latitude are mandatory and textual addresses are optional.
+    \n A location is treated as first class citizen in parallel to job because we see that there are repeated jobs for same customer and location. The historical assignment patterns can be learned on location level.
+    """
     location_code: str
     geo_longitude: float
     geo_latitude: float

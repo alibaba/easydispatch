@@ -38,14 +38,14 @@ export default {
       attribution,
       waypoints: [
         { lat: 38.7436056, lng: -9.2304153 },
-        { lat: 38.7436056, lng: -0.131281 }
-      ]
+        { lat: 38.7436056, lng: -0.131281 },
+      ],
     };
   },
 
   provide: function() {
     return {
-      getMap: this.getMap
+      getMap: this.getMap,
     };
   },
   methods: {
@@ -64,26 +64,26 @@ export default {
         }
       }
       checkForMap();
-    }
+    },
   },
 
   computed: {
     ...mapFields("gantt", [
-      "selected.latLongRouteArray",
-      "dialogs.dialogMapRouteVisible"
-    ])
+      "selected.latLongWayPoints",
+      "dialogs.dialogMapRouteVisible",
+    ]),
   },
 
   watch: {
-    latLongRouteArray(newValue, oldValue) {
+    latLongWayPoints(newValue, oldValue) {
       // https://dev.to/viniciuskneves/watch-for-vuex-state-changes-2mgj
-      console.log(`latLongRouteArray Updating from ${oldValue} to ${newValue}`);
+      console.log(`latLongWayPoints Updating from ${oldValue} to ${newValue}`);
       if (newValue) {
         console.log(newValue[0], newValue[1]);
       }
 
       // Do whatever makes sense now
-    }
-  }
+    },
+  },
 };
 </script>

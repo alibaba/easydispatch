@@ -1,4 +1,5 @@
 # https://stackoverflow.com/questions/4913349/haversine-formula-in-python-bearing-and-distance-between-two-gps-points
+import logging
 from math import radians, cos, sin, asin, sqrt
 import requests
 
@@ -8,7 +9,6 @@ from dispatch.plugins.kandbox_planner.util.cache_dict import CacheDict
 
 travel_time_dict = CacheDict(cache_len=5000)
 
-import logging
 
 log = logging.getLogger(__file__)
 
@@ -114,7 +114,8 @@ class OSRMTravelTime(KandboxTravelTimePlugin):
     def __init__(self, travel_mode="car"):
         self.travel_mode = travel_mode
         self.url_template = (
-            "http://127.0.0.1:5000/route/v1/driving/{},{};{},{}?steps=false&overview=false"
+            "https://kerrypoc.dispatch.kandbox.com/route/v1/driving/{},{};{},{}?steps=false&overview=false"
+            # "http://127.0.0.1:5000/route/v1/driving/{},{};{},{}?steps=false&overview=false"
         )
 
     def get_travel_minutes_2locations(self, loc_1, loc_2):  # get_travel_time_2locations
@@ -127,8 +128,8 @@ class OSRMTravelTime(KandboxTravelTimePlugin):
             travel_time = resp_json["routes"][0]["duration"] / 60
         except KeyError:
             print(resp_json)
-            travel_time = -1
-            return -1
+            travel_time = 9999
+            return travel_time
         if travel_time < 1:
             travel_time = 1
         return travel_time

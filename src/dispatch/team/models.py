@@ -8,6 +8,7 @@ from sqlalchemy_utils import TSVectorType
 from dispatch.database import Base
 from dispatch.models import TimeStampMixin, DispatchBase
 from dispatch.service.models import ServiceCreate
+from pydantic import validator, Field
 
 
 class Team(Base, TimeStampMixin):
@@ -54,8 +55,10 @@ class Team(Base, TimeStampMixin):
 
 
 class TeamBase(DispatchBase):
+    """ A team is the scope of one dispatching planner instance. The jobs in each team will be assigned to workers in the same team."""
 
-    code: str
+    code: str = Field(
+        default=None, title="Code", description="The unique team code.",)
     name: Optional[str]
     description: Optional[str]
     planner_service: Optional[ServiceCreate]

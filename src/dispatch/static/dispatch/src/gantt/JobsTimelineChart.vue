@@ -421,7 +421,7 @@ export default {
       "global_job_dict",
       "selectedWorkerList",
       "chartClickBehaviour",
-      "latLongRouteArray",
+      "latLongWayPoints",
       "singleJobDropCheckResult",
       "singleJobDropCheckOptions",
       "plannerFilters",
@@ -703,8 +703,8 @@ export default {
                   params.value[POS_JOB_INDEX_end_datetime]
                 ).getTime();
 
-                jobInfo = 
-                  params.marker + "Job: " +
+                jobInfo =
+                  params.marker +
                   params.value[POS_JOB_INDEX_job_code] +
                   "( " +
                   params.value[POS_JOB_INDEX_worker_code] +
@@ -731,7 +731,7 @@ export default {
               //break
               case "workersSeries":
                 //console.log(params)
-                jobInfo = params.marker + "Worker: " +
+                jobInfo =
                   params.value[POS_WORKER_INDEX_name] +
                   `, Skills =(${params.value[
                     POS_WORKER_INDEX_skills
@@ -1138,8 +1138,7 @@ export default {
               ") to (" +
               params.value[POS_JOB_INDEX_job_code] +
               ")"
-          ); //params.name
-          // TODO  import { forEach } from "lodash"
+          );
           for (
             let i = 0;
             i < this.global_loaded_data.all_jobs_in_env.length;
@@ -1155,32 +1154,34 @@ export default {
               break;
             }
           }
+          let from_latlng = this.global_job_dict[
+            params.value[POS_JOB_INDEX_travel_prev_code]
+          ]["data_latlng"];
+          let to_latlng = this.global_job_dict[
+            params.value[POS_JOB_INDEX_job_code]
+          ]["data_latlng"];
 
-          this.showDialogMapRoute(
-            // show_job_route(
-            [
-              this.global_job_dict[
-                params.value[POS_JOB_INDEX_travel_prev_code]
-              ]["data_latlng"],
-              this.global_job_dict[params.value[POS_JOB_INDEX_job_code]][
-                "data_latlng"
-              ],
-            ]
-          );
+          this.showDialogMapRoute([
+            { lat: from_latlng[0], lng: from_latlng[1] },
+            { lat: to_latlng[0], lng: to_latlng[1] },
+          ]);
         } else {
           console.log(
             "Sorry, this visit has no previous visit in the same day, and I am plotting prev loc.",
             "loc type = ",
             params.value[POS_JOB_INDEX_prev_location_type]
           );
+
+          let to_latlng = this.global_job_dict[
+            params.value[POS_JOB_INDEX_job_code]
+          ]["data_latlng"];
+
           this.showDialogMapRoute([
-            [
-              params.value[POS_JOB_INDEX_prev_geo_latitude],
-              params.value[POS_JOB_INDEX_prev_geo_longitude],
-            ],
-            this.global_job_dict[params.value[POS_JOB_INDEX_job_code]][
-              "data_latlng"
-            ],
+            {
+              lat: params.value[POS_JOB_INDEX_prev_geo_latitude],
+              lng: params.value[POS_JOB_INDEX_prev_geo_longitude],
+            },
+            { lat: to_latlng[0], lng: to_latlng[1] },
           ]);
         }
       } else if (params.seriesId == "workersSeries") {

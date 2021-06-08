@@ -6,7 +6,7 @@
           <v-list-item-content>
             <v-list-item-title v-if="id" class="title">Edit</v-list-item-title>
             <v-list-item-title v-else class="title">New</v-list-item-title>
-            <v-list-item-subtitle>Service</v-list-item-subtitle>
+            <v-list-item-subtitle>Team</v-list-item-subtitle>
           </v-list-item-content>
           <v-btn
             icon
@@ -27,7 +27,7 @@
           <v-container grid-list-md>
             <v-layout wrap>
               <v-flex xs12>
-                <span class="subtitle-2">Details</span>
+                <span class="subtitle-2">Team Details</span>
               </v-flex>
               <v-flex xs12>
                 <ValidationProvider name="TeamCode" rules="required" immediate>
@@ -60,6 +60,47 @@
               <v-flex xs12>
                 <service-select v-model="planner_service" />
               </v-flex>
+              <v-flex xs12>
+                <span class="subtitle-2">Planning Window</span>
+              </v-flex>
+
+              <v-flex xs12>
+                <ValidationProvider
+                  name="env_start_day"
+                  rules="required"
+                  immediate
+                >
+                  <v-text-field
+                    v-model="flex_form_data.env_start_day"
+                    slot-scope="{ errors, valid }"
+                    :error-messages="errors"
+                    :success="valid"
+                    label="Planning Start Day"
+                    hint="Planning Start Day in format of YYYYMMDD"
+                    clearable
+                    required
+                  />
+                </ValidationProvider>
+              </v-flex>
+
+              <v-flex xs12>
+                <ValidationProvider
+                  name="nbr_of_days_planning_window"
+                  rules="required"
+                  immediate
+                >
+                  <v-text-field
+                    v-model="flex_form_data.nbr_of_days_planning_window"
+                    slot-scope="{ errors, valid }"
+                    :error-messages="errors"
+                    :success="valid"
+                    label="Planning Days"
+                    hint="How many days to plan e.g. 1, 2, 3, ..."
+                    clearable
+                    required
+                  />
+                </ValidationProvider>
+              </v-flex>
             </v-layout>
           </v-container>
         </v-card-text>
@@ -76,7 +117,7 @@ import { required } from "vee-validate/dist/rules";
 import ServiceSelect from "@/service/ServiceSelect.vue";
 extend("required", {
   ...required,
-  message: "This field is required"
+  message: "This field is required",
 });
 
 export default {
@@ -85,7 +126,7 @@ export default {
   components: {
     ValidationObserver,
     ValidationProvider,
-    ServiceSelect
+    ServiceSelect,
   },
 
   computed: {
@@ -95,13 +136,14 @@ export default {
       "selected.name",
       "selected.description",
       "selected.planner_service",
+      "selected.flex_form_data",
       "selected.loading",
-      "dialogs.showCreateEdit"
-    ])
+      "dialogs.showCreateEdit",
+    ]),
   },
 
   methods: {
-    ...mapActions("team", ["save", "closeCreateEdit"])
-  }
+    ...mapActions("team", ["save", "closeCreateEdit"]),
+  },
 };
 </script>

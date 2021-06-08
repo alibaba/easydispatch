@@ -124,6 +124,9 @@ def update_service_plugin(
     service_plugin = get(db_session=db_session, service_plugin_id=service_plugin_id)
     if not service_plugin:
         raise HTTPException(status_code=404, detail="The requested service_plugin does not exist.")
+    if (service_plugin_in.service is None) or (service_plugin_in.plugin is None):
+        raise HTTPException(
+            status_code=400, detail="The request does not contain valid service and plugin.")
 
     previous_service_plugin = ServicePluginRead.from_orm(service_plugin)
 

@@ -70,8 +70,10 @@ config = Config(".env")
 LOG_LEVEL = config("LOG_LEVEL", default=logging.WARNING)
 
 module_levels = {
-    "dispatch.main": logging.ERROR,
-    "rllib_env_job2slot": logging.DEBUG,
+    "dispatch.main": logging.DEBUG,
+    "recommendation_server": logging.DEBUG,
+    "rllib_env_job2slot": logging.ERROR,
+    "dispatch.plugins.kandbox_planner.routing.travel_time_routingpy_redis": logging.ERROR,
 }
 
 
@@ -244,7 +246,7 @@ REDIS_PASSWORD = config("REDIS_PASSWORD", default=None)
 
 
 # kandbox
-NBR_OF_OBSERVED_WORKERS = config("NBR_OF_OBSERVED_WORKERS", cast=int, default=33)
+NBR_OF_OBSERVED_WORKERS = config("NBR_OF_OBSERVED_WORKERS", cast=int, default=8)
 MINUTES_PER_DAY = config("MINUTES_PER_DAY", cast=int, default=1440)
 MAX_NBR_OF_JOBS_PER_DAY_WORKER = config("MAX_NBR_OF_JOBS_PER_DAY_WORKER", cast=int, default=25)
 SCORING_FACTOR_STANDARD_TRAVEL_MINUTES = config(
@@ -319,6 +321,7 @@ KANDBOX_TEST_OPTI1DAY_END_DAY = "20200525"
 
 KANDBOX_OPTI1DAY_EXEC_SECONDS = 2
 KANDBOX_TEST_WORKING_DIR = "/tmp"
+BATCH_OSS_LOCAL_STORAGE_PATH = "/tmp"
 RL_MAX_EPOCHS = 5
 RL_TRAINING_DAYS = 8
 
@@ -360,3 +363,4 @@ DEFAULT_START_DAY = "K_START"
 REDIS_KEY_SEPERATOR = "/"
 
 APPOINTMENT_ON_REDIS_KEY_PREFIX = "A/"
+TRAINED_MODEL_PATH = config("TRAINED_MODEL_PATH", default="/tmp")

@@ -6,22 +6,23 @@ import addMinutes from "date-fns/addMinutes";
 
 const getDefaultSelectedState = () => {
   return {
-    latLongRouteArray: null,
+    latLongWayPoints: null,
+    latLongCenter: [13.764567, 100.4733888],
     recommendationedActions: [],
     job: null,
-    selectedJobIndex: 0
+    selectedJobIndex: 0,
   };
 };
 
 const state = {
   selected: {
-    ...getDefaultSelectedState()
+    ...getDefaultSelectedState(),
   },
   planned_jobs_data_last_upate_date_string: "N/A",
   dialogs: {
     dialogFilterVisible: false,
     dialogMapRouteVisible: false,
-    dialogActionWithRecommendationVisible: false
+    dialogActionWithRecommendationVisible: false,
   },
   envTableLoading: false,
   autoCommitFlag: false,
@@ -38,7 +39,7 @@ const state = {
       "worker_code",
       "geo_longitude",
       "geo_latitude",
-      "weekly_working_minutes"
+      "weekly_working_minutes",
     ],
     workers_data: [],
     jobs_dimensions: [
@@ -53,12 +54,12 @@ const state = {
       "scheduled_primary_worker_id",
       "geo_longitude",
       "geo_latitude",
-      "changed_flag"
+      "changed_flag",
     ],
     planned_jobs_data: [],
     all_jobs_in_env: [],
     start_time: "2020-06-16T00:00:00",
-    end_time: "2020-06-18T00:00:00"
+    end_time: "2020-06-18T00:00:00",
   },
   chartClickBehaviour: "show_job", //drag_n_drop
   global_job_dict: {},
@@ -72,7 +73,7 @@ const state = {
     inplanning_job_count: 2,
     unplanned_job_count: 3,
     onsite_working_minutes: 6,
-    planning_window: "NA"
+    planning_window: "NA",
   },
   plannerHealthCheckResultShowFlag: false,
   singleJobCheckAPICallInProgressFlag: false,
@@ -91,19 +92,19 @@ const state = {
         message: [
           {
             score: 1,
-            message: ["Job is between start and end time of the worker"]
-          }
-        ]
-      }
-    ]
+            message: ["Job is between start and end time of the worker"],
+          },
+        ],
+      },
+    ],
   },
   // global_planner_game_list: {},
   globalRecommendedSlotsData: {},
   selectedWorkerList: ["duanorg_Duan", "duanorg_Harry"],
   plannerFilters: {
-    team: { id: 2 },
-    windowDates: ["2020-10-13", "2020-10-14"],
-    forceReloadFlag: false
+    team: null, //{ id: 2 }
+    windowDates: null, //["2020-10-13", "2020-10-14"],
+    forceReloadFlag: false,
   },
   INDEX_CONFIG: {
     POS_JOB_INDEX_worker_index: 0,
@@ -133,8 +134,8 @@ const state = {
     POS_WORKING_TIME_INDEX_worker_index: 0,
     POS_WORKING_TIME_INDEX_start_ms: 1 + 0,
     POS_WORKING_TIME_INDEX_end_ms: 2 + 0,
-    HEIGHT_RATIO: 0.6
-  }
+    HEIGHT_RATIO: 0.6,
+  },
   /*
   draggbleConfig: {
     draggable: false,
@@ -153,13 +154,14 @@ const state = {
 
 const getters = {
   getField,
-  getPlannerFilters: state => () => {
+  getPlannerFilters: (state) => () => {
     // original getter body
     return {
       team_id: state.plannerFilters.team.id, //3,
+      team_code: state.plannerFilters.team.code, //"london_t1",
       start_day: state.plannerFilters.start_day, //state.plannerFilters.windowDates[0].replace("-", "").replace("-", ""), //"TODO",
       end_day: state.plannerFilters.end_day, //state.plannerFilters.windowDates[1].replace("-", "").replace("-", "")
-      force_reload: state.plannerFilters.forceReloadFlag
+      force_reload: state.plannerFilters.forceReloadFlag,
     };
   }, //(state) {
 
@@ -168,7 +170,7 @@ const getters = {
       return {};
     }
     return state.singleJobDropCheckOptions;
-  }
+  },
 };
 
 const actions = {
@@ -177,7 +179,7 @@ const actions = {
     let plannerFilters_ = getters.getPlannerFilters();
 
     return GanttApi.getPlannerWorkerJobDataset(plannerFilters_)
-      .then(response => {
+      .then((response) => {
         commit("SET_TABLE_LOADING", false);
         commit("SET_ENV_LOADED_DATA", response.data);
         //TODO
@@ -185,7 +187,7 @@ const actions = {
 
         commit("SET_DIALOG_FILTER_VISIBLE", false);
       })
-      .catch(err => {
+      .catch((err) => {
         commit("SET_TABLE_LOADING", false);
         commit(
           "app/SET_SNACKBAR",
@@ -193,7 +195,8 @@ const actions = {
             text:
               `Failed to load workers and jobs. Reason: ` +
               JSON.stringify(err.response.data),
-            color: "red"
+            color: "red",
+//             timeout:120
           },
           { root: true }
         );
@@ -205,14 +208,15 @@ const actions = {
     let plannerFilters_ = getters.getPlannerFilters();
 
     return GanttApi.getPlannerScoreStats(plannerFilters_)
-      .then(response => {
+      .then((response) => {
         // commit("SET_TABLE_LOADING", false)
         commit("SET_PLANNER_SCORE_STATS", response.data);
         commit("SET_PLANNER_SCORE_SHOW_FLAG", true);
 
         commit("SET_DIALOG_FILTER_VISIBLE", false);
+        commit("SET_PLANNER_SCORE_API_CALL_IN_PROGRESS_FLAG", false);
       })
-      .catch(err => {
+      .catch((err) => {
         // commit("SET_TABLE_LOADING", false)
         commit(
           "app/SET_SNACKBAR",
@@ -220,10 +224,11 @@ const actions = {
             text:
               `Failed to load score statistics. Reason: ` +
               JSON.stringify(err.response.data),
-            color: "red"
+            color: "red",
           },
           { root: true }
         );
+        commit("SET_PLANNER_SCORE_API_CALL_IN_PROGRESS_FLAG", false);
       });
   }, 1000),
 
@@ -244,11 +249,11 @@ const actions = {
       }
 
       return GanttApi.doSingleJobDropCheck(getters.getSingleJobDropCheckOptions)
-        .then(response => {
+        .then((response) => {
           commit("SET_SINGLE_JOB_CHECK_API_CALL_IN_PROGRESS_FLAG", false);
           commit("SET_SINGLE_JOB_CHECK_RESULT", response.data);
         })
-        .catch(err => {
+        .catch((err) => {
           commit("SET_SINGLE_JOB_CHECK_API_CALL_IN_PROGRESS_FLAG", false);
           commit(
             "app/SET_SNACKBAR",
@@ -256,7 +261,7 @@ const actions = {
               text:
                 `Failed to check rules for job ${jobActionOptions.job_code} . Reason: ` +
                 JSON.stringify(err.response.data.detail),
-              color: "red"
+              color: "red",
             },
             { root: true }
           );
@@ -280,14 +285,14 @@ const actions = {
     jobActionOptions.job_code = job.job_code;
 
     GanttApi.getRecommendedSlots(jobActionOptions)
-      .then(response => {
+      .then((response) => {
         let recommendedSlots = response.data.recommendations;
         if (recommendedSlots.length < 1) {
           commit(
             "app/SET_SNACKBAR",
             {
               text: "Failed to get recommendations, maybe all occupied",
-              color: "red"
+              color: "red",
             },
             { root: true }
           );
@@ -315,7 +320,7 @@ const actions = {
 
         commit("SET_SINGLE_JOB_CHECK_API_CALL_IN_PROGRESS_FLAG", false);
       })
-      .catch(err => {
+      .catch((err) => {
         commit("SET_SINGLE_JOB_CHECK_API_CALL_IN_PROGRESS_FLAG", false);
         commit(
           "app/SET_SNACKBAR",
@@ -323,7 +328,7 @@ const actions = {
             text:
               "Failed to get recommendations. Reason: " +
               err.response.data.detail,
-            color: "red"
+            color: "red",
           },
           { root: true }
         );
@@ -338,9 +343,9 @@ const actions = {
 
     dispatch("doSingleJobDropCheck", jobActionOptions);
   },
-  showDialogMapRoute({ commit }, latLongRouteArray) {
-    if (latLongRouteArray) {
-      commit("SET_SELECTED_LAT_LONG", latLongRouteArray);
+  showDialogMapRoute({ commit }, latLongWayPoints) {
+    if (latLongWayPoints) {
+      commit("SET_SELECTED_LAT_LONG", latLongWayPoints);
     }
     commit("SET_DIALOG_SHOW_MAP_ROUTE", true);
   },
@@ -354,7 +359,7 @@ const actions = {
   },
   commitSingleJob({ commit, dispatch }, jobActionOptions) {
     GanttApi.commitJobAction(jobActionOptions)
-      .then(response => {
+      .then((response) => {
         console.log(response.data);
         if (response.data.errorNumber != 0) {
           commit(
@@ -365,7 +370,7 @@ const actions = {
                 JSON.stringify(response.data),
               color: "red",
               timeout: -1,
-              top: true
+              top: true,
             },
             { root: true }
           );
@@ -374,21 +379,21 @@ const actions = {
           commit(
             "app/SET_SNACKBAR",
             {
-              text: `Job (${jobActionOptions.job_code}) is committed successfully.`
+              text: `Job (${jobActionOptions.job_code}) is committed successfully.`,
             },
             { root: true }
           );
           dispatch("getPlannerWorkerJobDataset");
         }
       })
-      .catch(err => {
+      .catch((err) => {
         commit(
           "app/SET_SNACKBAR",
           {
             text:
               `Failed to commit job (${jobActionOptions.job_code}), please retry or reload_env / start over. \nReason: ` +
               err.response.data.detail,
-            color: "red"
+            color: "red",
           },
           { root: true }
         );
@@ -414,7 +419,47 @@ const actions = {
     });
     // do manual reload . 2021-02-24 08:55:16 moved to .then of commit api.
     // dispatch("getPlannerWorkerJobDataset")
-  }
+  },
+
+  runBatchOptimizer({ commit, getters, dispatch }) {
+    let plannerFilters_ = getters.getPlannerFilters();
+    if (!plannerFilters_.team_code) {
+      commit(
+        "app/SET_SNACKBAR",
+        { text: "No team is selected, please first click load data." },
+        { root: true }
+      );
+      return;
+    }
+    commit("SET_PLANNER_SCORE_API_CALL_IN_PROGRESS_FLAG", true);
+
+    GanttApi.runBatchOptimizer(plannerFilters_)
+      .then((response) => {
+        console.log("runBatchOptimizer done ->", response.data);
+        commit(
+          "app/SET_SNACKBAR",
+          {
+            text: `Batch Optimizer is executed successfully.`,
+          },
+          { root: true }
+        );
+        dispatch("getPlannerWorkerJobDataset");
+        dispatch("getPlannerScoreStats");
+      })
+      .catch((err) => {
+        commit(
+          "app/SET_SNACKBAR",
+          {
+            text:
+              `Failed to run Batch Optimizer, please retry or reload_env / start over. \nReason: ` +
+              err.response.data.detail,
+            color: "red",
+          },
+          { root: true }
+        );
+        commit("SET_PLANNER_SCORE_API_CALL_IN_PROGRESS_FLAG", false);
+      });
+  },
 };
 
 const mutations = {
@@ -427,7 +472,9 @@ const mutations = {
   },
 
   SET_SELECTED_LAT_LONG(state, value) {
-    state.selected.latLongRouteArray = value;
+    state.selected.latLongWayPoints = value;
+    //TODO, take average
+    state.selected.latLongCenter = value[0];
   },
 
   SET_SELECTED(state, value) {
@@ -442,7 +489,7 @@ const mutations = {
       {
         team_id: plannerFilters.team.id, //3,
         start_day: plannerFilters.start_day,
-        end_day: plannerFilters.end_day
+        end_day: plannerFilters.end_day,
       }
     );
   },
@@ -454,7 +501,7 @@ const mutations = {
     state.global_loaded_data = value;
     state.global_worker_dict = null;
     state.global_worker_dict = {};
-    state.global_loaded_data.workers_data.forEach(element => {
+    state.global_loaded_data.workers_data.forEach((element) => {
       state.global_worker_dict[
         element[state.INDEX_CONFIG.POS_WORKER_INDEX_worker_code]
       ] = element[state.INDEX_CONFIG.POS_WORKER_INDEX_worker_index];
@@ -477,6 +524,9 @@ const mutations = {
   },
   SET_SINGLE_JOB_CHECK_API_CALL_IN_PROGRESS_FLAG(state, value) {
     state.singleJobCheckAPICallInProgressFlag = value;
+  },
+  SET_PLANNER_SCORE_API_CALL_IN_PROGRESS_FLAG(state, value) {
+    state.plannerScoresAPICallInProgressFlag = value;
   },
   RESET_SINGLE_JOB_CHECK(state) {
     state.singleJobDropCheckOptions = {};
@@ -563,7 +613,7 @@ const mutations = {
       jobActionOptions.scheduled_primary_worker_id;
     // selectedJob.scheduled_secondary_worker_ids = jobActionOptions.scheduled_secondary_worker_ids
     selectedJob.scheduled_worker_codes = [
-      jobActionOptions.scheduled_primary_worker_id
+      jobActionOptions.scheduled_primary_worker_id,
     ].concat(jobActionOptions.scheduled_secondary_worker_ids);
 
     selectedJob["changed_flag"] = 1;
@@ -625,7 +675,7 @@ const mutations = {
           data_latlng: state.global_job_dict[selectedJob.job_code].data_latlng,
           job_index_in_all:
             state.global_job_dict[selectedJob.job_code].job_index_in_all,
-          job_index_in_planned: -1
+          job_index_in_planned: -1,
         };
       }
 
@@ -644,7 +694,7 @@ const mutations = {
         workerCode, // POS_JOB_INDEX_worker_code: 8,
         selectedJob["geo_longitude"], // POS_JOB_INDEX_geo_longitude: 9 + 0,
         selectedJob["geo_latitude"], // POS_JOB_INDEX_geo_latitude: 10 + 0,
-        1 // POS_JOB_INDEX_changed_flag: 11 + 0,
+        1, // POS_JOB_INDEX_changed_flag: 11 + 0,
       ];
       console.log("I will add job to chart: ", newJobUnplanned2Inplanning);
 
@@ -673,7 +723,7 @@ const mutations = {
     //
     //"scheduled_travel_minutes_before": j["scheduled_travel_minutes_before"],
     //"scheduled_travel_prev_code": j["scheduled_travel_prev_code"],
-  }
+  },
 };
 
 export default {
@@ -681,5 +731,5 @@ export default {
   state,
   getters,
   actions,
-  mutations
+  mutations,
 };

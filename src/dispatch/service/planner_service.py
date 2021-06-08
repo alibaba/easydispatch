@@ -33,6 +33,8 @@ from sqlalchemy.orm.attributes import flag_modified
 # from dispatch.plugins.kandbox_planner.agent.kprl_agent_rllib_ppo import KandboxAgentRLLibPPO
 import dispatch.plugins.kandbox_planner.util.kandbox_date_util as date_util
 
+from dispatch.common.utils.kandbox_clear_data import clear_team_data_for_redispatching
+
 
 import dispatch.config as config
 import logging
@@ -316,8 +318,9 @@ def reset_planning_window_for_team(org_code, team_id):
     team_env_key = "env_{}_{}".format(org_code, team_id)
     lock_key = "lock_env/env_{}_{}".format(org_code, team_id)
 
+    log.debug(f"Trying to get lock for clearing env = {team_env_key}")
     with redis_conn.lock(
-        lock_key, timeout=60 * 10
+        lock_key, timeout=60
     ) as lock:
         for key in redis_conn.scan_iter(f"{team_env_key}/*"):
             redis_conn.delete(key)
@@ -334,4 +337,17 @@ def reset_planning_window_for_team(org_code, team_id):
     # rl_env.replay_env_to_redis()
 
     result_info = {"status": "OK", "config": rl_env.config}
+    return result_info, planner
+
+
+def run_batch_optimizer(org_code, team_id):
+
+    clear_team_data_for_redispatching(org_code, team_id)
+    result_info, planner = reset_planning_window_for_team(org_code, team_id)
+    rl_env = planner["planner_env"]
+
+    planner["batch_optimizer"].dispatch_jobs(env=rl_env)
+    log.info(f"Finished dispatching {len(rl_env.jobs_dict)} jobs for env={rl_env.jobs_dict}...")
+
+    result_info = {"status": "OK", "jobs_dispatched": len(rl_env.jobs_dict)}
     return result_info

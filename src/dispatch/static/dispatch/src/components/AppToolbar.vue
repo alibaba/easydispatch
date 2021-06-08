@@ -1,5 +1,5 @@
 <template>
-  <v-app-bar clipped-left clipped-right app color="primary" dark>
+  <v-app-bar clipped-left clipped-right app color="primary" dark height="70">
     <v-app-bar-nav-icon @click="handleDrawerToggle" />
     <span class="title ml-3 mr-5">Dispatch</span>
     <!-- <v-text-field
@@ -45,7 +45,10 @@
             </v-avatar>
           </v-btn>
         </template>
-        <span>user = {{ userInfo.email }}, team = {{ defaultTeam.code }} </span>
+        <span
+          >user = {{ userInfo.email }}, team =
+          {{ defaultTeam ? defaultTeam.code : "" }}
+        </span>
       </v-tooltip>
       <!--
         <v-menu offset-y origin="center center" class="elelvation-1" :nudge-bottom="14" transition="scale-transition">
@@ -84,8 +87,8 @@ export default {
       },
       get() {
         return this.$store.state.query;
-      }
-    }
+      },
+    },
   },
   methods: {
     handleDrawerToggle() {
@@ -101,8 +104,8 @@ export default {
     ...mapActions("auth", ["logout"]),
     ...mapActions("search", ["setQuery"]),
     ...mapMutations("search", ["SET_QUERY"]),
-    ...mapMutations("gantt", ["SET_JOB_HEALTH_CHECK_RESULT_SHOW_FLAG"])
-  }
+    ...mapMutations("gantt", ["SET_JOB_HEALTH_CHECK_RESULT_SHOW_FLAG"]),
+  },
 };
 </script>
 

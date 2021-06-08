@@ -1,7 +1,7 @@
 <template>
   <v-card class="mx-auto" max-width="500" style="margin-top: -64px;">
     <v-card-title>
-      Dispatch - Login
+      Login to EasyDispatch
     </v-card-title>
     <v-card-text>
       <v-form>

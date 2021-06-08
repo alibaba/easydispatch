@@ -3,7 +3,7 @@ from datetime import datetime
 from typing import Any, List, Optional
 
 from fastapi_permissions import Allow
-from pydantic import BaseModel, validator
+from pydantic import BaseModel, validator, Field
 from sqlalchemy import (
     JSON,
     Column,
@@ -66,7 +66,7 @@ class Job(Base, TimeStampMixin):
 
     planning_status = Column(
         String, nullable=False, default=JobPlanningStatus.UNPLANNED
-    )  # planning_status
+    )
     auto_planning = Column(Boolean, default=True)
 
     is_active = Column(Boolean, default=True)  # job vs absence
@@ -128,12 +128,20 @@ class Job(Base, TimeStampMixin):
 
 # Pydantic models...
 class JobBase(DispatchBase):
-    code: str
+    """A Job is the main object that easydispatch will actively manage. The job may have different status as Unplanned, Inplanned, Planned. 
+    \n There maybe different types of jobs, especially the composite job and the atom job. Other high level objects like Appointments, Worker's Leave Event are also treated as jobs.
+    \n 
+    """
+
+    code: str = Field(
+        title="Job Code", description='Job code is the unique identify for this job. It must be unique across all teams',)
     name: Optional[str] = None
     description: Optional[str] = None
     planning_status: JobPlanningStatus = JobPlanningStatus.UNPLANNED
-    auto_planning: Optional[bool] = False
-    flex_form_data: Any = None
+    auto_planning: Optional[bool] = Field(
+        default=False, title="Automatic Planning Flag", description='When a job code have auto_planning == True, the easydispatch engine will try dispatch it when its status is U and make its status to I',)
+    flex_form_data: Any = Field(
+        default={}, title="Flexible Form Data", description='You can save all customized job attributes into a flex_form_data. Those data will be used by dispatching rule plugins to validate the worker-job assignment. \n Examples of field candidates are: requested_skills, job_schedule_type, ...',)
 
     requested_start_datetime: Optional[datetime] = None
     requested_duration_minutes: float = None
@@ -141,7 +149,7 @@ class JobBase(DispatchBase):
 
     scheduled_start_datetime: Optional[datetime] = None
     scheduled_duration_minutes: float = None
-    scheduled_primary_worker: Optional[WorkerRead]  #  : WorkerRead
+    scheduled_primary_worker: Optional[WorkerRead]  # : WorkerRead
     scheduled_secondary_workers: Optional[List[WorkerRead]] = []
 
     tags: Optional[List[Any]] = []  # any until we figure out circular imports
@@ -152,7 +160,8 @@ class JobCreate(JobBase):
     location: LocationCreate
 
     # refer https://github.com/tiangolo/fastapi/issues/211
-    flex_form_data: dict = None
+    flex_form_data: dict = Field(
+        default={}, title="Flexible Form Data", description='You can save all customized job attributes into a flex_form_data. Those data will be used by dispatching rule plugins to validate the worker-job assignment. \n Examples of field candidates are: requested_skills, job_schedule_type, ...',)
     requested_start_datetime: Optional[datetime] = None
     requested_duration_minutes: float = None
 
@@ -160,7 +169,7 @@ class JobCreate(JobBase):
 
     scheduled_start_datetime: Optional[datetime] = None
     scheduled_duration_minutes: float = None
-    scheduled_primary_worker: Optional[WorkerCreate]  #  : WorkerRead
+    scheduled_primary_worker: Optional[WorkerCreate]  # : WorkerRead
     scheduled_secondary_workers: Optional[List[WorkerCreate]] = []
 
 
@@ -171,16 +180,17 @@ class JobUpdate(JobBase):
     location: LocationCreate
 
     # refer https://github.com/tiangolo/fastapi/issues/211
-    flex_form_data: dict = None
+    flex_form_data: dict = Field(
+        default={}, title="Flexible Form Data", description='You can save all customized job attributes into a flex_form_data. Those data will be used by dispatching rule plugins to validate the worker-job assignment. \n Examples of field candidates are: requested_skills, job_schedule_type, ...',)
     requested_start_datetime: Optional[datetime] = None
     requested_duration_minutes: float = None
     scheduled_start_datetime: Optional[datetime] = None
     scheduled_duration_minutes: float = None
 
     requested_primary_worker: Optional[WorkerCreate]
-    scheduled_primary_worker: Optional[WorkerCreate]  #  : WorkerRead
+    scheduled_primary_worker: Optional[WorkerCreate]  # : WorkerRead
     scheduled_secondary_workers: Optional[List[WorkerCreate]] = []
-    update_source:  str  = "Unknown"
+    update_source: str = "Unknown"
 
 
 class JobPlanningInfoUpdate(JobBase):
@@ -190,9 +200,9 @@ class JobPlanningInfoUpdate(JobBase):
     scheduled_start_datetime: Optional[datetime] = None
     scheduled_duration_minutes: float = None
 
-    scheduled_primary_worker_code: Optional[str]  #  : WorkerRead
+    scheduled_primary_worker_code: Optional[str]  # : WorkerRead
     scheduled_secondary_worker_codes: Optional[List[str]] = []
-    update_source:  str  = "Unknown"
+    update_source: str = "Unknown"
 
 
 class JobRead(JobBase):
@@ -201,7 +211,7 @@ class JobRead(JobBase):
     location: LocationRead
 
     requested_primary_worker: Optional[WorkerRead]
-    scheduled_primary_worker: Optional[WorkerRead]  #  : WorkerRead
+    scheduled_primary_worker: Optional[WorkerRead]  # : WorkerRead
     scheduled_secondary_workers: Optional[List[WorkerRead]] = []
 
     events: Optional[List[EventRead]] = []

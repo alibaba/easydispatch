@@ -5,7 +5,7 @@ from typing import Tuple
 import redis
 from intervaltree import Interval, IntervalTree
 from dispatch.config import PLANNER_SERVER_ROLE
-from dispatch import  config
+from dispatch import config
 from dispatch.plugins.kandbox_planner.env.env_enums import *
 
 # RTree and Intervaltree, similar?
@@ -143,16 +143,12 @@ class CacheOnlySlotServer:
             assigned_job_codes=[],
         )
         a = self.set_slot(slot)
-        self.env.kafka_server.post_changed_slot_codes(
-            message_type=KafkaMessageType.UPDATE_WORKING_TIME_SLOTS,
-            changed_slot_codes_list=[self.get_time_slot_key(slot)],
-        )
 
         return a
 
     def delete_slot__TODEL(
         self, slot_code: str
-    ):  #  worker_id, start_minutes, end_minutes, slot_type,
+    ):  # worker_id, start_minutes, end_minutes, slot_type,
         assert False
 
         if slot_code in self.time_slot_dict.keys():
@@ -667,7 +663,7 @@ class CacheOnlySlotServer:
                                 },
                             )
 
-                        else:  #  len(the_slots) == 1:
+                        else:  # len(the_slots) == 1:
                             local_slot = the_slots.pop()
                             slot_code = self.get_time_slot_key(local_slot)
                             slot = local_slot
@@ -830,7 +826,7 @@ class CacheOnlySlotServer:
             return original_slots
         new_slot_tree = IntervalTree([Interval(sl[0], sl[1], sl) for sl in original_slots])
         for r_slot in rejected_slots:
-            for r_interval in new_slot_tree[r_slot[0] : r_slot[1]]:
+            for r_interval in new_slot_tree[r_slot[0]: r_slot[1]]:
                 new_slot_tree.remove(r_interval)  # Interval(r_slot[0], r_slot[1], r_slot)
 
         return set(new_slot_tree)
@@ -1096,21 +1092,24 @@ class CacheOnlySlotServer:
                 )
                 pass  # For now
 
-        else:  # NOT [JobType.ABSENCE/APPT] Not[ActionType.JOB_FIXED]: then it is flexible (including in-planning job) arrange into existing Floating slots
+        # NOT [JobType.ABSENCE/APPT] Not[ActionType.JOB_FIXED]: then it is flexible (including in-planning job) arrange into existing Floating slots
+        else:
 
             all_jobs = []
-            j_i = 0
+            j_start_i = 0
             for j_i in range(len(slot.assigned_job_codes)):
                 if (
                     self.env.jobs_dict[slot.assigned_job_codes[j_i]].scheduled_start_minutes
                     < action_dict.scheduled_start_minutes
                 ):
                     all_jobs.append(slot.assigned_job_codes[j_i])
+                    j_start_i = j_i + 1
                 else:
+                    j_start_i = j_i
                     break
             all_jobs.append(the_job.job_code)
 
-            for j_new_i in range(j_i + 1, len(slot.assigned_job_codes)):
+            for j_new_i in range(j_start_i, len(slot.assigned_job_codes)):
                 if (
                     self.env.jobs_dict[slot.assigned_job_codes[j_new_i]].scheduled_start_minutes
                     > action_dict.scheduled_start_minutes

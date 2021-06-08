@@ -5,7 +5,12 @@
         <v-list-item-content>
           <v-list-item-title class="title">New</v-list-item-title>
         </v-list-item-content>
-        <v-btn icon color="primary" :loading="loading" @click="save()">
+        <v-btn
+          icon
+          color="primary"
+          :loading="loading"
+          @click="setSelectedFormDataAndSave(localFlexFormData)"
+        >
           <v-icon>save</v-icon>
         </v-btn>
         <v-btn icon color="secondary" @click="closeNewSheet">
@@ -43,7 +48,7 @@ export default {
     // ValidationObserver,
     // JobLocationTab,
     JobPlannerDetailsTab,
-    JobFlexForm
+    JobFlexForm,
   },
 
   data() {
@@ -55,23 +60,50 @@ export default {
         properties: {
           job_schedule_type: {
             type: "string",
+            default: "N",
             title: "Job Type",
             description: "This affects timing, N=Normal, FS=Fixed Schedule.",
-            enum: ["N", "FS"]
+            enum: ["N", "FS"],
           },
           requested_min_level: {
             type: "number",
-            title: "requested min level (integer)"
+            default: 1,
+            title: "requested min level (integer)",
           },
           requested_skills: {
             type: "array",
+            default: ["level_1"],
             title: "requested_skills",
             items: {
-              type: "string"
-            }
-          }
-        }
-      }
+              type: "string",
+            },
+          },
+          tolerance_start_minutes: {
+            type: "number",
+            default: -1440,
+            title:
+              "requested min tolerance minutes backward, in minutes. One day is 1440 minutes",
+          },
+          tolerance_end_minutes: {
+            type: "number",
+            default: 1440,
+            title:
+              "requested max tolerance minutes forward, in minutes. One day is 1440 minutes",
+          },
+          min_number_of_workers: {
+            type: "number",
+            default: 1,
+            title:
+              "Min number of workers. Bigger than one means shared job among multiple workers",
+          },
+          max_number_of_workers: {
+            type: "number",
+            default: 1,
+            title:
+              "Max number of workers. Bigger than one means shared job among multiple workers",
+          },
+        },
+      },
     };
   },
 
@@ -81,12 +113,12 @@ export default {
       "selected.code",
       "selected.description",
       "selected.loading",
-      "dialogs.showNewSheet"
-    ])
+      "dialogs.showNewSheet",
+    ]),
   },
 
   methods: {
-    ...mapActions("job", ["save", "closeNewSheet"])
-  }
+    ...mapActions("job", ["setSelectedFormDataAndSave", "closeNewSheet"]),
+  },
 };
 </script>

@@ -32,6 +32,8 @@ DEFAULT_BUSINESS_HOUR = {
     "friday": [{"open": "0800", "close": "1700", "id": "5ca5578b0c5ec", "isOpen": True}],
     "saturday": [{"open": "", "close": "", "id": "5ca5578b0c5f8", "isOpen": False}],
 }
+
+
 class Worker(TimeStampMixin, Base):
     id = Column(Integer, primary_key=True)
     code = Column(String)
@@ -48,11 +50,9 @@ class Worker(TimeStampMixin, Base):
 
     flex_form_data = Column(JSON, default={})
     job_history_feature_data = Column(JSON, default={})
-    business_hour  = Column(JSON, default=DEFAULT_BUSINESS_HOUR)
-
+    business_hour = Column(JSON, default=DEFAULT_BUSINESS_HOUR)
 
     auth_username = Column(String)  # map to email@auth.user
-
 
     # belongs to Workder+Location_affinity
     # served_location_gmm=models.CharField(max_length=2000, null=True, blank=True) # [1,2,'termite']
@@ -67,26 +67,31 @@ class Worker(TimeStampMixin, Base):
             "code",
             "name",
             "description",
-            "auth_username", 
+            "auth_username",
         )
     )
 
 
 class WorkerBase(DispatchBase):
+    """ A worker may have different names in different business problem, like technicians, service engieers, delivery couriers, postman etc. One worker can work on different jobs at different time. Each worker can work on only one job at each time."""
+
     code: str
     name: Optional[str]
     flex_form_data: dict = {}
     business_hour: dict = DEFAULT_BUSINESS_HOUR
-    is_active: Optional[bool] = True 
+    is_active: Optional[bool] = True
     auth_username: Optional[str]
+
 
 class WorkerCreate(WorkerBase):
     team: TeamCreate
     location: Optional[LocationCreate]
 
+
 class WorkerUpdate(WorkerBase):
     team: TeamCreate
     location: Optional[LocationCreate]
+
 
 class WorkerRead(WorkerBase):
     id: int

@@ -1,3 +1,5 @@
+from sqlalchemy import inspect
+from dispatch.plugins.kandbox_planner.data_adapter.kafka_adapter import KafkaAdapter
 import math
 from datetime import datetime, timedelta
 from typing import List, Optional
@@ -15,6 +17,7 @@ from dispatch.plugins.base import plugins
 from dispatch.tag import service as tag_service
 from dispatch.tag.models import TagCreate, TagUpdate
 from dispatch.team.models import TeamCreate
+from dispatch.event.models import Event
 
 from dispatch.team import service as team_service
 from .enums import JobPlanningStatus
@@ -30,9 +33,6 @@ from dispatch.plugins.kandbox_planner.env.env_models import KafkaEnvMessage
 
 HOURS_IN_DAY = 24
 SECONDS_IN_HOUR = 3600
-from dispatch.plugins.kandbox_planner.data_adapter.kafka_adapter import KafkaAdapter
-
-from sqlalchemy import inspect
 
 
 kafka_server = KafkaAdapter(env=None, role=KafkaRoleType.FAKE, team_env_key="_")
@@ -232,10 +232,12 @@ def update_planning_info(*, db_session, job_in: JobPlanningInfoUpdate) -> Job:
     event_service.log(
         db_session=db_session,
         source=job_in.update_source,
-        description=f"Job ({job_in.code}) is changed to different plan: {job_in}",  # .scheduled_start_datetime
+        # .scheduled_start_datetime
+        description=f"Job ({job_in.code}) is changed to different plan: {job_in}",
         job_id=existing_job.id,
     )
-    post_job_to_kafka(job=existing_job, message_type=KafkaMessageType.UPDATE_JOB, db_session=db_session)
+    post_job_to_kafka(job=existing_job, message_type=KafkaMessageType.UPDATE_JOB,
+                      db_session=db_session)
 
     return existing_job
 
@@ -292,6 +294,7 @@ def update(*, db_session, job: Job, job_in: JobUpdate) -> Job:
 def delete(*, db_session, job_id: int):
     # TODO: When deleting, respect referential integrity here in the code. Or add cascading deletes
     # in models.py.
+    db_session.query(Event).filter(Event.job_id == job_id).delete()
     db_session.query(Job).filter(Job.id == job_id).delete()
     db_session.commit()
 

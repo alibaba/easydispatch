@@ -29,7 +29,7 @@ def get_teams(
     values: List[str] = Query(None, alias="value[]"),
 ):
     """
-    Get all team contacts.
+    Get all teams.
     """
     return search_filter_sort_paginate(
         db_session=db_session,
@@ -48,7 +48,7 @@ def get_teams(
 @router.post("/", response_model=TeamRead)
 def create_team(*, db_session: Session = Depends(get_db), team_contact_in: TeamCreate):
     """
-    Create a new team contact.
+    Create a new team. All jobs and workers must be assigned to one team.
     """
     team = get_by_code(db_session=db_session, code=team_contact_in.code)
     if team:
@@ -60,7 +60,7 @@ def create_team(*, db_session: Session = Depends(get_db), team_contact_in: TeamC
 @router.get("/{team_id}", response_model=TeamRead)
 def get_team(*, db_session: Session = Depends(get_db), team_id: int):
     """
-    Get a team contact.
+    Get a team.
     """
     team = get(db_session=db_session, team_id=team_id)
     if not team:
@@ -76,7 +76,7 @@ def update_team(
     team_contact_in: TeamUpdate,
 ):
     """
-    Update a team contact.
+    Update a team.
     """
     team = get(db_session=db_session, team_id=team_id)
     if not team:
@@ -88,7 +88,7 @@ def update_team(
 @router.delete("/{team_id}", response_model=TeamRead)
 def delete_team(*, db_session: Session = Depends(get_db), team_id: int):
     """
-    Delete a team contact.
+    Delete a team.
     """
     team = get(db_session=db_session, team_id=team_id)
     if not team:
