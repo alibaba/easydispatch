@@ -9,11 +9,7 @@ Some of the feature highlights:
 - Explainable AI to do drag and drop what-if analysis.
 - Full set of REST API and API Documents
 
-## Online Demo
-We are working on demo.
-
-## Problem Definition
-
+Read [Document](https://qiyangduan.github.io/) for more information
 
 ## Quick Start
 EasyDispatch relies on Postgres DB, Redis and Kafka. Those three components can be started by [docker](https://docs.docker.com/engine/install/ubuntu/) and [compose](https://docs.docker.com/compose/install/) or provisioned seperately. You also should have [npm and node](https://docs.npmjs.com/downloading-and-installing-node-js-and-npm) for frontend development.
