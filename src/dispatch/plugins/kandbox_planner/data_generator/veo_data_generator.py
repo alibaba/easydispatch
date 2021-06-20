@@ -206,6 +206,7 @@ def generate_one_day_orders(current_day, worker_list, nbr_jobs, job_start_index,
                     "min_number_of_workers": 1,
                     "max_number_of_workers": 1,
                     "priority": job_schedule_type["priority"],
+                    "included_job_codes": []
                 },
                 "team": {
                     "code": "london_t1",

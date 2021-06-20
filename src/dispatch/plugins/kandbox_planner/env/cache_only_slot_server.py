@@ -1100,7 +1100,7 @@ class CacheOnlySlotServer:
             for j_i in range(len(slot.assigned_job_codes)):
                 if (
                     self.env.jobs_dict[slot.assigned_job_codes[j_i]].scheduled_start_minutes
-                    < action_dict.scheduled_start_minutes
+                    <= action_dict.scheduled_start_minutes
                 ):
                     all_jobs.append(slot.assigned_job_codes[j_i])
                     j_start_i = j_i + 1
@@ -1116,7 +1116,7 @@ class CacheOnlySlotServer:
                 ):
                     all_jobs.append(slot.assigned_job_codes[j_new_i])
                 else:
-                    print(f"Error, wrong sequence {j_new_i} of {slot.assigned_job_codes}")
+                    log.debug(f"Error, wrong scheduled_start_minutes sequence of {slot.assigned_job_codes} at index  {j_new_i} ")
 
             # if prev_travel_minutes <= next_travel_minutes:
             #     all_jobs = [the_job.job_code] +

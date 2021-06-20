@@ -169,6 +169,11 @@ class KPlannerJob2SlotEnv(KandboxEnvPlugin):
         self.trial_step_count = 0
         self.run_mode = EnvRunModeType.PREDICT
 
+        self.unplanned_job_code_list = []
+        self.job_generation_count = 0
+        self.all_locations = []
+        self.current_job_code = None
+
         self.current_job_i = 0
         self.total_assigned_job_duration = 0
 
@@ -227,6 +232,8 @@ class KPlannerJob2SlotEnv(KandboxEnvPlugin):
 
         for x in env_config.keys():
             self.config[x] = env_config[x]
+        # TODO, 2021-06-14 07:47:06
+        self.config["nbr_of_days_planning_window"] = int(self.config["nbr_of_days_planning_window"])
 
         self.MAX_OBSERVED_SLOTS = (
             self.config["nbr_of_observed_workers"] * self.config["nbr_of_days_planning_window"]
@@ -354,16 +361,16 @@ class KPlannerJob2SlotEnv(KandboxEnvPlugin):
         # Used for get_reward, only for gym training
         self.job_travel_time_sample_list_static = [
             (
-                self._get_travel_time_2jobs(ji, (ji + 1) % len(self.jobs))
-                + self._get_travel_time_2jobs(ji, (ji + 2) % len(self.jobs))
-                + self._get_travel_time_2jobs(ji, (ji + 3) % len(self.jobs))
+                self._get_travel_time_2_job_indices(ji, (ji + 1) % len(self.jobs))
+                + self._get_travel_time_2_job_indices(ji, (ji + 2) % len(self.jobs))
+                + self._get_travel_time_2_job_indices(ji, (ji + 3) % len(self.jobs))
             )
             / 3
             for ji in range(0, len(self.jobs))
         ]
 
         self.total_travel_time_static = sum(
-            [self._get_travel_time_2jobs(ji, ji + 1) for ji in range(0, len(self.jobs) - 1)]
+            [self._get_travel_time_2_job_indices(ji, ji + 1) for ji in range(0, len(self.jobs) - 1)]
         )
 
     def normalize(self, x, data_type: str):
@@ -1186,7 +1193,7 @@ class KPlannerJob2SlotEnv(KandboxEnvPlugin):
             job_code=job["code"],
             job_id=job["id"],
             job_index=0,
-            job_type=JobType.JOB,
+            job_type=job["job_type"], #JobType.JOB,
             job_schedule_type=JobScheduleType.NORMAL,
             planning_status=the_final_status_type,
             location=job_location,
@@ -1206,7 +1213,7 @@ class KPlannerJob2SlotEnv(KandboxEnvPlugin):
             available_slots=job_available_slots,
             flex_form_data=flex_form_data,
             searching_worker_candidates=[],
-            included_job_codes=[],
+            included_job_codes=flex_form_data["included_job_codes"],
             new_job_codes=[],
             appointment_status=AppointmentStatus.NOT_APPOINTMENT,
             #
@@ -1718,7 +1725,7 @@ class KPlannerJob2SlotEnv(KandboxEnvPlugin):
 
         return job_solution
 
-    def get_planner_score_stats(self):
+    def get_planner_score_stats(self, include_slot_details=False):
 
         assigned_job_stats = {}
 
@@ -1730,6 +1737,7 @@ class KPlannerJob2SlotEnv(KandboxEnvPlugin):
         pre_job_code = "__HOME"
         prev_slot = None
         current_worker_id = "NOT_EXIST"
+        slot_details = {}
         # In this loop, it first collects Only all (I/P) in/planned jobs, which are available from working time slots
         for slot_code in sorted_slot_codes:
             # for work_time_i in  range(len( self.workers_dict[worker_code]['assigned_jobs'] ) ): # nth assigned job time unit.
@@ -1748,6 +1756,15 @@ class KPlannerJob2SlotEnv(KandboxEnvPlugin):
                 )
                 print(ke)
                 continue
+
+            if include_slot_details:
+                slot_duration = a_slot.end_minutes - a_slot.start_minutes
+                slot_details[slot_code] = {
+                    "travel_n_duration": [],
+                    "free_minutes": slot_duration,
+                    "start_end_duration": [a_slot.start_minutes, a_slot.end_minutes, slot_duration],
+                    "the_assigned_codes": the_assigned_codes,
+                }
 
             if a_slot.worker_id != current_worker_id:
                 current_start_loc = a_slot.start_location
@@ -1775,6 +1792,11 @@ class KPlannerJob2SlotEnv(KandboxEnvPlugin):
                     current_start_loc,
                     assigned_job.location,
                 )
+                if include_slot_details:
+                    slot_details[slot_code]["free_minutes"] -= (
+                        prev_travel_minutes + assigned_job.requested_duration_minutes)
+                    slot_details[slot_code]["travel_n_duration"] .append(
+                        (prev_travel_minutes, assigned_job.requested_duration_minutes))
 
                 if assigned_job_code in assigned_job_stats:
                     assigned_job_stats[assigned_job_code]["travel"] += prev_travel_minutes
@@ -1858,6 +1880,7 @@ class KPlannerJob2SlotEnv(KandboxEnvPlugin):
             "onsite_working_minutes": onsite_working_minutes,
             "planning_window": f"{planning_start} ~ {planning_end}",
             "total_overtime_minutes": total_overtime_minutes,
+            "slot_details": slot_details,
         }
         return planner_score_stats
 
@@ -2481,9 +2504,9 @@ class KPlannerJob2SlotEnv(KandboxEnvPlugin):
             self.current_job_i = 0
         if self.jobs[self.current_job_i].job_code != a_dict.job_code:
             self.current_job_i = self.jobs_dict[a_dict.job_code].job_index
-            log.warn(
-                f"job_code = { a_dict.job_code} missmatching.  self.jobs[self.current_job_i].job_code != a_dict.job_code"
-            )
+            # log.warn(
+            #     f"job_code = { a_dict.job_code} missmatching.  self.jobs[self.current_job_i].job_code != a_dict.job_code"
+            # )
 
         curr_job = self.jobs_dict[a_dict.job_code]
 
@@ -2573,7 +2596,7 @@ class KPlannerJob2SlotEnv(KandboxEnvPlugin):
                 f"action is rejected  because scheduled_start_minutes is out of planning window, action = {a_dict}"
             )
             job_commit_output.messages.append(
-                f"action is rejected  because it is out of planning window"
+                f"action is rejected  because scheduled_start_minutes is out of planning window"
             )
             return job_commit_output
 
@@ -2837,7 +2860,7 @@ class KPlannerJob2SlotEnv(KandboxEnvPlugin):
             self.current_job_i = 0
         obs = self._get_observation()
 
-        if self.trial_step_count > len(self.appts) * 2:
+        if self.trial_step_count > self.config["max_trial_step_count"]:
             done = True
             reward = -5
             if self.trial_count % 20 == 0:
@@ -2845,14 +2868,14 @@ class KPlannerJob2SlotEnv(KandboxEnvPlugin):
                     f"Env done as Failed: travel_time={self.total_travel_time:.2f}, trial={self.trial_count}, step={self.trial_step_count}, nbr_inplanning={self.nbr_inplanning} ... "
                 )
 
-        if len(self.appt_scores) >= len(self.appts):
-            done = True
-            reward += 3
-            if self.trial_count % 20 == 0:
-                # print("No more unplanned jobs, done. internal error? It should be handled by has_next!") )
-                print(
-                    f"Env done as Success: trial={self.trial_count}, step={self.trial_step_count}, reward={reward:.2f}, travel_time={self.total_travel_time:.2f}, nbr_inplanning={self.nbr_inplanning}, travel_worker_job_count = {self.total_travel_worker_job_count}"
-                )
+        # if len(self.appt_scores) >= len(self.appts):
+        #     done = True
+        #     reward += 3
+        #     if self.trial_count % 20 == 0:
+        #         # print("No more unplanned jobs, done. internal error? It should be handled by has_next!") )
+        #         log.info(
+        #             f"Env done as Success: trial={self.trial_count}, step={self.trial_step_count}, reward={reward:.2f}, travel_time={self.total_travel_time:.2f}, nbr_inplanning={self.nbr_inplanning}, travel_worker_job_count = {self.total_travel_worker_job_count}"
+        #         )
 
     def _calc_travel_minutes_difference(
         self, shared_time_slots_optimized, arranged_slots, current_job_code
@@ -2932,7 +2955,7 @@ class KPlannerJob2SlotEnv(KandboxEnvPlugin):
         obs, reward, done, info = self.step_naive_search_and_plan_job(shared_time_slots_optimized)
 
         if (not done):
-            if (self.trial_step_count > 0.3 * len(self.jobs)):
+            if (self.trial_step_count > self.config["max_trial_step_count"]):
                 done = True
                 reward = -5
                 msg = f"Env done as Failure:  inplanning = {self.inplanning_job_count}, trial_step_count = {self.trial_step_count},  reward={reward:.2f}, travel_time={self.total_travel_time:.2f}, nbr_inplanning={self.nbr_inplanning}, travel_worker_job_count = {self.total_travel_worker_job_count}, trial={self.trial_count},  when steps reaches maximum"
@@ -2970,6 +2993,11 @@ class KPlannerJob2SlotEnv(KandboxEnvPlugin):
         #     return (obs, reward, done, info)
 
         # obs, reward, done, info = self.step_recommend_and_plan_job(action_dict)
+
+    def pprint_all_slots(self):
+
+        for k in self.slot_server.time_slot_dict.keys():
+            job_list = self.slot_server.time_slot_dict[k].assigned_job_codes
 
     def step_naive_search_and_plan_job(self, shared_time_slots_optimized):
 
@@ -3074,15 +3102,20 @@ class KPlannerJob2SlotEnv(KandboxEnvPlugin):
 
         return prev_time, next_time, inside_time
 
-    def _get_travel_time_2jobs(self, job_index_1, job_index_2):
+    def _get_travel_time_2_job_indices(self, job_index_1, job_index_2):
+        job_1 = self.jobs[job_index_1]
+        job_2 = self.jobs[job_index_2]
+        return self._get_travel_time_2jobs(job_1,job_2
+        )
+    def _get_travel_time_2jobs(self, job_1, job_2):
         return self.travel_router.get_travel_minutes_2locations(
             [
-                self.jobs[job_index_1].location.geo_longitude,
-                self.jobs[job_index_1].location.geo_latitude,
+                job_1.location.geo_longitude,
+                job_1.location.geo_latitude,
             ],
             [
-                self.jobs[job_index_2].location.geo_longitude,
-                self.jobs[job_index_2].location.geo_latitude,
+                job_2.location.geo_longitude,
+                job_2.location.geo_latitude,
             ],
         )
 
@@ -3323,6 +3356,8 @@ class KPlannerJob2SlotEnv(KandboxEnvPlugin):
             if self.current_job_i >= len(self.jobs):
                 self.current_job_i = 0
             if self.jobs[self.current_job_i].planning_status == JobPlanningStatus.UNPLANNED:
+                self.current_job_code = self.jobs[self.current_job_i].job_code
+
                 return True
             self.current_job_i += 1
 

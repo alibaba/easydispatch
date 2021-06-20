@@ -30,12 +30,13 @@ def get_all(*, db_session) -> List[Optional[Team]]:
 def create(*, db_session, team_contact_in: TeamCreate) -> Team:
     planner_service = None
     if team_contact_in.planner_service:
-        planner_service = service_service.get_by_code(db_session=db_session, code=team_contact_in.planner_service.code) 
+        planner_service = service_service.get_by_code(
+            db_session=db_session, code=team_contact_in.planner_service.code)
 
     team = Team(
         **team_contact_in.dict(exclude={"planner_service"}),
-        planner_service=planner_service 
-    ) 
+        planner_service=planner_service
+    )
     db_session.add(team)
     db_session.commit()
     return team
@@ -55,7 +56,8 @@ def update(
 
     planner_service = None
     if team_contact_in.planner_service:
-        planner_service = service_service.get_by_code(db_session=db_session, code=team_contact_in.planner_service.code) 
+        planner_service = service_service.get_by_code(
+            db_session=db_session, code=team_contact_in.planner_service.code)
 
     update_data = team_contact_in.dict(
         skip_defaults=True, exclude={"planner_service"}
@@ -64,6 +66,10 @@ def update(
     for field in team_contact_data:
         if field in update_data:
             setattr(team_contact, field, update_data[field])
+
+    # TODO, clean up. 2021-06-14 07:31:54
+    team_contact.flex_form_data['nbr_of_days_planning_window'] = int(
+        team_contact.flex_form_data['nbr_of_days_planning_window'])
 
     team_contact.planner_service = planner_service
     db_session.add(team_contact)

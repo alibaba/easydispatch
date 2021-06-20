@@ -61,6 +61,7 @@ job_scheduled_secondary_workers = Table(
 class Job(Base, TimeStampMixin):
     id = Column(Integer, primary_key=True)
     code = Column(String, nullable=False, unique=True)  # code
+    job_type = Column(String, nullable=False, default=JobType.JOB)  # JobType
     name = Column(String)
     description = Column(String)  # , nullable=False
 
@@ -135,6 +136,8 @@ class JobBase(DispatchBase):
 
     code: str = Field(
         title="Job Code", description='Job code is the unique identify for this job. It must be unique across all teams',)
+    job_type: str = Field(
+        title="Job Type", description='Type of Job code as in job(visit), composite, appt, leave',)
     name: Optional[str] = None
     description: Optional[str] = None
     planning_status: JobPlanningStatus = JobPlanningStatus.UNPLANNED

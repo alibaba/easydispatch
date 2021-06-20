@@ -53,8 +53,8 @@ class KPlannerAPIAdapter:
             # print(myobj)
 
             myobj["team"]["code"] = self.team_code
-            log.debug(url)
-            log.debug(myobj)
+            # log.debug(url)
+            # log.debug(myobj)
 
             response = requests.post(
                 url,

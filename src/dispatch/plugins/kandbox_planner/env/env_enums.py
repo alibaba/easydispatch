@@ -1,3 +1,4 @@
+from dispatch.job.enums import JobPlanningStatus
 from enum import Enum
 
 
@@ -26,7 +27,13 @@ class ActionType(str, Enum):
 
 
 class JobType(str, Enum):
-    # INCIDENT = "incident"
+    """
+    COMPOSITE is a (virtual) job containing multiple jobs. The included jobs must be assigned to a same set workers.
+    APPOINTMENT is a composite job with permenant P status. The AI engine should not attempt to change its planning status/data. 
+    JOB = "visit"
+    ABSENCE = "event": when a worker can not performce the job.
+    """
+    COMPOSITE = "composite"
     APPOINTMENT = "appt"
     JOB = "visit"
     ABSENCE = "event"
@@ -60,8 +67,6 @@ class LocationType(str, Enum):
     JOB = "J"
     ABSENCE = "ABS"
 
-
-from dispatch.job.enums import JobPlanningStatus
 
 # class JobPlanningStatus(str, Enum):
 #     IN_PLANNING = "I"
@@ -119,7 +124,7 @@ class KafkaRoleType(str, Enum):
 
 class KafkaMessageType(str, Enum):
     CREATE_WORKER = "Create_Worker"
-    CREATE_JOB = "Create_Job"  #    from GTS loading
+    CREATE_JOB = "Create_Job"  # from GTS loading
     CREATE_APPOINTMENT = "Create_Appointment"
     CREATE_ABSENCE = "Create_Absence"
 

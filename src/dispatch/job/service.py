@@ -100,6 +100,7 @@ def create(
     # job_priority: str = None,
     # job_type: str,
     code: str,
+    job_type: str = "visit",
     name: str = None,
     planning_status: str,
     tags: List[dict],
@@ -149,6 +150,7 @@ def create(
     job = Job(
         code=code,
         name=name,
+        job_type=job_type,
         description=description,
         planning_status=planning_status,
         tags=tag_objs,

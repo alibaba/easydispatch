@@ -346,7 +346,7 @@ def run_batch_optimizer(org_code, team_id):
     result_info, planner = reset_planning_window_for_team(org_code, team_id)
     rl_env = planner["planner_env"]
 
-    planner["batch_optimizer"].dispatch_jobs(env=rl_env)
+    planner["batch_optimizer"].dispatch_jobs(env=rl_env, rl_agent=planner["planner_agent"])
     log.info(f"Finished dispatching {len(rl_env.jobs_dict)} jobs for env={rl_env.jobs_dict}...")
 
     result_info = {"status": "OK", "jobs_dispatched": len(rl_env.jobs_dict)}

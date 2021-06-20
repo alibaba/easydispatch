@@ -1,9 +1,5 @@
 from datetime import datetime, timedelta
 import pandas as pd
-
-
-from ortools.sat.python import cp_model
-
 import collections
 
 
@@ -37,13 +33,13 @@ import logging
 log = logging.getLogger(__name__)
 
 
-class OrtoolsNDaysPlanner(KandboxBatchOptimizerPlugin):
+class RLBatchNDaysPlanner(KandboxBatchOptimizerPlugin):
 
-    title = "Kandbox Plugin - Batch Optimizer - for n days"
-    slug = "kandbox_ortools_n_days_optimizer"
+    title = "Reinforcement Learning (RL) N Days in batch mode"
+    slug = "rl_batch_n_days_planner"
     author = "Kandbox"
     author_url = "https://github.com/alibaba/easydispatch"
-    description = "Kandbox Plugin - Batch Optimizer - for n days"
+    description = "Kandbox Plugin - Batch Optimizer - Reinforcement Learning (RL) N Days in batch mode"
     version = "0.1.0"
     default_config = {"log_search_progress": True, "max_exec_seconds": 10}
     config_form_spec = {
@@ -65,89 +61,49 @@ class OrtoolsNDaysPlanner(KandboxBatchOptimizerPlugin):
         return int(new_time / 1)
 
     def dispatch_jobs(self, env, rl_agent=None):
-        # rl_agent will not be used.
-        # , start_date="20191101", end_date="20191230"
+        if rl_agent is None:
+            raise ValueError("rl agent can not be none!")
         self.kandbox_env = env
-        GENERATOR_START_DATE = datetime.strptime(
-            self.kandbox_env.config["env_start_day"], config.KANDBOX_DATE_FORMAT
-        )
-        GENERATOR_END_DATE = GENERATOR_START_DATE + timedelta(
-            days=self.kandbox_env.config["nbr_of_days_planning_window"]
-        )
-        current_date = GENERATOR_START_DATE
-        print("current_start_day", current_date, "GENERATOR_END_DATE", GENERATOR_END_DATE)
+        rl_agent.config["nbr_of_actions"] = 2
+        pprint(env.get_planner_score_stats())
 
-        slot_keys = list(self.kandbox_env.slot_server.time_slot_dict.keys())
-        worker_slots = [self.kandbox_env.slot_server.time_slot_dict[key] for key in slot_keys]
-        # TODO, do it per day
+        log.info(
+            f"Starting Batch planning for env={self.kandbox_env.env_inst_code}, ...")
 
-        jobs_orig = []
-        for j in self.kandbox_env.jobs:
-            if j.planning_status in (JobPlanningStatus.UNPLANNED, JobPlanningStatus.IN_PLANNING):
-                jobs_orig.append(j)
-        if len(jobs_orig) < 1:
-            print("it is empty, nothing to dispatch!")
-            return
-
-        current_shifts = jobs_orig
-
-        print(
-            {
-                "loaded day": GENERATOR_START_DATE,
-                "job count": len(current_shifts),
-                "worker_slots count": len(worker_slots),
-            }
-        )
-
-        worker_day = self.dispatch_jobs_to_slots(
-            jobs=current_shifts, worker_slots=worker_slots
-        )  # [0:20]  [:70]
-
-        if len(worker_day) < 1:
-            print("no data returned from dispataching!")
-            return
-
-        # pprint(worker_day)
-
-        job_list = []
-        for w_i in range(len(worker_day)):
-            # worker_day is the dispatched result, now we save it into DB.
-            pre_job_code = "__HOME"
-            for task in worker_day[w_i][:-1]:
-                task_id = task[0]  # + 1
-                worker_code = worker_slots[w_i].worker_id
-
-                # updated_order =  {} # latest_order_dict[id]
-                job_list.append(
-                    {
-                        "job_code": current_shifts[task_id].job_code,
-                        "job_schedule_type": current_shifts[task_id].job_schedule_type,
-                        "planning_status": JobPlanningStatus.IN_PLANNING,
-                        "scheduled_primary_worker_id": worker_code,
-                        "scheduled_start_minutes": task[1] + worker_slots[w_i].start_minutes,
-                        "scheduled_duration_minutes": current_shifts[
-                            task_id
-                        ].requested_duration_minutes,
-                        "scheduled_travel_minutes_before": task[2],
-                        "scheduled_travel_prev_code": pre_job_code,
-                        "geo_longitude": current_shifts[task_id].location[0],
-                        "geo_latitude": current_shifts[task_id].location[1],
-                        "conflict_level": 0,
-                        "scheduled_secondary_worker_ids": "[]",
-                        "scheduled_share_status": "N",
-                        "error_message": "",
-                    }
+        for job_code in env.jobs_dict.keys():
+            if (env.jobs_dict[job_code].job_type == JobType.JOB) & (
+                env.jobs_dict[job_code].planning_status == JobPlanningStatus.UNPLANNED
+            ):
+                res = rl_agent.predict_action_dict_list(job_code=job_code)
+                if len(res) < 1:
+                    log.warn(f"Failed to predict for job_code = {job_code}")
+                    continue
+                one_job_action_dict = ActionDict(
+                    is_forced_action=True,
+                    job_code=job_code,
+                    # I assume that only in-planning jobs can appear here...
+                    action_type=ActionType.FLOATING,
+                    scheduled_worker_codes=res[0].scheduled_worker_codes,
+                    scheduled_start_minutes=res[0].scheduled_start_minutes,
+                    scheduled_duration_minutes=res[0].scheduled_duration_minutes,
                 )
-                pre_job_code = current_shifts[task_id].job_code
-        """
-        import pprint
+                internal_result_info = env.mutate_update_job_by_action_dict(
+                    a_dict=one_job_action_dict, post_changes_flag=True
+                )
 
-        pprint.pprint(job_list)
+                if internal_result_info.status_code != ActionScoringResultType.OK:
+                    log.warn(
+                        # {internal_result_info}
+                        f"JOB:{ job_code}: Failed to act on job={job_code}. "
+                    )
+                else:
+                    log.info(f"JOB:{job_code}: Successfully Planned job, action={res[0]}. ")
+
+        log.info("Batch planning Done, printing new scores...")
+        pprint(env.get_planner_score_stats())
+
         return
-        """
-        # TODO: No needs of 2 rounds.
-        # fmt:off
-        self.kandbox_env.kp_data_adapter.reload_data_from_db()
+
         for job in job_list:
             one_job_action_dict = ActionDict(
                 is_forced_action=False,
@@ -167,7 +123,6 @@ class OrtoolsNDaysPlanner(KandboxBatchOptimizerPlugin):
 
             job_to_update = JobPlanningInfoUpdate(
                 code=job["job_code"],
-                job_type=JobType.JOB,
                 planning_status=job["planning_status"],
                 scheduled_start_datetime=self.kandbox_env.env_decode_from_minutes_to_datetime(
                     job["scheduled_start_minutes"]),
@@ -569,7 +524,7 @@ class OrtoolsNDaysPlanner(KandboxBatchOptimizerPlugin):
 
 if __name__ == "__main__":
 
-    opti = OrtoolsNDaysPlanner(max_exec_seconds=config.KANDBOX_OPTI1DAY_EXEC_SECONDS)  # 0*60*24
+    opti = RLBatchNDaysPlanner(max_exec_seconds=config.KANDBOX_OPTI1DAY_EXEC_SECONDS)  # 0*60*24
     ss = config.KANDBOX_TEST_OPTI1DAY_START_DAY
     ee = config.KANDBOX_TEST_OPTI1DAY_END_DAY
     opti.kandbox_env.purge_planner_job_status(
@@ -582,7 +537,7 @@ if __name__ == "__main__":
 
     # from dispatch.plugins.kandbox_planner.travel_time_plugin  import  TaxicabTravelTime as TravelTime
     """
-    opti = OrtoolsNDaysPlanner( max_exec_seconds = 20)
+    opti = RLBatchNDaysPlanner( max_exec_seconds = 20)
     from dispatch.plugins.kandbox_planner.travel_time_plugin  import  TaxicabTravelTime
     opti.travel_router = TaxicabTravelTime()
     # [index, type = 'FS', location = '7:12', start_time: 110, end_time = 60 (not used), duration = 32]

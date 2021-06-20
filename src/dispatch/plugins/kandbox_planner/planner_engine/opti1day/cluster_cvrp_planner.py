@@ -68,8 +68,9 @@ class ClusterCVRPPlanner(KandboxBatchOptimizerPlugin):
         # print("travel: ", new_time)
         return int(new_time / 1)
 
-    def dispatch_jobs(self, env):
-        # , start_date="20191101", end_date="20191230"
+    def dispatch_jobs(self, env, rl_agent=None):
+        # Real batch, rl_agent is skilpped.
+        #
         assert env.config["nbr_of_days_planning_window"] == 1, "I can do all workers for one day only."
         if len(env.jobs) < 1:
             print("it is empty, nothing to dispatch!")

@@ -70,7 +70,7 @@ config = Config(".env")
 LOG_LEVEL = config("LOG_LEVEL", default=logging.WARNING)
 
 module_levels = {
-    "dispatch.main": logging.DEBUG,
+    "dispatch.main": logging.ERROR,
     "recommendation_server": logging.DEBUG,
     "rllib_env_job2slot": logging.ERROR,
     "dispatch.plugins.kandbox_planner.routing.travel_time_routingpy_redis": logging.ERROR,
@@ -248,7 +248,7 @@ REDIS_PASSWORD = config("REDIS_PASSWORD", default=None)
 # kandbox
 NBR_OF_OBSERVED_WORKERS = config("NBR_OF_OBSERVED_WORKERS", cast=int, default=8)
 MINUTES_PER_DAY = config("MINUTES_PER_DAY", cast=int, default=1440)
-MAX_NBR_OF_JOBS_PER_DAY_WORKER = config("MAX_NBR_OF_JOBS_PER_DAY_WORKER", cast=int, default=25)
+MAX_NBR_OF_JOBS_PER_DAY_WORKER = config("MAX_NBR_OF_JOBS_PER_DAY_WORKER", cast=int, default=8)
 SCORING_FACTOR_STANDARD_TRAVEL_MINUTES = config(
     "SCORING_FACTOR_STANDARD_TRAVEL_MINUTES", cast=int, default=100
 )
