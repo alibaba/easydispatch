@@ -55,6 +55,16 @@
             </v-menu>
           </v-list-item-content>
         </v-list-item>
+        <v-list-item>
+          <v-list-item-content>
+            <v-switch
+                v-model="forceReloadFlag"
+                class="mx-4"
+                label="force reload"
+                disabled
+              ></v-switch>
+          </v-list-item-content>
+        </v-list-item>
       </v-list>
     </v-card>
   </v-dialog>
@@ -182,7 +192,8 @@ export default {
       menu: false,
       plannerWindowMinMax: ["2021-04-27", "2021-05-07"],
       plannerFilters_windowDates: [],
-      plannerFilters_team: null,
+      plannerFilters_team: null,      
+      forceReloadFlag: false,
       filters: {
         // team: null,
         tag: [],
@@ -192,7 +203,7 @@ export default {
     };
   },
 
-  created: function() {
+  created: function () {
     // this.plannerFilters_windowDates = this.defaultDates
     // this.fetchData()
   },
@@ -202,20 +213,23 @@ export default {
       if (newTeam) {
         console.log(`plannerFilters_team is changed to ${newTeam.code}`);
         try {
-          this.plannerFilters_windowDates = this.getPlannerWindowDateFromTeam(
-            newTeam
-          );
+          this.plannerFilters_windowDates =
+            this.getPlannerWindowDateFromTeam(newTeam);
         } catch (err) {
           this.$store.commit(
             "app/SET_SNACKBAR",
             {
-              text:
-                "This team has no valid plannign window. Please choose a different one.",
+              text: "This team has no valid plannign window. Please choose a different one.",
             },
             { root: true }
           );
         }
       }
+    },
+     forceReloadFlag: function(newValue) {
+      this.$store.commit("gantt/SET_PLANNER_FILTERS", {
+        forceReloadFlag: newValue,
+      });
     },
   },
 
@@ -223,7 +237,7 @@ export default {
     ...mapFields("gantt", ["dialogs.dialogFilterVisible"]),
     ...mapState("auth", ["userInfo"]),
 
-    numFilters: function() {
+    numFilters: function () {
       return sum([
         this.filters.job_type.length,
         this.filters.job_priority.length,
@@ -232,7 +246,7 @@ export default {
     },
     queryDates() {
       // adjust for same month
-      return map(this.dates, function(item) {
+      return map(this.dates, function (item) {
         return parseISO(item).toISOString();
       });
     },
@@ -244,9 +258,7 @@ export default {
       return this.today.toISOString().substr(0, 10);
     },
     defaultEnd() {
-      return this.addDays(this.today, 6)
-        .toISOString()
-        .substr(0, 10);
+      return this.addDays(this.today, 6).toISOString().substr(0, 10);
     },
     dateRangeText() {
       return this.plannerFilters_windowDates.join(" ~ ");

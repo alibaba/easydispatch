@@ -31,14 +31,14 @@
       ></v-switch>
     </v-flex>
 
-    <v-flex class="mb-0 pa-0 d-flex justify-end" lg1 sm4 xs6>
+    <!-- <v-flex class="mb-0 pa-0 d-flex justify-end" lg1 sm4 xs6>
       <v-switch
         v-model="forceReloadFlag"
         class="mx-2"
         label="Reload"
         disabled
       ></v-switch>
-    </v-flex>
+    </v-flex> -->
     <v-spacer />
 
     <v-flex class="d-flex justify-end" lg2 sm3 xs3>
