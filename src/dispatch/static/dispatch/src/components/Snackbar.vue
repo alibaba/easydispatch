@@ -1,9 +1,7 @@
 <template>
   <v-snackbar v-model="show">
     {{ text }}
-    <v-btn text :color="color" @click.native="closeSnackbar" :timeout="timeout"
-      >Close</v-btn
-    >
+    <v-btn text :color="color" @click.native="closeSnackBar" :timeout="timeout">Close</v-btn>
   </v-snackbar>
 </template>
 
@@ -21,12 +19,17 @@ export default {
       "snackbar.text",
       "snackbar.timeout",
       "snackbar.show",
-      "snackbar.color"
-    ])
+      "snackbar.color",
+    ]),
   },
 
   methods: {
-    ...mapActions("app", ["closeSnackbar"])
-  }
+    ...mapActions("app", ["closeSnackBar"]),
+  },
+  watch: {
+    show: function (newValue) {
+      console.log("show change :" + newValue);
+    },
+  },
 };
 </script>

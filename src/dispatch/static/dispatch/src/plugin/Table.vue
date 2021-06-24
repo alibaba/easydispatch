@@ -56,7 +56,7 @@
                   disabled
                 ></v-simple-checkbox>
               </template>
-              <template v-slot:item.data-table-actions="{ item }">
+              <!-- <template v-slot:item.data-table-actions="{ item }">
                 <v-menu bottom left>
                   <template v-slot:activator="{ on }">
                     <v-btn icon v-on="on">
@@ -69,7 +69,7 @@
                     </v-list-item>
                   </v-list>
                 </v-menu>
-              </template>
+              </template> -->
             </v-data-table>
           </v-card>
         </v-flex>

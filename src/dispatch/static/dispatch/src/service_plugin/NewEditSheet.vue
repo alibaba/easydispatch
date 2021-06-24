@@ -32,11 +32,7 @@
               />
             </v-flex>
             <v-flex xs12>
-              <PluginCombobox
-                v-model="plugin"
-                label="Plugin Slug"
-                hint="Please chooase a plugin by searching/selecting the slug."
-              />
+              <PluginCombobox v-model="plugin" label="Plugin Slug" hint="Please chooase a plugin by searching/selecting the slug." />
             </v-flex>
           </v-layout>
         </v-container>
@@ -46,13 +42,13 @@
 </template>
 
 <script>
-import { mapFields } from "vuex-map-fields";
-import { mapActions } from "vuex";
-import ServiceSelect from "@/service/ServiceSelect.vue";
-import PluginCombobox from "@/plugin/PluginCombobox.vue";
+import { mapFields } from 'vuex-map-fields'
+import { mapActions } from 'vuex'
+import ServiceSelect from '@/service_plugin/ServiceSelect.vue'
+import PluginCombobox from '@/plugin/PluginCombobox.vue'
 
 export default {
-  name: "JobTypeNewEditSheet",
+  name: 'JobTypeNewEditSheet',
 
   components: {
     ServiceSelect,
@@ -62,36 +58,36 @@ export default {
   data() {
     return {
       planning_plugin_types_list: [
-        "kandbox_env_proxy",
-        "kandbox_batch_optimizer",
-        //"kandbox_env"
-        "kandbox_agent",
-        "kandbox_rule"
-        //kandbox_travel_time = "kandbox_travel_time"
-        //kandbox_data_adapter = "kandbox_data_adapter"
-        //kandbox_data_generator = "kandbox_data_generator"
+        'kandbox_env_proxy',
+        'kandbox_batch_optimizer',
+        'kandbox_env',
+        'kandbox_agent',
+        'kandbox_rule',
+        'kandbox_travel_time',
+        'kandbox_data_adapter',
+        'kandbox_data_generator'
       ],
-      fake_text: "fake txt"
-    };
+      fake_text: 'fake txt'
+    }
   },
 
   computed: {
-    ...mapFields("service_plugin", [
-      "dialogs.showCreateEdit",
-      "selected.plugin",
-      "selected.service",
-      "selected.config",
-      "selected.planning_plugin_type",
-      "selected.id",
-      "selected.loading"
+    ...mapFields('service_plugin', [
+      'dialogs.showCreateEdit',
+      'selected.plugin',
+      'selected.service',
+      'selected.config',
+      'selected.planning_plugin_type',
+      'selected.id',
+      'selected.loading'
     ])
   },
 
   methods: {
-    ...mapActions("service_plugin", ["save", "closeCreateEdit"]),
+    ...mapActions('service_plugin', ['save', 'closeCreateEdit']),
     updatePluginMetadata(event) {
-      this.plugin_metadata = event.data;
+      this.plugin_metadata = event.data
     }
   }
-};
+}
 </script>
