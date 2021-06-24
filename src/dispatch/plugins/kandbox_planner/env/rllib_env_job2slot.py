@@ -1193,7 +1193,7 @@ class KPlannerJob2SlotEnv(KandboxEnvPlugin):
             job_code=job["code"],
             job_id=job["id"],
             job_index=0,
-            job_type=job["job_type"], #JobType.JOB,
+            job_type=job["job_type"],  # JobType.JOB,
             job_schedule_type=JobScheduleType.NORMAL,
             planning_status=the_final_status_type,
             location=job_location,
@@ -3105,8 +3105,9 @@ class KPlannerJob2SlotEnv(KandboxEnvPlugin):
     def _get_travel_time_2_job_indices(self, job_index_1, job_index_2):
         job_1 = self.jobs[job_index_1]
         job_2 = self.jobs[job_index_2]
-        return self._get_travel_time_2jobs(job_1,job_2
-        )
+        return self._get_travel_time_2jobs(job_1, job_2
+                                           )
+
     def _get_travel_time_2jobs(self, job_1, job_2):
         return self.travel_router.get_travel_minutes_2locations(
             [

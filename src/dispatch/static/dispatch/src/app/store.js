@@ -6,30 +6,30 @@ const getDefaultSnackbarState = () => {
     text: null,
     color: "primary",
     show: false,
-    timeout: 2000
+    timeout: 2000,
   };
 };
 
 const getDefaulRefreshState = () => {
   return {
     show: false,
-    message: "blah"
+    message: "blah",
   };
 };
 
 const state = {
   toggleDrawer: true,
   snackbar: {
-    ...getDefaultSnackbarState()
+    ...getDefaultSnackbarState(),
   },
   refresh: {
-    ...getDefaulRefreshState()
+    ...getDefaulRefreshState(),
   },
-  loading: false
+  loading: false,
 };
 
 const getters = {
-  getField
+  getField,
 };
 
 const actions = {
@@ -45,7 +45,7 @@ const actions = {
   },
   setLoading({ commit }, value) {
     commit("SET_LOADING", value);
-  }
+  },
 };
 
 const mutations = {
@@ -69,7 +69,7 @@ const mutations = {
   },
   RESET_REFRESH(state) {
     state.refresh = Object.assign(state.refresh, getDefaulRefreshState());
-  }
+  },
 };
 
 export default {
@@ -77,5 +77,5 @@ export default {
   state,
   getters,
   actions,
-  mutations
+  mutations,
 };

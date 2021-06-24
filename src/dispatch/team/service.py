@@ -78,7 +78,8 @@ def update(
 
 
 def delete(*, db_session, team_id: int):
-    team = db_session.query(Team).filter(Team.id == team_id).first()
-    team.terms = []
-    db_session.delete(team)
+    db_session.query(Team).filter(Team.id == team_id).delete()
+    # team = db_session.query(Team).filter(Team.id == team_id).first()
+    # team.terms = []
+    # db_session.delete(team)
     db_session.commit()

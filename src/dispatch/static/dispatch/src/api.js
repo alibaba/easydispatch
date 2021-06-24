@@ -3,13 +3,13 @@ import store from "@/store";
 import router from "./router";
 
 const instance = axios.create({
-  baseURL: "/api/v1"
+  baseURL: "/api/v1",
 });
 
 // const authProviderSlug = process.env.VUE_APP_DISPATCH_AUTHENTICATION_PROVIDER_SLUG
 
 instance.interceptors.request.use(
-  config => {
+  (config) => {
     let token = store.state.auth.accessToken;
     if (token) {
       config.headers["Authorization"] = `Bearer ${token}`;
@@ -17,7 +17,7 @@ instance.interceptors.request.use(
 
     return config;
   },
-  error => {
+  (error) => {
     return Promise.reject(error);
   }
 );
@@ -40,7 +40,7 @@ instance.interceptors.response.use(
         {
           text:
             "Something has gone very wrong. Please consider logout and login, or let your admin know this error.",
-          color: "red"
+          color: "red",
         },
         { root: true }
       );

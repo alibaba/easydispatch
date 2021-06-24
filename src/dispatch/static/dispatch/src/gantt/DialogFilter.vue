@@ -4,9 +4,7 @@
       <v-card-title>
         <span class="headline">Filters</span>
         <v-spacer></v-spacer>
-        <v-btn text color="primary" @click="setDialogFilterVisible(false)"
-          >Cancel</v-btn
-        >
+        <v-btn text color="primary" @click="setDialogFilterVisible(false)">Cancel</v-btn>
         <v-btn text color="primary" @click="fetchData">OK</v-btn>
       </v-card-title>
       <v-list dense>
@@ -45,24 +43,14 @@
               >
                 <v-spacer></v-spacer>
                 <v-btn text color="primary" @click="menu = false">Cancel</v-btn>
-                <v-btn
-                  text
-                  color="primary"
-                  @click="$refs.menu.save(plannerFilters_windowDates)"
-                  >OK</v-btn
-                >
+                <v-btn text color="primary" @click="$refs.menu.save(plannerFilters_windowDates)">OK</v-btn>
               </v-date-picker>
             </v-menu>
           </v-list-item-content>
         </v-list-item>
         <v-list-item>
           <v-list-item-content>
-            <v-switch
-                v-model="forceReloadFlag"
-                class="mx-4"
-                label="force reload"
-                disabled
-              ></v-switch>
+            <v-switch v-model="forceReloadFlag" class="mx-4" label="force reload" disabled></v-switch>
           </v-list-item-content>
         </v-list-item>
       </v-list>
@@ -130,6 +118,16 @@ export default {
       if (this.plannerFilters_team) {
         //filterOptions.team_id = this.plannerFilters_team.id
         filterOptions.team = this.plannerFilters_team;
+      } else {
+        this.$store.commit(
+          "app/SET_SNACKBAR",
+          {
+            text: "Please choose a Team.",
+            color: "red",
+          },
+          { root: true }
+        );
+        return false;
       }
       this.$store.commit("gantt/SET_PLANNER_FILTERS", filterOptions);
 
@@ -192,7 +190,7 @@ export default {
       menu: false,
       plannerWindowMinMax: ["2021-04-27", "2021-05-07"],
       plannerFilters_windowDates: [],
-      plannerFilters_team: null,      
+      plannerFilters_team: null,
       forceReloadFlag: false,
       filters: {
         // team: null,
@@ -226,7 +224,7 @@ export default {
         }
       }
     },
-     forceReloadFlag: function(newValue) {
+    forceReloadFlag: function (newValue) {
       this.$store.commit("gantt/SET_PLANNER_FILTERS", {
         forceReloadFlag: newValue,
       });
