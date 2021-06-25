@@ -15,8 +15,7 @@
         <v-list-item-content>
           <v-list-item-title>
             No Teams matching "
-            <strong>{{ search }}</strong
-            >".
+            <strong>{{ search }}</strong>".
           </v-list-item-title>
         </v-list-item-content>
       </v-list-item>
@@ -32,23 +31,23 @@ export default {
   props: {
     value: {
       type: Object,
-      default: function() {
+      default: function () {
         return {};
-      }
+      },
     },
     label: {
       type: String,
-      default: function() {
+      default: function () {
         return "Team";
-      }
-    }
+      },
+    },
   },
 
   data() {
     return {
       loading: false,
       items: [],
-      search: null
+      search: null,
     };
   },
 
@@ -59,8 +58,8 @@ export default {
       },
       set(value) {
         this.$emit("input", value);
-      }
-    }
+      },
+    },
   },
 
   created() {
@@ -71,11 +70,11 @@ export default {
     fetchData(filterOptions) {
       this.error = null;
       this.loading = true;
-      TeamApi.getAll(filterOptions).then(response => {
+      TeamApi.getAll(filterOptions).then((response) => {
         this.items = response.data.items;
         this.loading = false;
       });
-    }
-  }
+    },
+  },
 };
 </script>

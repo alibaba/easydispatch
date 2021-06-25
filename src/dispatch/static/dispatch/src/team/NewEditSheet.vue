@@ -65,11 +65,7 @@
               </v-flex>
 
               <v-flex xs12>
-                <ValidationProvider
-                  name="env_start_day"
-                  rules="required"
-                  immediate
-                >
+                <ValidationProvider name="env_start_day" rules="required" immediate>
                   <v-text-field
                     v-model="flex_form_data.env_start_day"
                     slot-scope="{ errors, valid }"
@@ -84,11 +80,7 @@
               </v-flex>
 
               <v-flex xs12>
-                <ValidationProvider
-                  name="nbr_of_days_planning_window"
-                  rules="required"
-                  immediate
-                >
+                <ValidationProvider name="nbr_of_days_planning_window" rules="required" immediate>
                   <v-text-field
                     v-model="flex_form_data.nbr_of_days_planning_window"
                     slot-scope="{ errors, valid }"
@@ -100,6 +92,14 @@
                     required
                   />
                 </ValidationProvider>
+              </v-flex>
+              <v-flex xs12>
+                <v-btn
+                  color="primary"
+                  dark
+                  class="mb-2"
+                  @click="reset_planning_window()"
+                >ResetPlanningWindow</v-btn>
               </v-flex>
             </v-layout>
           </v-container>
@@ -143,7 +143,7 @@ export default {
   },
 
   methods: {
-    ...mapActions("team", ["save", "closeCreateEdit"]),
+    ...mapActions("team", ["save", "closeCreateEdit", "reset_planning_window"]),
   },
 };
 </script>

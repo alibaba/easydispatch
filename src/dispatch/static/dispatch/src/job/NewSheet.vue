@@ -23,7 +23,7 @@
       <v-tab key="flex_form">Flex Form</v-tab>
     </v-tabs>
     <v-tabs-items v-model="tab">
-      <v-tab-item key="jobs">
+      <v-tab-item key="details">
         <job-planner-details-tab />
       </v-tab-item>
       <v-tab-item key="flex_form">

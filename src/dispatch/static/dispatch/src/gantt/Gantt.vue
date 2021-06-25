@@ -5,11 +5,7 @@
     </v-flex>
 
     <v-flex class="mb-0 pa-0 d-flex justify-end" lg1 sm4 xs6>
-      <v-switch
-        v-model="plannerScoresShowFlag"
-        class="mx-2"
-        label="Score"
-      ></v-switch>
+      <v-switch v-model="plannerScoresShowFlag" class="mx-2" label="Score"></v-switch>
     </v-flex>
     <v-flex class="mb-0 pa-0 d-flex justify-end" lg1 sm4 xs6>
       <v-switch
@@ -24,21 +20,8 @@
       <v-switch v-model="chartDraggable" class="mx-2" label="Drag"></v-switch>
     </v-flex>
     <v-flex class="mb-0 pa-0 d-flex justify-end" lg1 sm4 xs6>
-      <v-switch
-        v-model="chartClickShowMapFlag"
-        class="mx-2"
-        label="map"
-      ></v-switch>
+      <v-switch v-model="chartClickShowMapFlag" class="mx-2" label="map"></v-switch>
     </v-flex>
-
-    <!-- <v-flex class="mb-0 pa-0 d-flex justify-end" lg1 sm4 xs6>
-      <v-switch
-        v-model="forceReloadFlag"
-        class="mx-2"
-        label="Reload"
-        disabled
-      ></v-switch>
-    </v-flex> -->
     <v-spacer />
 
     <v-flex class="d-flex justify-end" lg2 sm3 xs3>
@@ -46,9 +29,7 @@
     </v-flex>
 
     <v-flex class="d-flex justify-end" lg2 sm3 xs3>
-      <v-btn color="primary" dark @click="setDialogFilterVisible(true)"
-        >Load Data</v-btn
-      >
+      <v-btn color="primary" dark @click="setDialogFilterVisible(true)">Load Data</v-btn>
     </v-flex>
     <dialog-filter />
     <v-flex lg12 sm12 xs12>
@@ -72,7 +53,7 @@
         ></job-primary-team-bar-chart-card>
       </v-flex>
 
-      -->
+    -->
 
     <!-- Statistics -->
 
@@ -96,17 +77,20 @@
               :loading="envTableLoading"
               loading-text="Loading data from backend env... Please wait"
             >
-              <template v-slot:item.requested_start_datetime="{ item }">{{
+              <template v-slot:item.requested_start_datetime="{ item }">
+                {{
                 item.requested_start_datetime | formatHHMM
-              }}</template>
-              <template v-slot:item.scheduled_start_datetime="{ item }">{{
+                }}
+              </template>
+              <template v-slot:item.scheduled_start_datetime="{ item }">
+                {{
                 item.scheduled_start_datetime | formatHHMM
-              }}</template>
+                }}
+              </template>
 
               <template v-slot:item.data-table-actions="{ item }">
                 <v-btn @click="showActionWithRecommendation(item)">
-                  <v-icon small class="mr-2"> mdi-pencil </v-icon>
-                  Plan
+                  <v-icon small class="mr-2">mdi-pencil</v-icon>Plan
                 </v-btn>
               </template>
 
@@ -320,20 +304,20 @@ export default {
     */
   },
   watch: {
-    chartDraggable: function() {
+    chartDraggable: function () {
       this.refreshChartClickBehaviour();
     },
 
-    chartClickShowMapFlag: function() {
+    chartClickShowMapFlag: function () {
       this.refreshChartClickBehaviour();
     },
 
-    forceReloadFlag: function(newValue) {
+    forceReloadFlag: function (newValue) {
       this.$store.commit("gantt/SET_PLANNER_FILTERS", {
         forceReloadFlag: newValue,
       });
     },
-    plannerHealthCheckResultShowFlag: function(newValue) {
+    plannerHealthCheckResultShowFlag: function (newValue) {
       this.$store.commit("gantt/SET_PLANNER_SCORE_SHOW_FLAG", !newValue);
     },
     /*

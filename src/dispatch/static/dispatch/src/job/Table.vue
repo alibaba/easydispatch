@@ -31,20 +31,15 @@
               :loading="loading"
               loading-text="Loading... Please wait"
             >
-              <template v-slot:item.cost="{ item }">{{
+              <template v-slot:item.cost="{ item }">
+                {{
                 item.cost | toUSD
-              }}</template>
+                }}
+              </template>
               <template v-slot:item.commander="{ item }">
                 <div v-if="item.commander">
-                  <v-chip
-                    class="ma-2"
-                    pill
-                    small
-                    :href="item.commander.weblink"
-                  >
-                    <div v-if="item.commander.name">
-                      {{ item.commander.name }}
-                    </div>
+                  <v-chip class="ma-2" pill small :href="item.commander.weblink">
+                    <div v-if="item.commander.name">{{ item.commander.name }}</div>
                     <div v-else>{{ item.commander.code }}</div>
                   </v-chip>
                 </div>
@@ -52,16 +47,16 @@
               <template v-slot:item.reporter="{ item }">
                 <div v-if="item.reporter">
                   <v-chip class="ma-2" pill small :href="item.reporter.weblink">
-                    <div v-if="item.reporter.name">
-                      {{ item.reporter.name }}
-                    </div>
+                    <div v-if="item.reporter.name">{{ item.reporter.name }}</div>
                     <div v-else>{{ item.reporter.code }}</div>
                   </v-chip>
                 </div>
               </template>
-              <template v-slot:item.reported_at="{ item }">{{
+              <template v-slot:item.reported_at="{ item }">
+                {{
                 item.reported_at | formatDate
-              }}</template>
+                }}
+              </template>
               <template v-slot:item.data-table-actions="{ item }">
                 <v-menu bottom left>
                   <template v-slot:activator="{ on }">
@@ -95,7 +90,7 @@ export default {
 
   components: {
     EditSheet,
-    NewSheet
+    NewSheet,
   },
 
   props: ["name"],
@@ -104,16 +99,24 @@ export default {
     return {
       headers: [
         // { text: "ID", value: "id", align: "left" },
+        { text: "Job Name", value: "name" },
         { text: "Job Code", value: "code" },
+        ,
         { text: "Status", value: "planning_status" },
+        { text: "Description", value: "description" },
         { text: "Requested Worker", value: "requested_primary_worker.code" },
         { text: "Requested Start", value: "requested_start_datetime" },
         { text: "Requested Minutes", value: "requested_duration_minutes" },
         { text: "Scheduled Primary", value: "scheduled_primary_worker.code" },
         { text: "scheduled Start", value: "scheduled_start_datetime" },
         { text: "Scheduled Minutes", value: "scheduled_duration_minutes" },
-        { text: "", value: "data-table-actions", sortable: false, align: "end" }
-      ]
+        {
+          text: "",
+          value: "data-table-actions",
+          sortable: false,
+          align: "end",
+        },
+      ],
     };
   },
 
@@ -128,8 +131,8 @@ export default {
       "table.options.descending",
       "table.loading",
       "table.rows.items",
-      "table.rows.total"
-    ])
+      "table.rows.total",
+    ]),
   },
 
   mounted() {
@@ -140,20 +143,20 @@ export default {
     this.getAll();
 
     this.$watch(
-      vm => [vm.page],
+      (vm) => [vm.page],
       () => {
         this.getAll();
       }
     );
 
     this.$watch(
-      vm => [
+      (vm) => [
         vm.q,
         vm.sortBy,
         vm.itemsPerPage,
         vm.descending,
         vm.planning_status,
-        vm.tag
+        vm.tag,
       ],
       () => {
         this.page = 1;
@@ -167,8 +170,8 @@ export default {
       "getAll",
       "showNewSheet",
       "showEditSheet",
-      "removeShow"
-    ])
-  }
+      "removeShow",
+    ]),
+  },
 };
 </script>

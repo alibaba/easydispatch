@@ -14,14 +14,14 @@
     clearable
     :loading="loading"
     @update:search-input="fetchData({ q: $event })"
+    dense
   >
     <template v-slot:no-data>
       <v-list-item>
         <v-list-item-content>
           <v-list-item-title>
             No Indivduals matching "
-            <strong>{{ search }}</strong
-            >".
+            <strong>{{ search }}</strong>".
           </v-list-item-title>
         </v-list-item-content>
       </v-list-item>
@@ -37,23 +37,23 @@ export default {
   props: {
     value: {
       type: Array,
-      default: function() {
+      default: function () {
         return [];
-      }
+      },
     },
     label: {
       type: String,
-      default: function() {
+      default: function () {
         return "Worker";
-      }
-    }
+      },
+    },
   },
 
   data() {
     return {
       loading: false,
       items: [],
-      search: null
+      search: null,
     };
   },
 
@@ -63,18 +63,18 @@ export default {
         return cloneDeep(this.value);
       },
       set(value) {
-        this._workers = value.map(v => {
+        this._workers = value.map((v) => {
           if (typeof v === "string") {
             v = {
-              name: v
+              name: v,
             };
             this.items.push(v);
           }
           return v;
         });
         this.$emit("input", this._workers);
-      }
-    }
+      },
+    },
   },
 
   created() {
@@ -85,14 +85,14 @@ export default {
     fetchData(filterOptions) {
       this.error = null;
       this.loading = true;
-      WorkerApi.getAll(filterOptions).then(response => {
+      WorkerApi.getAll(filterOptions).then((response) => {
         this.items = response.data.items;
         this.loading = false;
       });
     },
-    getFilteredData: debounce(function(options) {
+    getFilteredData: debounce(function (options) {
       this.fetchData(options);
-    }, 500)
-  }
+    }, 500),
+  },
 };
 </script>

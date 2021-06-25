@@ -1,7 +1,7 @@
 """
 This is used for rllib training purpose.
 """
-
+from dispatch.location.models import Location
 from dispatch.plugins.kandbox_planner.planner_engine.naive_manual_planner_shared_jobs_in_slots import (
     NaivePlannerJobsInSlots,
 )
@@ -814,7 +814,8 @@ class KPlannerJob2SlotEnv(KandboxEnvPlugin):
 
         self.kafka_server.consume_env_messages()
 
-    def env_encode_single_worker(self, worker=None):
+    def env_encode_single_worker(self, obj_worker=None):
+        worker=obj_worker.__dict__
         if worker["code"] == "MY|D|3|CT07":
             log.debug("env_encode_single_worker debug MY|D|3|CT07")
 
@@ -822,9 +823,20 @@ class KPlannerJob2SlotEnv(KandboxEnvPlugin):
 
         flex_form_data = worker["flex_form_data"].copy()
 
+        # db_session = self.cnx
+
+        # _workers = pd.read_sql(
+        #     db_session.query(Location).filter(Location.location_code ==
+        #                                       worker['location_id']).statement,
+        #     db_session.bind,
+        # )
+        # worker_info = _workers.set_index("id").to_dict(orient="index")
+
+        location = obj_worker.location
+
         home_location = LocationTuple(
-            float(flex_form_data["geo_longitude"]),
-            float(flex_form_data["geo_latitude"]),
+            float(location.geo_longitude),
+            float(location.geo_latitude),
             "H",
         )
         # working_minutes_array = flex_form_data["StartEndTime"].split(";")
@@ -913,11 +925,11 @@ class KPlannerJob2SlotEnv(KandboxEnvPlugin):
         #
         # index = 0
         for _, worker in self.kp_data_adapter.workers_db_dict.items():
-            active_int = 1 if worker["is_active"] else 0
+            active_int = 1 if worker.is_active else 0
             if active_int != 1:
                 print(
                     "worker {} is not active, maybe it shoud be skipped from loading? ",
-                    worker["id"],
+                    worker.id,
                 )
                 # TODO
                 # included for now , since maybe job on it?

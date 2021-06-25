@@ -10,6 +10,7 @@ const getDefaultSelectedState = () => {
     name: null,
     team: null,
     location: null,
+    description: null,
     is_active: null,
     flex_form_data: {},
     business_hour: {},

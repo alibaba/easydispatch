@@ -57,6 +57,15 @@
           required
         ></location-select>
       </v-flex>
+
+      <v-flex xs12>
+        <v-textarea
+          v-model="description"
+          label="Description"
+          hint="Description of worker."
+          clearable
+        />
+      </v-flex>
     </v-layout>
   </v-container>
 </template>
@@ -70,7 +79,7 @@ import LocationSelect from "@/location/LocationSelect.vue";
 
 extend("required", {
   ...required,
-  message: "This field is required"
+  message: "This field is required",
 });
 
 export default {
@@ -79,7 +88,7 @@ export default {
   components: {
     ValidationProvider,
     TeamSelect,
-    LocationSelect
+    LocationSelect,
   },
 
   computed: {
@@ -89,10 +98,11 @@ export default {
       "selected.name",
       "selected.team",
       "selected.location",
+      "selected.description",
       "selected.loading",
       "selected.flex_form_data",
-      "dialogs.showCreateEdit"
-    ])
-  }
+      "dialogs.showCreateEdit",
+    ]),
+  },
 };
 </script>

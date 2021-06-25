@@ -103,7 +103,6 @@ export default {
 
     fetchData() {
       let filterOptions = {};
-
       filterOptions = {
         team: { id: 2 },
         start_day: "20200901",
@@ -168,8 +167,9 @@ export default {
             that.plannerFilters_team
           );
           that.plannerWindowMinMax = that.plannerFilters_windowDates;
-
-          that.fetchData();
+          if (that.plannerFilters.team == null) {
+            that.fetchData();
+          }
 
           console.log(
             "loaded default team info",
@@ -232,6 +232,7 @@ export default {
   },
 
   computed: {
+    ...mapState("gantt", ["plannerFilters"]),
     ...mapFields("gantt", ["dialogs.dialogFilterVisible"]),
     ...mapState("auth", ["userInfo"]),
 
