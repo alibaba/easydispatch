@@ -252,8 +252,7 @@ def update(*, db_session, job: Job, job_in: JobUpdate) -> Job:
     scheduled_secondary_workers = []
     for w in job_in.scheduled_secondary_workers:
         scheduled_secondary_workers.append(
-            worker_service.get(db_session=db_session, tag_in=WorkerUpdate(**w))
-        )
+            worker_service.get_by_code(db_session=db_session, code=w.code))
 
     update_data = job_in.dict(
         skip_defaults=True,

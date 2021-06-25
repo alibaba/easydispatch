@@ -81,6 +81,7 @@ class WorkerBase(DispatchBase):
     business_hour: dict = DEFAULT_BUSINESS_HOUR
     is_active: Optional[bool] = True
     auth_username: Optional[str]
+    description: Optional[str]
 
 
 class WorkerCreate(WorkerBase):

@@ -143,6 +143,28 @@ const actions = {
         );
       });
   },
+  reset_planning_window({ commit, dispatch }) {
+    return TeamApi.reset_planning_window({ team_code: state.selected.code })
+      .then(function() {
+        commit(
+          "app/SET_SNACKBAR",
+          { text: "reset_planning_window successfully." },
+          { root: true }
+        );
+      })
+      .catch((err) => {
+        commit(
+          "app/SET_SNACKBAR",
+          {
+            text:
+              "reset_planning_window error. Reason: " +
+              err.response.data.detail,
+            color: "red",
+          },
+          { root: true }
+        );
+      });
+  },
 };
 
 const mutations = {

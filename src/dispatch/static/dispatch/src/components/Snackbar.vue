@@ -1,7 +1,7 @@
 <template>
   <v-snackbar v-model="show">
     {{ text }}
-    <v-btn text :color="color" @click.native="closeSnackBar" :timeout="timeout">Close</v-btn>
+    <v-btn text :color="color" @click="closeSnackBar" :timeout="timeout">Close</v-btn>
   </v-snackbar>
 </template>
 

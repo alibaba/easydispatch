@@ -29,13 +29,23 @@
           ></team-select>
         </ValidationProvider>
       </v-flex>
-      <v-flex xs12>
-        <v-text-field
-          v-model="name"
-          label="Job Name"
-          hint="Job Name"
-          clearable
-        />
+      <v-flex xs6>
+        <v-text-field v-model="name" label="Job Name" hint="Job Name" clearable />
+      </v-flex>
+      <v-flex xs6>
+        <ValidationProvider name="Title_2" rules="required" immediate>
+          <v-select
+            slot-scope="{ errors, valid }"
+            :error-messages="errors"
+            :success="valid"
+            v-model="job_type"
+            label="Jpb Type"
+            :items="job_type_list"
+            hint="Please choose a Job Type."
+            clearable
+          />
+        </ValidationProvider>
+        <!-- <v-text-field v-model="job_type" label="Job Type" hint="Job Type" clearable /> -->
       </v-flex>
       <v-flex xs12>
         <location-select
@@ -54,23 +64,15 @@
       <v-flex xs12>
         <v-row>
           <v-col cols="6">
-            <date-picker-menu
-              v-model="requested_start_datetime"
-            ></date-picker-menu>
+            <date-picker-menu v-model="requested_start_datetime"></date-picker-menu>
           </v-col>
           <v-col cols="6">
-            <time-picker-menu
-              v-model="requested_start_datetime"
-            ></time-picker-menu>
+            <time-picker-menu v-model="requested_start_datetime"></time-picker-menu>
           </v-col>
         </v-row>
       </v-flex>
       <v-flex xs6>
-        <ValidationProvider
-          name="requested_primary_worker"
-          rules="required"
-          immediate
-        >
+        <ValidationProvider name="requested_primary_worker" rules="required" immediate>
           <worker-select
             v-model="requested_primary_worker"
             slot-scope="{ errors, valid }"
@@ -119,14 +121,10 @@
       <v-flex xs12>
         <v-row>
           <v-col cols="6">
-            <date-picker-menu
-              v-model="scheduled_start_datetime"
-            ></date-picker-menu>
+            <date-picker-menu v-model="scheduled_start_datetime"></date-picker-menu>
           </v-col>
           <v-col cols="6">
-            <time-picker-menu
-              v-model="scheduled_start_datetime"
-            ></time-picker-menu>
+            <time-picker-menu v-model="scheduled_start_datetime"></time-picker-menu>
           </v-col>
         </v-row>
       </v-flex>
@@ -148,18 +146,10 @@
         />
       </v-flex>
       <v-flex xs12>
-        <WorkerCombo
-          v-model="scheduled_secondary_workers"
-          label="Scheduled Secondary Workers"
-        />
+        <WorkerCombo v-model="scheduled_secondary_workers" label="Scheduled Secondary Workers" />
       </v-flex>
       <v-flex xs12>
-        <v-textarea
-          v-model="description"
-          label="Description"
-          hint="Description of job."
-          clearable
-        />
+        <v-textarea v-model="description" label="Description" hint="Description of job." clearable />
       </v-flex>
       <v-flex xs12>
         <tag-filter-combobox label="Tags" v-model="tags" />
@@ -213,6 +203,7 @@ export default {
     return {
       statuses: ["Active", "Stable", "Closed"],
       visibilities: ["Open", "Restricted"],
+      job_type_list: ["composite", "appt", "visit", "event"],
     };
   },
 
@@ -225,6 +216,7 @@ export default {
       "selected.created_at",
       "selected.planning_status",
       "selected.tags",
+      "selected.job_type",
 
       // K
       "selected.team",

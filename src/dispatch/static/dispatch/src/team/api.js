@@ -21,5 +21,8 @@ export default {
 
   delete(teamId) {
     return API.delete(`${resource}/${teamId}`);
-  }
+  },
+  reset_planning_window(payload) {
+    return API.post(`/planner_service/reset_planning_window/`, payload);
+  },
 };

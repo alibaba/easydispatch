@@ -9,6 +9,7 @@ const getDefaultSelectedState = () => {
     code: null,
     name: null,
     description: null,
+    job_type: null,
     // location: {
     //   location_code: "job_loc_1",
     //   geo_longitude: -0.306,
@@ -167,17 +168,26 @@ const actions = {
     }
     // commit("SET_SELECTED", { flex_form_data: value });
 
+    commit("SET_SELECTED_LOADING", true);
     if (!state.selected.id) {
-      commit("SET_SELECTED_LOADING", true);
       return JobApi.create(state.selected)
         .then((response) => {
           commit("SET_SELECTED", response.data);
           commit("SET_SELECTED_LOADING", false);
-          this.interval = setInterval(function() {
-            if (state.selected.id) {
-              dispatch("get");
-            }
-          }, 5000);
+
+          dispatch("closeEditSheet");
+          dispatch("closeNewSheet");
+          dispatch("getAll");
+          commit(
+            "app/SET_SNACKBAR",
+            { text: "Job create successfully." },
+            { root: true }
+          );
+          // this.interval = setInterval(function() {
+          //   if (state.selected.id) {
+          //     dispatch("get");
+          //   }
+          // }, 5000);
         })
         .catch((err) => {
           commit("SET_SELECTED_LOADING", false);
@@ -195,6 +205,7 @@ const actions = {
     } else {
       return JobApi.update(state.selected.id, state.selected)
         .then(() => {
+          commit("SET_SELECTED_LOADING", false);
           dispatch("closeEditSheet");
           dispatch("closeNewSheet");
           dispatch("getAll");
@@ -205,6 +216,7 @@ const actions = {
           );
         })
         .catch((err) => {
+          commit("SET_SELECTED_LOADING", false);
           commit(
             "app/SET_SNACKBAR",
             {

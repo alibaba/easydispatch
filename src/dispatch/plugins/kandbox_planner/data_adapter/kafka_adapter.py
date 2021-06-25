@@ -524,8 +524,9 @@ class KafkaAdapter:
                 # Lookup right location by location_code saved in the appointment.
                 # Save Locaiton object instead of original tuple
                 job.location = self.env.locations_dict[job.location.location_code]
-            except KeyError:
-                log.error("KeyError, can not find location, or worker for job: {}".format(obj_dict["code"]))
+            except:
+                log.error("KeyError, can not find location, or worker for job: {}".format(
+                    obj_dict["code"]))
                 return
             self.env.mutate_create_job(job, auto_replay=auto_replay_in_process)
             return
