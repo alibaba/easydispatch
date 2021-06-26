@@ -303,7 +303,7 @@ class CacheOnlySlotServer:
                         end_minutes=end_minutes,
                     )
                     if len(the_slots) < 1:
-                        log.error(
+                        log.info(
                             f"release_job_time_slots: no slots to release, worker={worker_id}, start={start_minutes}, job_code={job_code}"
                         )
                         return (
@@ -342,7 +342,7 @@ class CacheOnlySlotServer:
                         try:
                             slot.assigned_job_codes.remove(job_code)
                         except ValueError:
-                            log.error(
+                            log.info(
                                 f"JOB:{job_code}:release_job_time_slots: {job_code} is not in slot. slot_code={slot_code} "
                             )
                             return (
@@ -1116,7 +1116,8 @@ class CacheOnlySlotServer:
                 ):
                     all_jobs.append(slot.assigned_job_codes[j_new_i])
                 else:
-                    log.debug(f"Error, wrong scheduled_start_minutes sequence of {slot.assigned_job_codes} at index  {j_new_i} ")
+                    log.debug(
+                        f"Error, wrong scheduled_start_minutes sequence of {slot.assigned_job_codes} at index  {j_new_i} ")
 
             # if prev_travel_minutes <= next_travel_minutes:
             #     all_jobs = [the_job.job_code] +
