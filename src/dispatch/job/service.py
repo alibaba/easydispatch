@@ -30,7 +30,6 @@ from dispatch.plugins.kandbox_planner.env.env_enums import (
 )
 from dispatch.plugins.kandbox_planner.env.env_models import KafkaEnvMessage
 
-
 HOURS_IN_DAY = 24
 SECONDS_IN_HOUR = 3600
 
@@ -144,8 +143,11 @@ def create(
         scheduled_primary_worker = worker_service.get_by_code(
             db_session=db_session, code=scheduled_primary_worker["code"]
         )
-    if scheduled_secondary_workers is None:
-        scheduled_secondary_workers = []
+    scheduled_secondary_workers_list = []
+    if scheduled_secondary_workers is not None:
+        for w in scheduled_secondary_workers:
+            scheduled_secondary_workers_list.append(
+                worker_service.get_by_code(db_session=db_session, code=w['code']))
     # We create the job
     job = Job(
         code=code,
@@ -163,7 +165,7 @@ def create(
         scheduled_start_datetime=scheduled_start_datetime,
         scheduled_duration_minutes=scheduled_duration_minutes,
         scheduled_primary_worker=scheduled_primary_worker,
-        scheduled_secondary_workers=scheduled_secondary_workers,
+        scheduled_secondary_workers=scheduled_secondary_workers_list,
         auto_planning=auto_planning,
     )
     db_session.add(job)

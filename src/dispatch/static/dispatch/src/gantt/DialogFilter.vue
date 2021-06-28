@@ -73,6 +73,7 @@ import { parseISO } from "date-fns"; // addDays,
 import { mapFields } from "vuex-map-fields";
 //var _that = this
 import TeamApi from "@/team/api";
+import AuthApi from "@/auth/api";
 
 export default {
   name: "DialogFilterGantt",
@@ -133,6 +134,16 @@ export default {
       this.getPlannerWorkerJobDataset(filterOptions);
 
       this.getPlannerScoreStats(filterOptions);
+
+      // 修改plannerScoresStats.planning_window
+      this.planning_window =
+        filterOptions.start_day.substr(4, 2) +
+        "-" +
+        filterOptions.start_day.substr(6, 2) +
+        "~" +
+        filterOptions.end_day.substr(4, 2) +
+        "-" +
+        filterOptions.end_day.substr(6, 2);
     },
     getPlannerWindowDateFromTeam(team) {
       let d = team.flex_form_data.env_start_day;
@@ -159,26 +170,28 @@ export default {
     let that = this;
     if (this.userInfo.default_team_id) {
       console.log("dialog mounted, then I am changing default_team_id");
-      TeamApi.get(this.userInfo.default_team_id) //
-        .then((response) => {
-          that.plannerFilters_team = response.data;
+      AuthApi.getUserInfo().then((res) => {
+        TeamApi.get(res.data.default_team_id) //
+          .then((response) => {
+            that.plannerFilters_team = response.data;
 
-          that.plannerFilters_windowDates = that.getPlannerWindowDateFromTeam(
-            that.plannerFilters_team
-          );
-          that.plannerWindowMinMax = that.plannerFilters_windowDates;
-          if (that.plannerFilters.team == null) {
-            that.fetchData();
-          }
+            that.plannerFilters_windowDates = that.getPlannerWindowDateFromTeam(
+              that.plannerFilters_team
+            );
+            that.plannerWindowMinMax = that.plannerFilters_windowDates;
+            if (that.plannerFilters.team == null) {
+              that.fetchData();
+            }
 
-          console.log(
-            "loaded default team info",
-            that.userInfo.default_team_id
-          );
-        })
-        .catch(() => {
-          console.log("Failed to load default team");
-        });
+            console.log(
+              "loaded default team info",
+              that.userInfo.default_team_id
+            );
+          })
+          .catch(() => {
+            console.log("Failed to load default team");
+          });
+      });
     } else {
       console.log(
         "dialog mounted but team is not loaded because userInfo has no default_team_id!"
@@ -213,6 +226,7 @@ export default {
         try {
           this.plannerFilters_windowDates =
             this.getPlannerWindowDateFromTeam(newTeam);
+          this.plannerWindowMinMax = this.plannerFilters_windowDates;
         } catch (err) {
           this.$store.commit(
             "app/SET_SNACKBAR",
@@ -233,7 +247,10 @@ export default {
 
   computed: {
     ...mapState("gantt", ["plannerFilters"]),
-    ...mapFields("gantt", ["dialogs.dialogFilterVisible"]),
+    ...mapFields("gantt", [
+      "dialogs.dialogFilterVisible",
+      "plannerScoresStats.planning_window",
+    ]),
     ...mapState("auth", ["userInfo"]),
 
     numFilters: function () {

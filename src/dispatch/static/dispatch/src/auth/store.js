@@ -11,7 +11,7 @@ const getDefaultSelectedState = () => {
     id: null,
     email: null,
     role: null,
-    loading: false
+    loading: false,
   };
 };
 
@@ -21,31 +21,31 @@ const state = {
   defaultTeam: null,
   accessToken: null,
   selected: {
-    ...getDefaultSelectedState()
+    ...getDefaultSelectedState(),
   },
   dialogs: {
-    showEdit: false
+    showEdit: false,
   },
   table: {
     rows: {
       items: [],
-      total: null
+      total: null,
     },
     options: {
       q: "",
       page: 1,
       itemsPerPage: 10,
       sortBy: ["email"],
-      descending: [true]
+      descending: [true],
     },
-    loading: false
-  }
+    loading: false,
+  },
 };
 
 const actions = {
   getAll: debounce(({ commit, state }) => {
     commit("SET_TABLE_LOADING", true);
-    return UserApi.getAll(state.table.options).then(response => {
+    return UserApi.getAll(state.table.options).then((response) => {
       commit("SET_TABLE_LOADING", false);
       commit("SET_TABLE_ROWS", response.data);
     });
@@ -72,12 +72,12 @@ const actions = {
             { root: true }
           );
         })
-        .catch(err => {
+        .catch((err) => {
           commit(
             "app/SET_SNACKBAR",
             {
               text: "User not created. Reason: " + err.response.data.detail,
-              color: "red"
+              color: "red",
             },
             { root: true }
           );
@@ -93,12 +93,12 @@ const actions = {
             { root: true }
           );
         })
-        .catch(err => {
+        .catch((err) => {
           commit(
             "app/SET_SNACKBAR",
             {
               text: "User not updated. Reason: " + err.response.data.detail,
-              color: "red"
+              color: "red",
             },
             { root: true }
           );
@@ -116,12 +116,12 @@ const actions = {
           { root: true }
         );
       })
-      .catch(err => {
+      .catch((err) => {
         commit(
           "app/SET_SNACKBAR",
           {
             text: "User not deleted. Reason: " + err.response.data.detail,
-            color: "red"
+            color: "red",
           },
           { root: true }
         );
@@ -139,7 +139,7 @@ const actions = {
 
         router.push({ path: "/gantt" });
       })
-      .catch(err => {
+      .catch((err) => {
         commit(
           "app/SET_SNACKBAR",
           { text: err.response.data.detail, color: "red" },
@@ -152,7 +152,7 @@ const actions = {
       .then(function() {
         dispatch("basicLogin", payload);
       })
-      .catch(err => {
+      .catch((err) => {
         commit(
           "app/SET_SNACKBAR",
           { text: err.response.data.detail, color: "red" },
@@ -180,7 +180,7 @@ const actions = {
         "app/SET_REFRESH",
         {
           show: true,
-          message: "Your credentials have expired. Please refresh the page."
+          message: "Your credentials have expired. Please refresh the page.",
         },
         { root: true }
       );
@@ -193,7 +193,7 @@ const actions = {
         commit("SET_DEFAULT_TEAM", res.data);
       });
     });
-  }
+  },
 };
 
 const mutations = {
@@ -231,14 +231,14 @@ const mutations = {
     state.userInfo = null;
     state.accessToken = null;
     localStorage.removeItem("token");
-  }
+  },
 };
 
 const getters = {
   getField,
   accessToken: () => state.accessToken,
   email: () => state.userInfo.email,
-  exp: () => state.userInfo.exp
+  exp: () => state.userInfo.exp,
 };
 
 export default {
@@ -246,5 +246,5 @@ export default {
   state,
   getters,
   actions,
-  mutations
+  mutations,
 };

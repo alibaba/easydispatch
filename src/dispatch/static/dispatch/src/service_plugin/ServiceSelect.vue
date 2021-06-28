@@ -6,7 +6,7 @@
     :menu-props="{ maxHeight: '400' }"
     cache-items
     item-text="name"
-    label="Service"
+    label="Planner Service"
     placeholder="Start typing to Search"
     return-object
     :loading="loading"
@@ -22,10 +22,10 @@ export default {
   props: {
     value: {
       type: Object,
-      default: function() {
+      default: function () {
         return {};
-      }
-    }
+      },
+    },
   },
 
   data() {
@@ -33,7 +33,7 @@ export default {
       loading: false,
       search: null,
       select: null,
-      items: []
+      items: [],
     };
   },
 
@@ -44,7 +44,7 @@ export default {
     value(val) {
       if (!val) return;
       this.items.push(val);
-    }
+    },
   },
 
   computed: {
@@ -54,28 +54,28 @@ export default {
       },
       set(value) {
         this.$emit("input", value);
-      }
-    }
+      },
+    },
   },
 
   methods: {
     querySelections(v) {
       this.loading = true;
       // Simulated ajax query
-      ServiceApi.getAll({ q: v }).then(response => {
+      ServiceApi.getAll({ q: v }).then((response) => {
         this.items = response.data.items;
         this.loading = false;
       });
-    }
+    },
   },
 
   mounted() {
     this.error = null;
     this.loading = true;
-    ServiceApi.getAll().then(response => {
+    ServiceApi.getAll().then((response) => {
       this.items = response.data.items;
       this.loading = false;
     });
-  }
+  },
 };
 </script>
