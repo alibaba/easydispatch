@@ -1,61 +1,78 @@
 <template>
-  <v-dialog v-model="dialogFilterVisible" max-width="600px">
-    <v-card>
-      <v-card-title>
-        <span class="headline">Filters</span>
-        <v-spacer></v-spacer>
-        <v-btn text color="primary" @click="setDialogFilterVisible(false)">Cancel</v-btn>
-        <v-btn text color="primary" @click="fetchData">OK</v-btn>
-      </v-card-title>
-      <v-list dense>
-        <v-list-item>
-          <v-list-item-content>
-            <team-select v-model="plannerFilters_team" />
-          </v-list-item-content>
-        </v-list-item>
-        <v-list-item>
-          <v-list-item-content>
-            <v-menu
-              ref="menu"
-              v-model="menu"
-              :close-on-content-click="false"
-              :return-value.sync="plannerFilters_windowDates"
-              transition="scale-transition"
-              offset-y
-              max-width="290px"
-              min-width="190px"
-            >
-              <template v-slot:activator="{ on, attrs }">
-                <v-text-field
-                  v-model="dateRangeText"
-                  label="Start and end date for selecting jobs in the planner Env"
-                  prepend-icon="event"
-                  readonly
-                  v-bind="attrs"
-                  v-on="on"
-                ></v-text-field>
-              </template>
-              <v-date-picker
-                v-model="plannerFilters_windowDates"
-                type="date"
-                :allowed-dates="allowedDates"
-                range
+  <ValidationObserver v-slot="{ invalid, validated }">
+    <v-dialog v-model="dialogFilterVisible" max-width="600px">
+      <v-card>
+        <v-card-title>
+          <span class="headline">Filters</span>
+          <v-spacer></v-spacer>
+          <v-btn text color="primary" @click="setDialogFilterVisible(false)">Cancel</v-btn>
+          <v-btn text color="primary" :disabled="invalid || !validated" @click="fetchData">OK</v-btn>
+        </v-card-title>
+        <v-list dense>
+          <v-list-item>
+            <v-list-item-content>
+              <ValidationProvider name="teamSelect" rules="required" immediate>
+                <team-select
+                  v-model="plannerFilters_team"
+                  slot-scope="{ errors, valid }"
+                  label="Team"
+                  :error-messages="errors"
+                  :success="valid"
+                  hint="The team"
+                  clearable
+                  required
+                ></team-select>
+              </ValidationProvider>
+            </v-list-item-content>
+          </v-list-item>
+          <v-list-item>
+            <v-list-item-content>
+              <v-menu
+                ref="menu"
+                v-model="menu"
+                :close-on-content-click="false"
+                :return-value.sync="plannerFilters_windowDates"
+                transition="scale-transition"
+                offset-y
+                max-width="290px"
+                min-width="190px"
               >
-                <v-spacer></v-spacer>
-                <v-btn text color="primary" @click="menu = false">Cancel</v-btn>
-                <v-btn text color="primary" @click="$refs.menu.save(plannerFilters_windowDates)">OK</v-btn>
-              </v-date-picker>
-            </v-menu>
-          </v-list-item-content>
-        </v-list-item>
-        <v-list-item>
-          <v-list-item-content>
-            <v-switch v-model="forceReloadFlag" class="mx-4" label="force reload" disabled></v-switch>
-          </v-list-item-content>
-        </v-list-item>
-      </v-list>
-    </v-card>
-  </v-dialog>
+                <template v-slot:activator="{ on, attrs }">
+                  <v-text-field
+                    v-model="dateRangeText"
+                    label="Start and end date for selecting jobs in the planner Env"
+                    prepend-icon="event"
+                    readonly
+                    v-bind="attrs"
+                    v-on="on"
+                  ></v-text-field>
+                </template>
+                <v-date-picker
+                  v-model="plannerFilters_windowDates"
+                  type="date"
+                  :allowed-dates="allowedDates"
+                  range
+                >
+                  <v-spacer></v-spacer>
+                  <v-btn text color="primary" @click="menu = false">Cancel</v-btn>
+                  <v-btn
+                    text
+                    color="primary"
+                    @click="$refs.menu.save(plannerFilters_windowDates)"
+                  >OK</v-btn>
+                </v-date-picker>
+              </v-menu>
+            </v-list-item-content>
+          </v-list-item>
+          <v-list-item>
+            <v-list-item-content>
+              <v-switch v-model="forceReloadFlag" class="mx-4" label="force reload" disabled></v-switch>
+            </v-list-item-content>
+          </v-list-item>
+        </v-list>
+      </v-card>
+    </v-dialog>
+  </ValidationObserver>
 </template>
 
 <script>
@@ -64,6 +81,7 @@
 import { map, sum } from "lodash";
 import { mapState, mapActions } from "vuex";
 
+import { ValidationProvider, ValidationObserver } from "vee-validate";
 // import WorkerCombobox from "@/worker/WorkerCombobox.vue"
 //import TagFilterCombobox from "@/tag/TagFilterCombobox.vue"
 //import JobTypeCombobox from "@/job_type/JobTypeCombobox.vue"
@@ -163,6 +181,8 @@ export default {
     // WorkerCombobox,
     // TagFilterCombobox,
     // JobTypeCombobox,
+    ValidationObserver,
+    ValidationProvider,
     TeamSelect,
   },
   mounted() {

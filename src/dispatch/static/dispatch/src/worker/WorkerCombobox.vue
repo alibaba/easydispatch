@@ -5,7 +5,7 @@
     :items="items"
     item-text="code"
     :search-input.sync="search"
-    :menu-props="{ maxHeight: '400' }"
+    :menu-props="{ maxHeight: '400' ,closeOnClick: true, closeOnContentClick: true,}"
     hide-selected
     :label="label"
     multiple

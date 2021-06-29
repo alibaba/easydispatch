@@ -90,7 +90,13 @@ POST {{hostUrl}}/teams/
 Authorization: Bearer {{jwtoken}}
 Content-Type: application/json
 
-{"id":null,"code":"london_t1","planner_service":{"code":"planner","name":"planner","service_type":"realtime_heuristic_planner","description":null,"is_active":true,"id":4,"created_at":"2021-04-29T15:56:15.108107","updated_at":"2021-04-29T15:56:15.108120"},"name":"london_t1","description":null,"created_at":null,"updated_at":null,"loading":false,"flex_form_data":{"env_start_day":"20210428", "nbr_of_days_planning_window":2}}
+{"id":null,"code":"london_t2","planner_service":{"code":"planner","name":"planner","service_type":"realtime_heuristic_planner","description":null,"is_active":true,"id":4,"created_at":"2021-04-29T15:56:15.108107","updated_at":"2021-04-29T15:56:15.108120"},"name":"london_t2","description":null,"created_at":null,"updated_at":null,"loading":false,"flex_form_data":{"env_start_day":"20210428", "nbr_of_days_planning_window":2}}
+
+###
+# @name delete_team
+DELETE  {{hostUrl}}/teams/22
+Authorization: Bearer {{jwtoken}}
+Content-Type: application/json
 
 
 # From here onward, you can call util generate data to create jobs and workers.
@@ -173,7 +179,7 @@ Content-Type: application/json
 Authorization: Bearer {{jwtoken}}
 
 ###
-GET {{hostUrl}}/planner_service/get_planner_worker_job_dataset/?team_id=1&start_day=20210505&end_day=20210507&force_reload=false HTTP/1.1
+GET {{hostUrl}}/planner_service/get_planner_worker_job_dataset/?team_id=4&start_day=20210505&end_day=20210507&force_reload=false HTTP/1.1
 Content-Type: application/json
 Authorization: Bearer {{jwtoken}}
 
@@ -251,7 +257,7 @@ Authorization: Bearer {{jwtoken}}
 
 ###
 # @name get_team
-GET {{hostUrl}}/planner_service/get_planner_worker_job_dataset/?team_id=1&team_code=london_t1&start_day=20210524&end_day=20210525&force_reload=false HTTP/1.1
+GET {{hostUrl}}/planner_service/get_planner_worker_job_dataset/?team_id=4&team_code=london_t1&start_day=20210524&end_day=20210527&force_reload=false HTTP/1.1
 Content-Type: application/json
 Authorization: Bearer {{jwtoken}}
 
@@ -272,6 +278,6 @@ Authorization: Bearer {{jwtoken}}
 
 ###
 # @name get_worker
-GET {{hostUrl}}/planner_service/get_planner_score_stats/?team_id=1&team_code=london_t1&start_day=20210524&end_day=20210525&force_reload=false HTTP/1.1
+GET {{hostUrl}}/planner_service/get_planner_score_stats/?team_id=4&team_code=london_t1&start_day=20210524&end_day=20210527&force_reload=false HTTP/1.1
 Content-Type: application/json
 Authorization: Bearer {{jwtoken}}

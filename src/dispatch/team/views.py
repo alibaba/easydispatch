@@ -95,4 +95,4 @@ def delete_team(*, db_session: Session = Depends(get_db), team_id: int):
         raise HTTPException(status_code=404, detail="The team with this id does not exist.")
 
     delete(db_session=db_session, team_id=team_id)
-    return team
+    return None
