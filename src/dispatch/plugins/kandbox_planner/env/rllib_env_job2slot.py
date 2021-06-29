@@ -311,7 +311,7 @@ class KPlannerJob2SlotEnv(KandboxEnvPlugin):
         self.kp_data_adapter.reload_data_from_db()
         # I don't know why, self.kp_data_adapter loses this workers_dict_by_id after next call.
         # 2021-05-06 21:34:01
-        self.workers_dict_by_id = self.kp_data_adapter.workers_dict_by_id
+        self.workers_dict_by_id = copy.deepcopy(self.kp_data_adapter.workers_dict_by_id)
 
         # self._reset_data()
 
@@ -815,7 +815,7 @@ class KPlannerJob2SlotEnv(KandboxEnvPlugin):
         self.kafka_server.consume_env_messages()
 
     def env_encode_single_worker(self, obj_worker=None):
-        worker=obj_worker.__dict__
+        worker = obj_worker.__dict__
         if worker["code"] == "MY|D|3|CT07":
             log.debug("env_encode_single_worker debug MY|D|3|CT07")
 

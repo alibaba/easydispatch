@@ -1,7 +1,7 @@
 <template>
-  <v-snackbar v-model="show">
-    {{ text }}
-    <v-btn text :color="color" @click="closeSnackBar" :timeout="timeout">Close</v-btn>
+  <v-snackbar v-model="snackbar.show">
+    {{ snackbar.text }}
+    <v-btn text :color="snackbar.color" @click="closeSnackBar" :timeout="snackbar.timeout">Close</v-btn>
   </v-snackbar>
 </template>
 
@@ -10,26 +10,16 @@ import { mapFields } from "vuex-map-fields";
 import { mapActions } from "vuex";
 
 export default {
+  name: "SnackbarInfo",
   data() {
     return {};
   },
 
   computed: {
-    ...mapFields("app", [
-      "snackbar.text",
-      "snackbar.timeout",
-      "snackbar.show",
-      "snackbar.color",
-    ]),
+    ...mapFields("app", ["snackbar"]),
   },
-
   methods: {
     ...mapActions("app", ["closeSnackBar"]),
-  },
-  watch: {
-    show: function (newValue) {
-      console.log("show change :" + newValue);
-    },
   },
 };
 </script>

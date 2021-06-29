@@ -17,9 +17,7 @@
       </div>
       <!-- App Footer -->
       <v-footer height="auto" class="pa-3 app--footer">
-      <span class="caption"
-        >Easy Dispatch &copy; {{ new Date().getFullYear() }}</span
-      >
+        <span class="caption">Easy Dispatch &copy; {{ new Date().getFullYear() }}</span>
         <v-spacer />
         <span class="caption mr-1">Dispatching by AI</span>
         <v-icon color="pink" small>favorite</v-icon>
@@ -38,7 +36,7 @@ import AppToolbarPlannerScore from "@/components/AppToolbarPlannerScore";
 import PageHeader from "@/components/PageHeader";
 import Snackbar from "@/components/Snackbar.vue";
 import Refresh from "@/components/Refresh.vue";
-import { mapActions } from "vuex";
+import { mapActions, mapMutations } from "vuex";
 import { mapState } from "vuex";
 
 export default {
@@ -49,7 +47,7 @@ export default {
     AppToolbarPlannerScore,
     PageHeader,
     Snackbar,
-    Refresh
+    Refresh,
   },
 
   created() {
@@ -59,18 +57,18 @@ export default {
   computed: {
     ...mapState("gantt", [
       "plannerHealthCheckResultShowFlag",
-      "plannerScoresShowFlag"
+      "plannerScoresShowFlag",
     ]),
-    noPlannerShowing: function() {
+    noPlannerShowing: function () {
       return (
         !this.plannerHealthCheckResultShowFlag && !this.plannerScoresShowFlag
       );
-    }
+    },
   },
 
   methods: {
-    ...mapActions("auth", ["getUserInfo"])
-  }
+    ...mapActions("auth", ["getUserInfo"]),
+  },
 };
 </script>
 

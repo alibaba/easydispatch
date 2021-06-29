@@ -30,11 +30,7 @@
                 <span class="subtitle-2">Details</span>
               </v-flex>
               <v-flex xs12>
-                <ValidationProvider
-                  name="ServiceCode"
-                  rules="required"
-                  immediate
-                >
+                <ValidationProvider name="ServiceCode" rules="required" immediate>
                   <v-text-field
                     v-model="code"
                     slot-scope="{ errors, valid }"
@@ -48,11 +44,7 @@
                 </ValidationProvider>
               </v-flex>
               <v-flex xs12>
-                <ValidationProvider
-                  name="ServiceName"
-                  rules="required"
-                  immediate
-                >
+                <ValidationProvider name="ServiceName" rules="required" immediate>
                   <v-text-field
                     v-model="name"
                     slot-scope="{ errors, valid }"
@@ -75,12 +67,12 @@
               </v-flex>
               <!-- Disable type (default to pager duty) until we have a way to validate. -->
 
-              <v-flex xs12>
+              <!-- <v-flex xs12>
                 <v-switch
                   v-model="is_active"
                   :label="is_active ? 'Active' : 'Inactive'"
                 />
-              </v-flex>
+              </v-flex>-->
             </v-layout>
           </v-container>
         </v-card-text>
@@ -98,7 +90,7 @@ import PluginApi from "@/plugin/api";
 
 extend("required", {
   ...required,
-  message: "This field is required"
+  message: "This field is required",
 });
 
 export default {
@@ -106,7 +98,7 @@ export default {
 
   components: {
     ValidationObserver,
-    ValidationProvider
+    ValidationProvider,
   },
 
   computed: {
@@ -117,26 +109,26 @@ export default {
       "selected.description",
       "selected.is_active",
       "selected.loading",
-      "dialogs.showCreateEdit"
-    ])
+      "dialogs.showCreateEdit",
+    ]),
   },
 
   methods: {
-    ...mapActions("service", ["save", "closeCreateEdit"])
+    ...mapActions("service", ["save", "closeCreateEdit"]),
   },
 
   data() {
     return {
-      oncall_plugins: null
+      oncall_plugins: null,
     };
   },
 
   mounted() {
     this.loading = true;
-    PluginApi.getByType("oncall").then(response => {
+    PluginApi.getByType("oncall").then((response) => {
       this.loading = false;
-      this.oncall_plugins = response.data.items.map(p => p.slug);
+      this.oncall_plugins = response.data.items.map((p) => p.slug);
     });
-  }
+  },
 };
 </script>

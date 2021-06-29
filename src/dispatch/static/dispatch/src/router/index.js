@@ -14,7 +14,7 @@ Vue.use(Router);
 const router = new Router({
   mode: "history",
   linkActiveClass: "active",
-  routes: routes
+  routes: routes,
 });
 
 const authProviderSlug =

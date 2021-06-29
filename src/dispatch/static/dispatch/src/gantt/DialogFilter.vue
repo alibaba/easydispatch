@@ -1,61 +1,78 @@
 <template>
-  <v-dialog v-model="dialogFilterVisible" max-width="600px">
-    <v-card>
-      <v-card-title>
-        <span class="headline">Filters</span>
-        <v-spacer></v-spacer>
-        <v-btn text color="primary" @click="setDialogFilterVisible(false)">Cancel</v-btn>
-        <v-btn text color="primary" @click="fetchData">OK</v-btn>
-      </v-card-title>
-      <v-list dense>
-        <v-list-item>
-          <v-list-item-content>
-            <team-select v-model="plannerFilters_team" />
-          </v-list-item-content>
-        </v-list-item>
-        <v-list-item>
-          <v-list-item-content>
-            <v-menu
-              ref="menu"
-              v-model="menu"
-              :close-on-content-click="false"
-              :return-value.sync="plannerFilters_windowDates"
-              transition="scale-transition"
-              offset-y
-              max-width="290px"
-              min-width="190px"
-            >
-              <template v-slot:activator="{ on, attrs }">
-                <v-text-field
-                  v-model="dateRangeText"
-                  label="Start and end date for selecting jobs in the planner Env"
-                  prepend-icon="event"
-                  readonly
-                  v-bind="attrs"
-                  v-on="on"
-                ></v-text-field>
-              </template>
-              <v-date-picker
-                v-model="plannerFilters_windowDates"
-                type="date"
-                :allowed-dates="allowedDates"
-                range
+  <ValidationObserver v-slot="{ invalid, validated }">
+    <v-dialog v-model="dialogFilterVisible" max-width="600px">
+      <v-card>
+        <v-card-title>
+          <span class="headline">Filters</span>
+          <v-spacer></v-spacer>
+          <v-btn text color="primary" @click="setDialogFilterVisible(false)">Cancel</v-btn>
+          <v-btn text color="primary" :disabled="invalid || !validated" @click="fetchData">OK</v-btn>
+        </v-card-title>
+        <v-list dense>
+          <v-list-item>
+            <v-list-item-content>
+              <ValidationProvider name="teamSelect" rules="required" immediate>
+                <team-select
+                  v-model="plannerFilters_team"
+                  slot-scope="{ errors, valid }"
+                  label="Team"
+                  :error-messages="errors"
+                  :success="valid"
+                  hint="The team"
+                  clearable
+                  required
+                ></team-select>
+              </ValidationProvider>
+            </v-list-item-content>
+          </v-list-item>
+          <v-list-item>
+            <v-list-item-content>
+              <v-menu
+                ref="menu"
+                v-model="menu"
+                :close-on-content-click="false"
+                :return-value.sync="plannerFilters_windowDates"
+                transition="scale-transition"
+                offset-y
+                max-width="290px"
+                min-width="190px"
               >
-                <v-spacer></v-spacer>
-                <v-btn text color="primary" @click="menu = false">Cancel</v-btn>
-                <v-btn text color="primary" @click="$refs.menu.save(plannerFilters_windowDates)">OK</v-btn>
-              </v-date-picker>
-            </v-menu>
-          </v-list-item-content>
-        </v-list-item>
-        <v-list-item>
-          <v-list-item-content>
-            <v-switch v-model="forceReloadFlag" class="mx-4" label="force reload" disabled></v-switch>
-          </v-list-item-content>
-        </v-list-item>
-      </v-list>
-    </v-card>
-  </v-dialog>
+                <template v-slot:activator="{ on, attrs }">
+                  <v-text-field
+                    v-model="dateRangeText"
+                    label="Start and end date for selecting jobs in the planner Env"
+                    prepend-icon="event"
+                    readonly
+                    v-bind="attrs"
+                    v-on="on"
+                  ></v-text-field>
+                </template>
+                <v-date-picker
+                  v-model="plannerFilters_windowDates"
+                  type="date"
+                  :allowed-dates="allowedDates"
+                  range
+                >
+                  <v-spacer></v-spacer>
+                  <v-btn text color="primary" @click="menu = false">Cancel</v-btn>
+                  <v-btn
+                    text
+                    color="primary"
+                    @click="$refs.menu.save(plannerFilters_windowDates)"
+                  >OK</v-btn>
+                </v-date-picker>
+              </v-menu>
+            </v-list-item-content>
+          </v-list-item>
+          <v-list-item>
+            <v-list-item-content>
+              <v-switch v-model="forceReloadFlag" class="mx-4" label="force reload" disabled></v-switch>
+            </v-list-item-content>
+          </v-list-item>
+        </v-list>
+      </v-card>
+    </v-dialog>
+  </ValidationObserver>
 </template>
 
 <script>
@@ -64,6 +81,7 @@
 import { map, sum } from "lodash";
 import { mapState, mapActions } from "vuex";
 
+import { ValidationProvider, ValidationObserver } from "vee-validate";
 // import WorkerCombobox from "@/worker/WorkerCombobox.vue"
 //import TagFilterCombobox from "@/tag/TagFilterCombobox.vue"
 //import JobTypeCombobox from "@/job_type/JobTypeCombobox.vue"
@@ -73,6 +91,7 @@ import { parseISO } from "date-fns"; // addDays,
 import { mapFields } from "vuex-map-fields";
 //var _that = this
 import TeamApi from "@/team/api";
+import AuthApi from "@/auth/api";
 
 export default {
   name: "DialogFilterGantt",
@@ -133,6 +152,16 @@ export default {
       this.getPlannerWorkerJobDataset(filterOptions);
 
       this.getPlannerScoreStats(filterOptions);
+
+      // 修改plannerScoresStats.planning_window
+      this.planning_window =
+        filterOptions.start_day.substr(4, 2) +
+        "-" +
+        filterOptions.start_day.substr(6, 2) +
+        "~" +
+        filterOptions.end_day.substr(4, 2) +
+        "-" +
+        filterOptions.end_day.substr(6, 2);
     },
     getPlannerWindowDateFromTeam(team) {
       let d = team.flex_form_data.env_start_day;
@@ -152,6 +181,8 @@ export default {
     // WorkerCombobox,
     // TagFilterCombobox,
     // JobTypeCombobox,
+    ValidationObserver,
+    ValidationProvider,
     TeamSelect,
   },
   mounted() {
@@ -159,26 +190,28 @@ export default {
     let that = this;
     if (this.userInfo.default_team_id) {
       console.log("dialog mounted, then I am changing default_team_id");
-      TeamApi.get(this.userInfo.default_team_id) //
-        .then((response) => {
-          that.plannerFilters_team = response.data;
+      AuthApi.getUserInfo().then((res) => {
+        TeamApi.get(res.data.default_team_id) //
+          .then((response) => {
+            that.plannerFilters_team = response.data;
 
-          that.plannerFilters_windowDates = that.getPlannerWindowDateFromTeam(
-            that.plannerFilters_team
-          );
-          that.plannerWindowMinMax = that.plannerFilters_windowDates;
-          if (that.plannerFilters.team == null) {
-            that.fetchData();
-          }
+            that.plannerFilters_windowDates = that.getPlannerWindowDateFromTeam(
+              that.plannerFilters_team
+            );
+            that.plannerWindowMinMax = that.plannerFilters_windowDates;
+            if (that.plannerFilters.team == null) {
+              that.fetchData();
+            }
 
-          console.log(
-            "loaded default team info",
-            that.userInfo.default_team_id
-          );
-        })
-        .catch(() => {
-          console.log("Failed to load default team");
-        });
+            console.log(
+              "loaded default team info",
+              that.userInfo.default_team_id
+            );
+          })
+          .catch(() => {
+            console.log("Failed to load default team");
+          });
+      });
     } else {
       console.log(
         "dialog mounted but team is not loaded because userInfo has no default_team_id!"
@@ -213,6 +246,7 @@ export default {
         try {
           this.plannerFilters_windowDates =
             this.getPlannerWindowDateFromTeam(newTeam);
+          this.plannerWindowMinMax = this.plannerFilters_windowDates;
         } catch (err) {
           this.$store.commit(
             "app/SET_SNACKBAR",
@@ -233,7 +267,10 @@ export default {
 
   computed: {
     ...mapState("gantt", ["plannerFilters"]),
-    ...mapFields("gantt", ["dialogs.dialogFilterVisible"]),
+    ...mapFields("gantt", [
+      "dialogs.dialogFilterVisible",
+      "plannerScoresStats.planning_window",
+    ]),
     ...mapState("auth", ["userInfo"]),
 
     numFilters: function () {

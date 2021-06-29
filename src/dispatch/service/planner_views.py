@@ -1,4 +1,6 @@
 import logging
+
+from sqlalchemy.sql.elements import Null
 from dispatch.config import DATA_START_DAY
 from dispatch.plugins.kandbox_planner.env.env_enums import (
     ActionType,
@@ -30,7 +32,7 @@ from dispatch.service.planner_service import (
     reset_planning_window_for_team,
     run_batch_optimizer
 )
-from dispatch.team.models import Team
+from dispatch.team.models import Team, TeamUpdate
 from dispatch.service.planner_models import (
     GenericJobPredictActionInput,
     GenericJobPredictActionOutput,
@@ -99,6 +101,7 @@ async def get_worker_job_dataset(
     end_day: str = Query(None, alias="end_day"),
     force_reload: bool = Query(False, alias="force_reload"),
     current_user: DispatchUser = Depends(get_current_user),
+    db_session: Session = Depends(get_db),
 ):
     # print(f"force_reload = {force_reload}")
     org_code = current_user.org_code
@@ -120,7 +123,6 @@ async def get_worker_job_dataset(
     res = planner["planner_env"].get_solution_dataset(start_time, end_time)
 
     # background_tasks.add_task(background_env_sync, 30, 2)
-
     return JSONResponse(res)
 
 

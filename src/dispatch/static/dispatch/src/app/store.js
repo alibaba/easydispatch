@@ -36,8 +36,8 @@ const actions = {
   toggleDrawer({ commit }, value) {
     commit("TOGGLE_DRAWER", value);
   },
-  closeSnackBar({ commit }) {
-    commit("RESET_SNACKBAR");
+  closeSnackBar({ commit }, value) {
+    commit("RESET_SNACKBAR", value);
   },
   performRefresh({ commit }) {
     router.go();
@@ -65,7 +65,7 @@ const mutations = {
     state.loading = value;
   },
   RESET_SNACKBAR(state) {
-    state.snackbar = Object.assign(state.snackbar, getDefaultSnackbarState());
+    state.snackbar = Object.assign(state.refresh, getDefaulRefreshState());
   },
   RESET_REFRESH(state) {
     state.refresh = Object.assign(state.refresh, getDefaulRefreshState());

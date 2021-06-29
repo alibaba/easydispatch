@@ -196,7 +196,7 @@ const actions = {
               `Failed to load workers and jobs. Reason: ` +
               JSON.stringify(err.response.data),
             color: "red",
-//             timeout:120
+            //             timeout:120
           },
           { root: true }
         );
@@ -508,7 +508,10 @@ const mutations = {
     });
   },
   SET_PLANNER_SCORE_STATS(state, value) {
-    state.plannerScoresStats = value;
+    _value = { planning_window, ...value };
+    _planning_window = state.plannerScoresStats.planning_window;
+    state.plannerScoresStats = _value;
+    state.plannerScoresStats.planning_window = _planning_window;
   },
 
   SET_PLANNER_SCORE_SHOW_FLAG(state, value) {
