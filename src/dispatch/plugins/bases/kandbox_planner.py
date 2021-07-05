@@ -102,7 +102,7 @@ class KandboxEnvPlugin(gym.Env):
 
     def decode_action_into_dict(self, action):
         """
-        action[0].shape=self.config['nbr_of_observed_workers']
+        action[0].shape=self.config['nbr_observed_slots']
         for iii in range(1,5):
         action[iii].shape=1
         new_act = list(action[0]) + list(action[1])  + list(action[2])  + list(action[3])  + list(action[4])

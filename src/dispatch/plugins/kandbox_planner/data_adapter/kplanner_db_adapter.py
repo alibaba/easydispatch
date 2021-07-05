@@ -67,13 +67,14 @@ class KPlannerDBAdapter(KandboxDataAdapterPlugin):
         In Heuristic search, do not call this one.
         """
 
-        w_df = self.get_workers()  # .reset_index()
-        # w_df["worker_code_index"] = w_df["id"]
-        # w_df.set_index("worker_code")
-        # self.workers_db_dict = w_df.set_index("worker_code_index").to_dict(orient="index")
-        self.workers_db_dict = {}
-        for worker in w_df:
-            self.workers_db_dict[worker.id] = worker
+        w_df = self.get_workers().reset_index()
+        w_df["worker_code_index"] = w_df["id"]
+        w_df["worker_code"] = w_df["code"]
+        w_df.set_index("worker_code")
+        self.workers_db_dict = w_df.set_index("worker_code_index").to_dict(orient="index")
+        # self.workers_db_dict = {}
+        # for worker in w_df:
+        #     self.workers_db_dict[worker.id] = worker
 
         self.workers_dict_by_id = {}  # Dictionary of dict
         self.workers_by_code_dict = {}  # Dictionary of dict
@@ -85,8 +86,8 @@ class KPlannerDBAdapter(KandboxDataAdapterPlugin):
 
         for ji, worker in self.workers_db_dict.items():
 
-            self.workers_dict_by_id[worker.id] = worker.__dict__
-            self.workers_by_code_dict[worker.code] = worker.__dict__
+            self.workers_dict_by_id[worker["id"]] = worker
+            self.workers_by_code_dict[worker["worker_code"]] = worker
 
         # start_day=self.config["data_start_day"], end_day=self.config["data_end_day"],
         j_df = self.get_jobs()
@@ -261,11 +262,12 @@ class KPlannerDBAdapter(KandboxDataAdapterPlugin):
             print(e)
             log.error(f"team_id={self.team_id} is invalid")
 
-        # k_workers = pd.read_sql(
-        #     db_session.query(Worker).filter(Worker.team_id == self.team_id).statement,
-        #     db_session.bind,
-        # )
-        k_workers = db_session.query(Worker).filter(Worker.team_id == self.team_id).all()
+        k_workers = pd.read_sql(
+            db_session.query(Worker, Location.geo_latitude, Location.geo_longitude, Location.location_code).filter(
+                Location.id == Worker.location_id).filter(Worker.team_id == self.team_id).statement,
+            db_session.bind,
+        )
+        # k_workers = db_session.query(Worker).filter(Worker.team_id == self.team_id).all()
         return k_workers
 
     def save_changed_jobs(self, changed_jobs=[]):

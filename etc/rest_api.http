@@ -216,11 +216,16 @@ Authorization: Bearer {{jwtoken}}
     "is_active": true
   },
   "flex_form_data": {
-    "env_start_day": "20210505",
-    "nbr_of_days_planning_window": 2
+    "env_start_day": "20210524",
+    "respect_initial_travel":true, 
+    "horizon_start_minutes":1925,
+    "nbr_of_days_planning_window": 1,
+    "travel_speed_km_hour":19.8,
+    "travel_min_minutes":5
   },
   "id": 8
 }
+
 
 
 ###

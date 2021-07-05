@@ -76,7 +76,7 @@ class SlotAttentionRealtimeAgentTransformer(KandboxAgentPlugin):
     version = "0.1.0"
     default_config = {
         "nbr_of_actions": 4,
-        "max_epochs": 1000,
+        "n_epochs": 1000,
         "nbr_of_days_planning_window": 1,
         # "model_path": "/tmp/model_trained/slot_attention_transformer.good.8jobs",
         "model_path": "/Users/qiyangduan/git/kandbox/kandbox_dispatch/etc/saved_model/slot_attention_transformer_layer_4_reward_250",

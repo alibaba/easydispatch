@@ -248,7 +248,7 @@ REDIS_PASSWORD = config("REDIS_PASSWORD", default=None)
 # kandbox
 NBR_OF_OBSERVED_WORKERS = config("NBR_OF_OBSERVED_WORKERS", cast=int, default=8)
 MINUTES_PER_DAY = config("MINUTES_PER_DAY", cast=int, default=1440)
-MAX_NBR_OF_JOBS_PER_DAY_WORKER = config("MAX_NBR_OF_JOBS_PER_DAY_WORKER", cast=int, default=8)
+MAX_NBR_OF_JOBS_PER_DAY_WORKER = config("MAX_NBR_OF_JOBS_PER_DAY_WORKER", cast=int, default=16)
 SCORING_FACTOR_STANDARD_TRAVEL_MINUTES = config(
     "SCORING_FACTOR_STANDARD_TRAVEL_MINUTES", cast=int, default=100
 )
@@ -301,6 +301,7 @@ ORIG_SYS_DATE_FORMAT = "%m/%d/%Y"
 
 KANDBOX_DATETIME_FORMAT_WITH_MS = "%Y-%m-%d %H:%M:%S.%f"  # For postgres as well
 KANDBOX_DATETIME_FORMAT_ISO = "%Y-%m-%dT%H:%M:%S"
+KANDBOX_DATETIME_FORMAT_ISO_SPACE = "%Y-%m-%d %H:%M:%S"
 KANDBOX_DATETIME_FORMAT_GTS_SLOT = "%Y%m%d%H%M"
 
 # FOR MODEL
@@ -343,7 +344,7 @@ POSITION_ASSIGNED_JOB_INDEX = 7
 APPOINTMENT_LOCAL_FILE = os.getenv("APPOINTMENT_LOCAL_FILE")
 
 DEBUGGING_JOB_CODE_SET = {
-    "0429-9-Replacement_Ventilation-255",
+    "0524-0-pick-839"  # , "0524-4-pick-517", "0524-4-pick-517"
 }
 
 
