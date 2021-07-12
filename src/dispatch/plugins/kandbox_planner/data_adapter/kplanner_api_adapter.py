@@ -52,7 +52,7 @@ class KPlannerAPIAdapter:
         for myobj in worker_list:
             # print(myobj)
 
-            myobj["team"]["code"] = self.team_code
+            # myobj["team"]["code"] = self.team_code
             # log.debug(url)
             # log.debug(myobj)
 

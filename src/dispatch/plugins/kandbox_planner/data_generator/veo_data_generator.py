@@ -295,7 +295,6 @@ def generate_all(opts):
     window_start_minutes = int((GENERATOR_START_DATE - data_start_datetime).total_seconds() / 60)
 
     update_planning_window(start_minutes=window_start_minutes, team_id=1)
-
     """
     return
     """

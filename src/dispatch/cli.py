@@ -72,20 +72,26 @@ def plugins_group():
 @click.option("--nbr_jobs", default=1, help="how many jobs to generate")
 @click.option("--job_start_index", default=20, help="how many jobs to generate")
 @click.option("--auto_planning_flag", default=1, help="auto or not, 1 is yes/true")
-def populate_data(username, password, start_day, end_day, team_code, dispatch_days, dataset, generate_worker, nbr_jobs, job_start_index, auto_planning_flag):
+@click.option("--planning_flag", default=1, help=" 1 is yes/true")
+def populate_data(username, password, start_day, end_day, team_code, dispatch_days, dataset, generate_worker, nbr_jobs, job_start_index, auto_planning_flag, planning_flag):
     """Shows all available plugins"""
     log.debug(f"Populating sample data wtih username={username}, dataset = {dataset}...")
 
     # from dispatch.plugins.kandbox_planner.data_generator.london_data_generator import generate_all
     if dataset == "veo":
         from dispatch.plugins.kandbox_planner.data_generator.veo_data_generator import generate_all
-    if dataset == "london_realtime":
+    elif dataset == "london_realtime":
         from dispatch.contrib.plugins.data_generator.london_realtime_data_generator import generate_all
 
     elif dataset == "beijing":
         from dispatch.plugins.kandbox_planner.data_generator.beijing_data_generator import (
             generate_all,
         )
+    elif dataset == "luxembourg":
+        if planning_flag:
+            from dispatch.plugins.kandbox_planner.data_generator.lp_generator import generate_all
+        else:
+            from dispatch.plugins.kandbox_planner.data_generator.lp_generator_old import generate_all
 
     org_engine = engine
     ORG_SQLALCHEMY_DATABASE_URI = config.SQLALCHEMY_DATABASE_URI

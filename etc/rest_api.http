@@ -89,7 +89,6 @@ Content-Type: application/json
 POST {{hostUrl}}/teams/
 Authorization: Bearer {{jwtoken}}
 Content-Type: application/json
-
 {"id":null,"code":"london_t2","planner_service":{"code":"planner","name":"planner","service_type":"realtime_heuristic_planner","description":null,"is_active":true,"id":4,"created_at":"2021-04-29T15:56:15.108107","updated_at":"2021-04-29T15:56:15.108120"},"name":"london_t2","description":null,"created_at":null,"updated_at":null,"loading":false,"flex_form_data":{"env_start_day":"20210428", "nbr_of_days_planning_window":2}}
 
 ###
@@ -179,7 +178,7 @@ Content-Type: application/json
 Authorization: Bearer {{jwtoken}}
 
 ###
-GET {{hostUrl}}/planner_service/get_planner_worker_job_dataset/?team_id=4&start_day=20210505&end_day=20210507&force_reload=false HTTP/1.1
+GET {{hostUrl}}/planner_service/get_planner_worker_job_dataset/?team_id=24&team_code=BT&start_day=20210522&end_day=20210523&force_reload=false HTTP/1.1
 Content-Type: application/json
 Authorization: Bearer {{jwtoken}}
 
