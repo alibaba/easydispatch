@@ -198,14 +198,13 @@ Authorization: Bearer {{jwtoken}}
 
 ###
 # @name update_team
-PUT {{hostUrl}}/teams/1 HTTP/1.1
+PUT {{hostUrl}}/teams/3 HTTP/1.1
 Content-Type: application/json
 Authorization: Bearer {{jwtoken}}
 
-
 {
-  "code": "london_t1",
-  "name": "london_t1",
+  "code": "RO",
+  "name": "Roost region",
   "description": null,
   "planner_service": {
     "code": "planner",

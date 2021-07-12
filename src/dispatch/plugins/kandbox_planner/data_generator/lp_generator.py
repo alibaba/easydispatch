@@ -39,7 +39,8 @@ df = pd.read_csv(
     sep=";",
     encoding="utf_8",
 )
-gps_df = df.sample(frac=1).reset_index(drop=True)
+# gps_df = df.sample(frac=1).reset_index(drop=True)
+gps_df = df
 
 gps_df["LongitudeGPS"].fillna("N/A", inplace=True)
 gps_df["LatitudeGPS"].fillna("N/A", inplace=True)
@@ -48,7 +49,7 @@ gps_df["Street"].fillna("N/A", inplace=True)
 gps_df["ZipCode"].fillna("N/A", inplace=True)
 gps_df["City"].fillna("N/A", inplace=True)
 
-team_dict = {'BT': 'Bettembourg region', 'LD': 'Luxembourg city region', 'RO': 'Roost region'}
+team_dict = {'BT': '`Bettembourg region`', 'LD': 'Luxembourg city region', 'RO': 'Roost region'}
 
 
 def init_data():
@@ -194,7 +195,11 @@ def generate_one_day_orders(current_day, worker_list, nbr_jobs, job_start_index,
     _worker_id = 0
     _location_list = [(6.1328, 49.6106)]
     scheduled_start = 0
+    # 按照team 排序
+    # group_job_data_sorted = sorted(group_job_data.items(), key=lambda k: k[1]['row'].CenterID)
     for real_job_id, job_item in group_job_data.items():
+        # real_job_id = job_item_data[0]
+        # job_item = job_item_data[1]
 
         i += 1
         row = job_item['row']
@@ -204,6 +209,7 @@ def generate_one_day_orders(current_day, worker_list, nbr_jobs, job_start_index,
         gps["location_code"] = "job_loc_{}".format(i)
 
         if _worker_id != job_item['worker_id']:
+            scheduled_start = 0
             _worker_id = job_item['worker_id']
             _location_list = [(6.1328, 49.6106)]
 
@@ -236,11 +242,10 @@ def generate_one_day_orders(current_day, worker_list, nbr_jobs, job_start_index,
             },
             "location": gps,
             "planning_status": JobPlanningStatus.PLANNED,
-            "scheduled_start": scheduled_start,
             "requested_duration_minutes": 1,
             "scheduled_duration_minutes": 1,
-            "requested_start_datetime": datetime.strftime(current_day + timedelta(minutes=0), "%Y-%m-%dT%H:%M:%S"),
-            "scheduled_start_datetime": datetime.strftime(current_day + timedelta(minutes=0), "%Y-%m-%dT%H:%M:%S"),
+            "requested_start_datetime": datetime.strftime(current_day + timedelta(minutes=scheduled_start), "%Y-%m-%dT%H:%M:%S"),
+            "scheduled_start_datetime": datetime.strftime(current_day + timedelta(minutes=scheduled_start), "%Y-%m-%dT%H:%M:%S"),
             "requested_primary_worker": {
                 "code": job_item['worker_id'],
                 "team": {
