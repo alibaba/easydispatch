@@ -80,8 +80,8 @@ def populate_data(username, password, start_day, end_day, team_code, dispatch_da
     # from dispatch.plugins.kandbox_planner.data_generator.london_data_generator import generate_all
     if dataset == "veo":
         from dispatch.plugins.kandbox_planner.data_generator.veo_data_generator import generate_all
-    elif dataset == "london_realtime":
-        from dispatch.contrib.plugins.data_generator.london_realtime_data_generator import generate_all
+    if dataset == "london_realtime":
+        from dispatch.contrib.plugins.data_generator.london_pick_drop_data_generator import generate_all
 
     elif dataset == "beijing":
         from dispatch.plugins.kandbox_planner.data_generator.beijing_data_generator import (

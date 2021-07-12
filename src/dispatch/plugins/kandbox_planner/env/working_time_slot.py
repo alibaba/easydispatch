@@ -5,7 +5,7 @@ from typing import Tuple
 import redis
 from intervaltree import Interval, IntervalTree
 from dispatch.config import PLANNER_SERVER_ROLE, MAX_MINUTES_PER_TECH, MAX_TRANSACTION_RETRY
-from dispatch import  config
+from dispatch import config
 from dispatch.plugins.kandbox_planner.env.env_enums import *
 
 # RTree and Intervaltree, similar?
@@ -154,7 +154,7 @@ class WorkingTimeSlotServer:
 
     def add_single_working_time_slot(
         self, worker_code: str, start_minutes: int, end_minutes: int, start_location, end_location
-    ) -> str:
+    ) -> WorkingTimeSlot:
         if end_minutes - start_minutes < 1:
             return None
         # It is such a luxury to have fake start / end for every day. So I used None to denote start/end of time slots in one original slot.
@@ -179,11 +179,11 @@ class WorkingTimeSlotServer:
             changed_slot_codes_list=[self.get_time_slot_key(slot)],
         )
 
-        return a
+        return slot
 
     def delete_slot__TODEL(
         self, slot_code: str
-    ):  #  worker_id, start_minutes, end_minutes, slot_type,
+    ):  # worker_id, start_minutes, end_minutes, slot_type,
 
         if slot_code in self.time_slot_dict.keys():
             slot = self.time_slot_dict[slot_code]
@@ -827,11 +827,12 @@ class WorkingTimeSlotServer:
                 pass
 
         for slot_code in slots_to_delete:
-            # pipe.delete(slot_code)
             #
-            redis_handler.delete(slot_code)
             if slot_code in config.DEBUGGING_SLOT_CODE_SET:
                 log.debug("debug atomic_slot_delete_and_add_back")
+
+            redis_handler.delete(slot_code)
+            self._remove_slot_code_from_internal_cache(slot_code)
         for slot_code in slots_to_add_back:
             # Sort all job codes by job start time
             slot_to_add = slots_to_add_back[slot_code]
@@ -875,7 +876,7 @@ class WorkingTimeSlotServer:
 
                 del self.time_slot_dict[slot_code]
             else:
-                #TODO, duan. temp fix.
+                # TODO, duan. temp fix.
                 log.error(f"Failed to delete from local dict cache, slot_code = {slot_code}. Instead, i remove overlapped with ")
                 for s_code, s in slots_to_add_back.items():
                     (interval_begin, interval_end) = self.get_interval_begin_end_by_worker_code(

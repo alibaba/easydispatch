@@ -88,6 +88,65 @@ class JobLocation(typing.NamedTuple):
 
 
 @dataclass
+class WorkingTimeSlot:
+    start_minutes: int
+    end_minutes: int
+    prev_slot_code: Optional[str]
+    next_slot_code: Optional[str]
+
+    slot_type: TimeSlotType
+    start_location: LocationTuple
+    end_location: LocationTuple
+
+    assigned_job_codes: List[str]
+    worker_id: str
+
+    referred_object_code: str = None  # 9
+    # This is a positive number and should be used like start_time - start_overtime_minutes
+    start_overtime_minutes: int = 0
+    # This is a positive number and should be used like end_time + end_overtime_minutes
+    end_overtime_minutes: int = 0
+    available_free_minutes: int = 0
+    total_job_minutes: int = 0
+    # If False, this work is over time and when released, it does not recover working slot.
+    is_in_working_hour: bool = True
+
+    env: InitVar[any] = None
+
+    def __post_init__(self, env):
+        if env is not None:
+            self.calc_free_time(env)
+        else:
+            self.total_job_minutes = -1
+            self.available_free_minutes = -1
+
+    def calc_free_time(self, env):
+        (
+            prev_travel_minutes,
+            next_travel_minutes,
+            inside_travel_minutes,
+        ) = env.get_travel_time_jobs_in_slot(self, self.assigned_job_codes)
+        self.available_free_minutes = (
+            self.end_minutes
+            - self.start_minutes
+            - prev_travel_minutes
+            - next_travel_minutes
+            - sum(inside_travel_minutes)
+        )
+
+        self.total_job_minutes = sum(
+            [env.jobs_dict[j].scheduled_duration_minutes for j in self.assigned_job_codes]
+        )
+
+
+class TimeSlotJSONEncoder(json.JSONEncoder):
+    def default(self, o):
+        if WorkingTimeSlot == type(o):
+            return python_dataclasses_astuple(o)
+        return super().default(o)
+
+
+@dataclass
 class BaseJob:
     """A class for holding Job Information in the RL environment, not in the database"""
 
@@ -143,6 +202,7 @@ class BaseJob:
     is_appointment_confirmed: bool = True
     is_auto_planning: bool = False
     #
+    retry_horizon_minutes: int = -1
 
 
 class Job(BaseJob):
@@ -198,6 +258,7 @@ class Worker:
     weekly_max_overtime_minutes: int = 0
 
     belongs_to_pair: tuple = None
+    curr_slot: WorkingTimeSlot = None
 
 
 @dataclass
@@ -337,93 +398,6 @@ class KafkaEnvMessage:
     message_source_code: str
 
     payload: List[Any]
-
-
-"""
-WorkingTimeSlot_fields = (
-    "start_minutes",  # 0
-    "end_minutes",
-    "prev_slot_code",
-    "next_slot_code",
-    "slot_type",  # : TimeSlotType,  # 4
-    "start_location",
-    "end_location",
-    "assigned_job_codes",  # 7  list
-    "worker_id",
-    "referred_object_code",  # 9
-    "start_overtime_eligible",
-    "end_overtime_eligible",
-    "available_free_minutes",
-    "total_job_minutes",
-    # "allocated_overtime_minutes",
-    # "interrupted_job_codes" # list, long jobs like hotel (8 hours) can be interrupted by small , urgent call out jobs. < 1hour.
-    # slot_worker_id_list  # for permenantly paired workers. Though one worker CT40 might be tied to CT10, it may still receive manual interventions to assign jobs with others. When other primary is sick? At the time of primary is on sick leave, this technician becames a free secondary?
-)
-WorkingTimeSlot = namedtuple(
-    "WorkingTimeSlot", WorkingTimeSlot_fields, defaults=(None,) * len(WorkingTimeSlot_fields)
-)
-POSITION_SLOT_TYPE = 4
-POSITION_ASSIGNED_JOB_CODES_INDEX = 7
-"""
-
-
-@dataclass
-class WorkingTimeSlot:
-    start_minutes: int
-    end_minutes: int
-    prev_slot_code: Optional[str]
-    next_slot_code: Optional[str]
-
-    slot_type: TimeSlotType
-    start_location: LocationTuple
-    end_location: LocationTuple
-
-    assigned_job_codes: List[str]
-    worker_id: str
-
-    referred_object_code: str = None  # 9
-    # This is a positive number and should be used like start_time - start_overtime_minutes
-    start_overtime_minutes: int = 0
-    # This is a positive number and should be used like end_time + end_overtime_minutes
-    end_overtime_minutes: int = 0
-    available_free_minutes: int = 0
-    total_job_minutes: int = 0
-    # If False, this work is over time and when released, it does not recover working slot.
-    is_in_working_hour: bool = True
-
-    env: InitVar[any] = None
-
-    def __post_init__(self, env):
-        if env is not None:
-            self.calc_free_time(env)
-        else:
-            self.total_job_minutes = -1
-            self.available_free_minutes = -1
-
-    def calc_free_time(self, env):
-        (
-            prev_travel_minutes,
-            next_travel_minutes,
-            inside_travel_minutes,
-        ) = env.get_travel_time_jobs_in_slot(self, self.assigned_job_codes)
-        self.available_free_minutes = (
-            self.end_minutes
-            - self.start_minutes
-            - prev_travel_minutes
-            - next_travel_minutes
-            - sum(inside_travel_minutes)
-        )
-
-        self.total_job_minutes = sum(
-            [env.jobs_dict[j].scheduled_duration_minutes for j in self.assigned_job_codes]
-        )
-
-
-class TimeSlotJSONEncoder(json.JSONEncoder):
-    def default(self, o):
-        if WorkingTimeSlot == type(o):
-            return python_dataclasses_astuple(o)
-        return super().default(o)
 
 
 if __name__ == "__main__":

@@ -31,7 +31,7 @@ class KandboxAgentRLLibPPO(KandboxAgentPlugin):
     version = "0.1.0"
     default_config = {
         "nbr_of_actions": 4,
-        "max_epochs": 1000,
+        "n_epochs": 1000,
         "nbr_of_days_planning_window": 6,
         "model_path": "default_model_path",
         "working_dir": "/tmp",
@@ -149,7 +149,7 @@ class KandboxAgentRLLibPPO(KandboxAgentPlugin):
     def train_model(self):
 
         # self.trainer = self.build_model()
-        for i in range(self.kandbox_config["max_epochs"]):
+        for i in range(self.kandbox_config["n_epochs"]):
             result = self.trainer.train()
             # print(pretty_print(result))
             print(
@@ -219,7 +219,7 @@ class KandboxAgentRLLibPPO(KandboxAgentPlugin):
             if len(actions) >= self.config["nbr_of_actions"]:
                 return actions
             actions.append(list(predicted_action).copy())
-            max_i = np.argmax(predicted_action[0 : len(env.workers)])
+            max_i = np.argmax(predicted_action[0: len(env.workers)])
             predicted_action[max_i] = 0
 
         return actions

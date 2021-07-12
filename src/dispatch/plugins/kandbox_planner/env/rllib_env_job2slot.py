@@ -60,7 +60,7 @@ import dispatch.plugins.kandbox_planner.util.kandbox_date_util as date_util
 
 # from dispatch.plugins.kandbox_planner.env.recommendation_server import RecommendationServer
 from dispatch.plugins.kandbox_planner.data_adapter.kafka_adapter import KafkaAdapter
-from dispatch.plugins.kandbox_planner.data_adapter.fake_kafka_adapter import FakeKafkaAdapter
+
 from dispatch.plugins.kandbox_planner.data_adapter.kplanner_db_adapter import KPlannerDBAdapter
 from dispatch.plugins.kandbox_planner.env.cache_only_slot_server import CacheOnlySlotServer
 from dispatch.plugins.kandbox_planner.env.working_time_slot import (
@@ -201,19 +201,21 @@ class KPlannerJob2SlotEnv(KandboxEnvPlugin):
             # "nbr_of_days_planning_window": 2,
             "planner_code": "rl_job2slot",
             "allow_overtime": False,
-            "nbr_of_observed_workers": NBR_OF_OBSERVED_WORKERS,
+            "nbr_observed_slots": NBR_OF_OBSERVED_WORKERS,
             "minutes_per_day": MINUTES_PER_DAY,
             "max_nbr_of_jobs_per_day_worker": MAX_NBR_OF_JOBS_PER_DAY_WORKER,
-            "travel_speed_km_hour": 25,
+
             # in minutes, 100 - travel / 1000 as the score
             "scoring_factor_standard_travel_minutes": SCORING_FACTOR_STANDARD_TRAVEL_MINUTES,
-            "flex_form_data": {
-                "holiday_days": "20210325",
-                "weekly_rest_day": "0",
-                "travel_speed_km_hour": 40,
-                "travel_min_minutes": 10,
-                "planning_working_days": 1,
-            },
+            # Team.flex_form_data will be copied here in the env top level. 
+            # The env does NOT have flex_form_data anymore ... 2021-07-05 12:18:45
+            # "flex_form_data": {
+            "holiday_days": "20210325",
+            "weekly_rest_day": "0",
+            "travel_speed_km_hour": 40,
+            "travel_min_minutes": 10,
+            "planning_working_days": 1,
+            # },
         }
 
         if env_config is None:
@@ -235,9 +237,6 @@ class KPlannerJob2SlotEnv(KandboxEnvPlugin):
         # TODO, 2021-06-14 07:47:06
         self.config["nbr_of_days_planning_window"] = int(self.config["nbr_of_days_planning_window"])
 
-        self.MAX_OBSERVED_SLOTS = (
-            self.config["nbr_of_observed_workers"] * self.config["nbr_of_days_planning_window"]
-        )
         self.PLANNING_WINDOW_LENGTH = (
             self.config["minutes_per_day"] * self.config["nbr_of_days_planning_window"]
         )
@@ -247,19 +246,6 @@ class KPlannerJob2SlotEnv(KandboxEnvPlugin):
         self.data_start_datetime = datetime.strptime(
             DATA_START_DAY, kandbox_config.KANDBOX_DATE_FORMAT
         )
-
-        if TESTING_MODE == "yes":
-            # if "env_start_day" in self.config.keys():
-            # Report exception if there is no env_start_day
-            if self.config["env_start_day"] == "_":
-                self.horizon_start_minutes = None
-            else:
-                start_date = datetime.strptime(
-                    self.config["env_start_day"], kandbox_config.KANDBOX_DATE_FORMAT
-                )
-                self.horizon_start_minutes = self.env_encode_from_datetime_to_minutes(start_date)
-        else:
-            self.horizon_start_minutes = None
 
         if kp_data_adapter is None:
             log.info("env is creating db_adapter by itslef, not injected.")
@@ -284,10 +270,13 @@ class KPlannerJob2SlotEnv(KandboxEnvPlugin):
 
         self.parse_team_flex_form_config()
         SharingEfficiencyLogic = "1_1.0;2_1.6;3_2.1"
+        self._reset_horizon_start_minutes()
 
         self.efficiency_dict = {}
         for day_eff in SharingEfficiencyLogic.split(";"):
             self.efficiency_dict[int(day_eff.split("_")[0])] = float(day_eff.split("_")[1])
+
+        self.kp_data_adapter.reload_data_from_db()
 
         if PLANNER_SERVER_ROLE == "trainer":
             self.kafka_server = KafkaAdapter(
@@ -301,14 +290,13 @@ class KPlannerJob2SlotEnv(KandboxEnvPlugin):
             self.kafka_input_window_offset = (
                 self.kp_data_adapter.get_team_env_window_latest_offset()
             )
-            self.config["flex_form_data"].update(self.kp_data_adapter.get_team_flex_form_data())
+            self.config.update(self.kp_data_adapter.get_team_flex_form_data())
 
         # self.recommendation_server = RecommendationServer(env=self, redis_conn=self.redis_conn)
 
         if "data_end_day" in self.config.keys():
             log.error("data_end_day is not supported from config!")
 
-        self.kp_data_adapter.reload_data_from_db()
         # I don't know why, self.kp_data_adapter loses this workers_dict_by_id after next call.
         # 2021-05-06 21:34:01
         self.workers_dict_by_id = copy.deepcopy(self.kp_data_adapter.workers_dict_by_id)
@@ -428,7 +416,7 @@ class KPlannerJob2SlotEnv(KandboxEnvPlugin):
         # This function also alters self.locations_dict
         self.jobs = self.load_transformed_jobs()
         if len(self.jobs) < 1:
-            log.warn("No Jobs on initialized Env.")
+            log.debug("No Jobs on initialized Env.")
 
         # This encoding includes appointments for now
         # TODO, sperate appointment out? 2020-11-06 14:28:59
@@ -593,13 +581,13 @@ class KPlannerJob2SlotEnv(KandboxEnvPlugin):
         # country_code = "CN"  team.country_code
         # self.national_holidays = holidays.UnitedStates()
         # self.national_holidays = holidays.CountryHoliday('US')
-        if self.config["flex_form_data"]["holiday_days"] is not None:
-            self.national_holidays = self.config["flex_form_data"]["holiday_days"].split(";")
+        if self.config["holiday_days"] is not None:
+            self.national_holidays = self.config["holiday_days"].split(";")
         else:
             self.national_holidays = []
 
-        if self.config["flex_form_data"]["weekly_rest_day"] is not None:
-            __split = str(self.config["flex_form_data"]["weekly_rest_day"]).split(";")
+        if self.config["weekly_rest_day"] is not None:
+            __split = str(self.config["weekly_rest_day"]).split(";")
         else:
             __split = []
 
@@ -608,8 +596,8 @@ class KPlannerJob2SlotEnv(KandboxEnvPlugin):
             self.weekly_working_days_flag[int(day_s)] = False
 
         # 1.	Travel time formula is defined as GPS straight line distance *1.5/ (40 KM/Hour), minimum 10 minutes. Those numbers like 1.5, 40, 10 minutes,
-        self.config["travel_speed_km_hour"] = self.config["flex_form_data"]["travel_speed_km_hour"]
-        self.config["travel_min_minutes"] = self.config["flex_form_data"]["travel_min_minutes"]
+        # self.config["travel_speed_km_hour"] = self.config["flex_form_data"]["travel_speed_km_hour"]
+        # self.config["travel_min_minutes"] = self.config["flex_form_data"]["travel_min_minutes"]
         self.travel_router = HaversineTravelTime(
             travel_speed=self.config["travel_speed_km_hour"],
             min_minutes=self.config["travel_min_minutes"],
@@ -814,9 +802,10 @@ class KPlannerJob2SlotEnv(KandboxEnvPlugin):
 
         self.kafka_server.consume_env_messages()
 
-    def env_encode_single_worker(self, obj_worker=None):
-        worker = obj_worker.__dict__
-        if worker["code"] == "MY|D|3|CT07":
+    def env_encode_single_worker(self, worker=None):
+        assert type(worker) == dict, "Wrong type, it must be dict"
+
+        if worker["worker_code"] in kandbox_config.DEBUGGING_JOB_CODE_SET:
             log.debug("env_encode_single_worker debug MY|D|3|CT07")
 
         # worker_week_day = (self.data_start_datetime.weekday() + 1) % 7
@@ -832,12 +821,16 @@ class KPlannerJob2SlotEnv(KandboxEnvPlugin):
         # )
         # worker_info = _workers.set_index("id").to_dict(orient="index")
 
-        location = obj_worker.location
-
-        home_location = LocationTuple(
-            float(location.geo_longitude),
-            float(location.geo_latitude),
-            "H",
+        # Here it makes planner respect initial travel time
+        if self.config["respect_initial_travel"] == True:
+            location_type = LocationType.JOB
+        else:
+            location_type = LocationType.HOME
+        home_location = JobLocationBase(
+            float(worker["geo_longitude"]),
+            float(worker["geo_latitude"]),
+            location_type,
+            worker["location_code"]
         )
         # working_minutes_array = flex_form_data["StartEndTime"].split(";")
 
@@ -887,7 +880,7 @@ class KPlannerJob2SlotEnv(KandboxEnvPlugin):
 
         overtime_minutes = 0
         if "max_overtime_minutes" in flex_form_data.keys():
-            overtime_minutes = int(float(self.config["flex_form_data"]["max_overtime_minutes"]))
+            overtime_minutes = int(float(flex_form_data["max_overtime_minutes"]))
 
         w_r = Worker(
             worker_id=worker["id"],
@@ -906,7 +899,7 @@ class KPlannerJob2SlotEnv(KandboxEnvPlugin):
             # linear_daily_start_gps=daily_start_gps,
             # linear_daily_end_gps=daily_end_gps,
             historical_job_location_distribution=worker["job_history_feature_data"],
-            worker_index=0,
+            worker_index=worker["id"],
             belongs_to_pair=belongs_to_pair,
             is_active=worker["is_active"],
             daily_max_overtime_minutes=overtime_minutes,
@@ -924,8 +917,8 @@ class KPlannerJob2SlotEnv(KandboxEnvPlugin):
         # w_dict = {}
         #
         # index = 0
-        for _, worker in self.kp_data_adapter.workers_db_dict.items():
-            active_int = 1 if worker.is_active else 0
+        for wk, worker in self.kp_data_adapter.workers_db_dict.items():
+            active_int = 1 if worker["is_active"] else 0
             if active_int != 1:
                 print(
                     "worker {} is not active, maybe it shoud be skipped from loading? ",
@@ -934,6 +927,9 @@ class KPlannerJob2SlotEnv(KandboxEnvPlugin):
                 # TODO
                 # included for now , since maybe job on it?
                 continue
+            # worker_dict = worker.__dict__
+            # if type(worker_dict["location"]) != dict:
+            #     worker_dict["location"] = worker.location.__dict__
 
             w_r = self.env_encode_single_worker(worker)
             w.append(w_r)
@@ -1906,8 +1902,25 @@ class KPlannerJob2SlotEnv(KandboxEnvPlugin):
     # ## Extended functions
     # **----------------------------------------------------------------------------
 
+    def _reset_horizon_start_minutes(self):
+
+        if TESTING_MODE == "yes":
+            # if "env_start_day" in self.config.keys():
+            # Report exception if there is no env_start_day
+            if self.config["env_start_day"] == "_":
+                self.horizon_start_minutes = None
+            else:
+                # start_date = datetime.strptime(
+                #     self.config["env_start_day"], kandbox_config.KANDBOX_DATE_FORMAT
+                # )
+                # self.horizon_start_minutes = self.env_encode_from_datetime_to_minutes(start_date) + 600
+                self.horizon_start_minutes = self.config["horizon_start_minutes"]
+        else:
+            self.horizon_start_minutes = None
+
     def mutate_refresh_planning_window_from_redis(self) -> bool:
         existing_working_days = self.get_planning_window_days_from_redis()
+        self.existing_working_days = existing_working_days
 
         if len(existing_working_days) < 1:
             min_horizon_start_seq = 0
@@ -1916,11 +1929,7 @@ class KPlannerJob2SlotEnv(KandboxEnvPlugin):
             min_horizon_start_seq = min(existing_working_days)
             max_horizon_start_seq = max(existing_working_days)
 
-        if TESTING_MODE == "yes":
-            self.horizon_start_minutes = min_horizon_start_seq * 1440
-        else:
-            self.horizon_start_minutes = None
-
+        self._reset_horizon_start_minutes()
         # min_planning_day_seq = int(self.get_env_planning_horizon_start_minutes() / 1440)
         # max_planning_day_seq = max(existing_working_days)
         self.config["nbr_of_days_planning_window"] = (
@@ -1961,7 +1970,7 @@ class KPlannerJob2SlotEnv(KandboxEnvPlugin):
             else:
                 self.daily_working_flag[day_seq] = False
 
-            if len(new_working_days) >= self.config["flex_form_data"]["planning_working_days"]:
+            if len(new_working_days) >= self.config["planning_working_days"]:
                 break
         # It may reduce several days of holidays
 
@@ -1975,9 +1984,9 @@ class KPlannerJob2SlotEnv(KandboxEnvPlugin):
             )
             return False
 
-        # Update nbr_of_days_planning_window, which may be larger than specified self.config["flex_form_data"]["DaysForPlanning"]
+        # Update nbr_of_days_planning_window, which may be larger than specified self.config["DaysForPlanning"]
         # nbr_of_days_planning_window may contain
-
+        self.existing_working_days = new_working_days
         days_to_add = new_working_days - existing_working_days
         days_to_delete = existing_working_days - new_working_days
 
@@ -2072,8 +2081,10 @@ class KPlannerJob2SlotEnv(KandboxEnvPlugin):
         )
         return True
 
-    def _mutate_planning_window_add_worker_day(self, worker_code: str, day_seq: int) -> bool:
+    def _mutate_planning_window_add_worker_day(self, worker_code: str, day_seq: int) -> WorkingTimeSlot:
         # I first calculate the working slot in this day
+        min_day_seq = min(self.existing_working_days)
+
         w = self.workers_dict[worker_code]
         today_weekday = self.env_encode_day_seq_to_weekday(day_seq)
         slot = (
@@ -2097,7 +2108,7 @@ class KPlannerJob2SlotEnv(KandboxEnvPlugin):
             new_start_location = w.weekly_start_gps[today_weekday]
             # new_end_location = w.weekly_end_gps[today_weekday]
 
-            for aslot_ in overlap_slots_sorted:
+            for aslot_i, aslot_ in enumerate(overlap_slots_sorted):
                 if aslot_.slot_type == TimeSlotType.FLOATING:
                     log.error(
                         f"WORKER:{worker_code}:DAY:{day_seq}:SLOT:{slot}, Encountered existing floating working time slot ({aslot_.start_minutes}->{aslot_.end_minutes}) while trying to add working slot. Aborted."
@@ -2110,13 +2121,16 @@ class KPlannerJob2SlotEnv(KandboxEnvPlugin):
                 new_slot_end = aslot_.start_minutes
                 new_end_location = aslot_.start_location
 
-                self.slot_server.add_single_working_time_slot(
+                curr_slot = self.slot_server.add_single_working_time_slot(
                     worker_code=w.worker_code,
                     start_minutes=new_slot_start,
                     end_minutes=new_slot_end,
                     start_location=new_start_location,
                     end_location=new_end_location,
                 )
+                if aslot_i == 0:
+                    if min_day_seq == day_seq:
+                        self.workers_dict[w.worker_code].curr_slot = curr_slot
 
                 new_slot_start = aslot_.end_minutes
                 new_start_location = aslot_.end_location
@@ -2132,16 +2146,18 @@ class KPlannerJob2SlotEnv(KandboxEnvPlugin):
                 )
             return False
         else:
-            self.slot_server.add_single_working_time_slot(
+            curr_slot = self.slot_server.add_single_working_time_slot(
                 worker_code=w.worker_code,
                 start_minutes=slot[0],
                 end_minutes=slot[1],
                 start_location=w.weekly_start_gps[today_weekday],
                 end_location=w.weekly_end_gps[today_weekday],
             )
-            log.info(
-                f"The worker_day slot (start_minutes = {slot[0]}, w.worker_code = {w.worker_code}) is added succesfully!"
-            )
+            if min_day_seq == day_seq:
+                self.workers_dict[w.worker_code].curr_slot = curr_slot
+        log.info(
+            f"The worker_day slot (start_minutes = {slot[0]}, w.worker_code = {w.worker_code}) is added succesfully!"
+        )
         return True
 
     # ***************************************************************
@@ -2495,6 +2511,29 @@ class KPlannerJob2SlotEnv(KandboxEnvPlugin):
         self.mutate_update_job_by_action_dict(a_dict=action_dict, post_changes_flag=False)
         return True
 
+    def mutate_complete_job(self, job_code):
+        # Mark a job as completed and optionally remove it.
+
+        if job_code not in self.jobs_dict.keys():
+            log.error("mutate_complete_job: error, job not exist: ", job_code)
+            return
+        curr_job = self.jobs_dict[job_code]
+
+        # Keep the scheduling information intact as before
+
+        release_success_flag, info = self.slot_server.release_job_time_slots(job=curr_job)
+        if (not release_success_flag):
+            log.warning(
+                f"Error in release_job_time_slots, {curr_job.job_code}, error = {str(info)}")
+            return False
+
+        curr_job.planning_status = JobPlanningStatus.COMPLETED
+        self.jobs_dict[job_code] = curr_job
+
+        log.debug(
+            f"Successfully mutate_complete_job. code = { job_code}"
+        )
+
     def mutate_update_job_by_action_dict(
         self, a_dict: ActionDict, post_changes_flag: bool = False
     ) -> SingleJobCommitInternalOutput:
@@ -2514,11 +2553,11 @@ class KPlannerJob2SlotEnv(KandboxEnvPlugin):
         #     return
         if self.current_job_i >= len(self.jobs):
             self.current_job_i = 0
-        if self.jobs[self.current_job_i].job_code != a_dict.job_code:
-            self.current_job_i = self.jobs_dict[a_dict.job_code].job_index
-            # log.warn(
-            #     f"job_code = { a_dict.job_code} missmatching.  self.jobs[self.current_job_i].job_code != a_dict.job_code"
-            # )
+        # if self.jobs[self.current_job_i].job_code != a_dict.job_code:
+        #     self.current_job_i = self.jobs_dict[a_dict.job_code].job_index
+        # log.warn(
+        #     f"job_code = { a_dict.job_code} missmatching.  self.jobs[self.current_job_i].job_code != a_dict.job_code"
+        # )
 
         curr_job = self.jobs_dict[a_dict.job_code]
 
@@ -3008,8 +3047,20 @@ class KPlannerJob2SlotEnv(KandboxEnvPlugin):
 
     def pprint_all_slots(self):
 
-        for k in self.slot_server.time_slot_dict.keys():
+        for k in sorted(self.slot_server.time_slot_dict.keys()):
             job_list = self.slot_server.time_slot_dict[k].assigned_job_codes
+            (
+                prev_travel,
+                next_travel,
+                inside_travel,
+            ) = self.get_travel_time_jobs_in_slot(self.slot_server.time_slot_dict[k], job_list)
+            print(k, self.slot_server.time_slot_dict[k].start_location[0:2], (
+                prev_travel,
+                next_travel,
+                inside_travel,
+            ))
+            print(self.slot_server.time_slot_dict[k].start_minutes, [
+                  (self.jobs_dict[s].scheduled_start_minutes, s) for s in job_list])
 
     def step_naive_search_and_plan_job(self, shared_time_slots_optimized):
 
@@ -3311,7 +3362,7 @@ class KPlannerJob2SlotEnv(KandboxEnvPlugin):
                     w_set.add(w_code)
         return w_set
 
-        # return list(self.workers_dict.keys())[0 : self.config["nbr_of_observed_workers"]]
+        # return list(self.workers_dict.keys())[0 : self.config["nbr_observed_slots"]]
 
     def _check_action_on_rule_set(
         self, a_dict: ActionDict, unplanned_job_codes: List = []
@@ -3471,56 +3522,56 @@ class KPlannerJob2SlotEnv(KandboxEnvPlugin):
         )
 
         o_start_longitude = np.zeros(
-            self.config["nbr_of_observed_workers"] * self.config["nbr_of_days_planning_window"]
+            self.config["nbr_observed_slots"] * self.config["nbr_of_days_planning_window"]
         )
         o_start_latitude = np.zeros(
-            self.config["nbr_of_observed_workers"] * self.config["nbr_of_days_planning_window"]
+            self.config["nbr_observed_slots"] * self.config["nbr_of_days_planning_window"]
         )
-        # o_max_available_working_slot_duration = np.zeros(self.config['nbr_of_observed_workers']* self.config['nbr_of_days_planning_window'])
+        # o_max_available_working_slot_duration = np.zeros(self.config['nbr_observed_slots']* self.config['nbr_of_days_planning_window'])
 
         o_end_longitude = np.zeros(
-            self.config["nbr_of_observed_workers"] * self.config["nbr_of_days_planning_window"]
+            self.config["nbr_observed_slots"] * self.config["nbr_of_days_planning_window"]
         )
         o_end_latitude = np.zeros(
-            self.config["nbr_of_observed_workers"] * self.config["nbr_of_days_planning_window"]
+            self.config["nbr_observed_slots"] * self.config["nbr_of_days_planning_window"]
         )
         o_average_longitude = np.zeros(
-            self.config["nbr_of_observed_workers"] * self.config["nbr_of_days_planning_window"]
+            self.config["nbr_observed_slots"] * self.config["nbr_of_days_planning_window"]
         )
         o_average_latitude = np.zeros(
-            self.config["nbr_of_observed_workers"] * self.config["nbr_of_days_planning_window"]
+            self.config["nbr_observed_slots"] * self.config["nbr_of_days_planning_window"]
         )
         #                                         =
         o_nbr_of_jobs_per_worker_day = np.zeros(
-            self.config["nbr_of_observed_workers"] * self.config["nbr_of_days_planning_window"]
+            self.config["nbr_observed_slots"] * self.config["nbr_of_days_planning_window"]
         )
         o_total_travel_minutes = np.zeros(
-            self.config["nbr_of_observed_workers"] * self.config["nbr_of_days_planning_window"]
+            self.config["nbr_observed_slots"] * self.config["nbr_of_days_planning_window"]
         )
         o_first_job_start_minutes = np.zeros(
-            self.config["nbr_of_observed_workers"] * self.config["nbr_of_days_planning_window"]
+            self.config["nbr_observed_slots"] * self.config["nbr_of_days_planning_window"]
         )
         o_total_occupied_duration = np.zeros(
-            self.config["nbr_of_observed_workers"] * self.config["nbr_of_days_planning_window"]
+            self.config["nbr_observed_slots"] * self.config["nbr_of_days_planning_window"]
         )
         o_total_unoccupied_duration = np.zeros(
-            self.config["nbr_of_observed_workers"] * self.config["nbr_of_days_planning_window"]
+            self.config["nbr_observed_slots"] * self.config["nbr_of_days_planning_window"]
         )
         #                                         =
         o_max_available_working_slot_duration = np.zeros(
-            self.config["nbr_of_observed_workers"] * self.config["nbr_of_days_planning_window"]
+            self.config["nbr_observed_slots"] * self.config["nbr_of_days_planning_window"]
         )
         o_max_available_working_slot_start = np.zeros(
-            self.config["nbr_of_observed_workers"] * self.config["nbr_of_days_planning_window"]
+            self.config["nbr_observed_slots"] * self.config["nbr_of_days_planning_window"]
         )
         o_max_available_working_slot_end = np.zeros(
-            self.config["nbr_of_observed_workers"] * self.config["nbr_of_days_planning_window"]
+            self.config["nbr_observed_slots"] * self.config["nbr_of_days_planning_window"]
         )
         o_max_unoccupied_rest_slot_duration = np.zeros(
-            self.config["nbr_of_observed_workers"] * self.config["nbr_of_days_planning_window"]
+            self.config["nbr_observed_slots"] * self.config["nbr_of_days_planning_window"]
         )
         o_total_available_working_slot_duration = np.zeros(
-            self.config["nbr_of_observed_workers"] * self.config["nbr_of_days_planning_window"]
+            self.config["nbr_observed_slots"] * self.config["nbr_of_days_planning_window"]
         )
 
         # + NBR_FEATURE_WORKER_ONLY + NBR_FEATURE_CUR_JOB_n_OVERALL ) # .tolist()
@@ -3884,7 +3935,7 @@ f_start_longlat[0], f_start_longlat[1], f_end_longlat[0], f_end_longlat[1], f_av
             + [self.config["minutes_per_day"]] * 3
             + [self.config["minutes_per_day"] * self.config["nbr_of_days_planning_window"]] * 3
             + [1]
-            + [self.config["nbr_of_observed_workers"]]
+            + [self.config["nbr_observed_slots"]]
         )
         self.obs_slot_space = spaces.Box(
             low=np.array(obs_slot_low),
@@ -3936,7 +3987,7 @@ f_start_longlat[0], f_start_longlat[1], f_end_longlat[0], f_end_longlat[1], f_av
         #         # f_min_available_working_slot_end,
         #         # spaces.Discrete(2),  # Mandatory start time or not
         #         spaces.Discrete(2),  # valid slot indicator. ==1
-        #         spaces.Discrete(self.config["nbr_of_observed_workers"]),  # technician ID
+        #         spaces.Discrete(self.config["nbr_observed_slots"]),  # technician ID
         #     )
         # )
         obs_job_low = (
@@ -3951,7 +4002,7 @@ f_start_longlat[0], f_start_longlat[1], f_end_longlat[0], f_end_longlat[1], f_av
             + [self.config["geo_latitude_max"]]
             + [self.config["minutes_per_day"]]
             + [self.PLANNING_WINDOW_LENGTH * 5] * 3
-            + [self.config["nbr_of_observed_workers"]] * 2
+            + [self.config["nbr_observed_slots"]] * 2
             + [1] * 2
         )
         self.obs_job_space = spaces.Box(
@@ -3993,7 +4044,7 @@ f_start_longlat[0], f_start_longlat[1], f_end_longlat[0], f_end_longlat[1], f_av
         #         #  # min  max nbr of share
         #         spaces.Box(
         #             low=0,
-        #             high=self.config["nbr_of_observed_workers"],
+        #             high=self.config["nbr_observed_slots"],
         #             shape=(2,),
         #             dtype=np.float32,
         #         ),
@@ -4008,20 +4059,20 @@ f_start_longlat[0], f_start_longlat[1], f_end_longlat[0], f_end_longlat[1], f_av
         # )
         self.observation_space = spaces.Dict(
             {
-                "slots": Repeated(self.obs_slot_space, max_len=self.MAX_OBSERVED_SLOTS),
-                "jobs": Repeated(self.obs_job_space, max_len=self.MAX_OBSERVED_SLOTS),
+                "slots": Repeated(self.obs_slot_space, max_len=self.config["nbr_observed_slots"]),
+                "jobs": Repeated(self.obs_job_space, max_len=self.config["nbr_observed_slots"]),
             }
         )
 
         # action_low = 0
         # action_high = np.ones(MAX_OBSERVED_SLOTS)
-        # action_low[0:self.config['nbr_of_observed_workers']] = 0
-        # action_high[0:self.config['nbr_of_observed_workers']] = 1
+        # action_low[0:self.config['nbr_observed_slots']] = 0
+        # action_high[0:self.config['nbr_observed_slots']] = 1
 
         self.action_space = spaces.Box(
-            low=0, high=1, shape=(self.MAX_OBSERVED_SLOTS,), dtype=np.float32
+            low=0, high=1, shape=(self.config["nbr_observed_slots"],), dtype=np.float32
         )
-        # self.action_space = spaces.Discrete(self.MAX_OBSERVED_SLOTS)
+        # self.action_space = spaces.Discrete(self.config["nbr_observed_slots"])
 
     def _get_observation_slot_list_tuple(self):
         if (len(self.jobs) < 1) | (len(self.workers) < 1):
@@ -4428,7 +4479,7 @@ f_start_longlat[0], f_start_longlat[1], f_end_longlat[0], f_end_longlat[1], f_av
             obs_dict["slots"].append(slot_obs)
 
             viewed_slots.append(a_slot)
-            if len(obs_dict["slots"]) >= self.MAX_OBSERVED_SLOTS:
+            if len(obs_dict["slots"]) >= self.config["nbr_observed_slots"]:
                 break
 
         # Secondary overall statistics about workers, inplanning jobs, including un-planed visits
@@ -4504,7 +4555,7 @@ f_start_longlat[0], f_start_longlat[1], f_end_longlat[0], f_end_longlat[1], f_av
             else:
                 obs_dict["jobs"].append(job_obs)
 
-            if len(obs_dict["jobs"]) >= self.MAX_OBSERVED_SLOTS:
+            if len(obs_dict["jobs"]) >= self.config["nbr_observed_slots"]:
                 break
 
         if len(obs_dict["jobs"]) < 1:
@@ -4543,7 +4594,7 @@ f_start_longlat[0], f_start_longlat[1], f_end_longlat[0], f_end_longlat[1], f_av
 
     def encode_dict_into_action(self, a_dict: ActionDict):
         MAX_OBSERVED_SLOTS = (
-            self.config["nbr_of_observed_workers"] * self.config["nbr_of_days_planning_window"]
+            self.config["nbr_observed_slots"] * self.config["nbr_of_days_planning_window"]
         )
 
         n = np.zeros(MAX_OBSERVED_SLOTS + 4)
@@ -4565,7 +4616,7 @@ f_start_longlat[0], f_start_longlat[1], f_end_longlat[0], f_end_longlat[1], f_av
         convert array of action_space ( worker_day-M*N, 4) into dictionary
         """
         MAX_OBSERVED_SLOTS = (
-            self.config["nbr_of_observed_workers"] * self.config["nbr_of_days_planning_window"]
+            self.config["nbr_observed_slots"] * self.config["nbr_of_days_planning_window"]
         )
 
         new_act = action.copy()
@@ -4587,11 +4638,11 @@ f_start_longlat[0], f_start_longlat[1], f_end_longlat[0], f_end_longlat[1], f_av
         c = action[0:MAX_OBSERVED_SLOTS]
 
         c.shape = [
-            self.config["nbr_of_observed_workers"],
+            self.config["nbr_observed_slots"],
             self.config["nbr_of_days_planning_window"],
         ]
 
-        all_worker_flags = c[0: self.config["nbr_of_observed_workers"], action_day]
+        all_worker_flags = c[0: self.config["nbr_observed_slots"], action_day]
 
         for i in range(1, shared_count):
             all_worker_flags[worker_index] = 0
@@ -4900,7 +4951,7 @@ class KPlannerJob2SlotEnvProxy(KandboxEnvProxyPlugin):
         "env_code": "rl_hist_affinity_env_proxy",
         "allow_overtime": False,
         #
-        "nbr_of_observed_workers": NBR_OF_OBSERVED_WORKERS,
+        "nbr_observed_slots": NBR_OF_OBSERVED_WORKERS,
         "nbr_of_days_planning_window": 2,
         "data_start_day": DATA_START_DAY,
         #
@@ -4924,7 +4975,7 @@ class KPlannerJob2SlotEnvProxy(KandboxEnvProxyPlugin):
                 "description": "This affects timing, N=Normal, FS=Fixed Schedule.",
                 "enum": ["N", "FS"],
             },
-            "nbr_of_observed_workers": {"type": "number", "code": "Number of observed_workers"},
+            "nbr_observed_slots": {"type": "number", "code": "Number of observed_workers"},
             "nbr_of_days_planning_window": {
                 "type": "number",
                 "code": "Number of days_planning_window",

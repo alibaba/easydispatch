@@ -26,10 +26,14 @@ from dispatch.plugins.kandbox_planner.env.env_models import (
     JobLocationBase,
 )
 
-log = logging.getLogger("rl_env.working_time_slot")
+from rtree import index
+
+
+log = logging.getLogger("rl_env.working_time_slot.cache_only")
 log.setLevel(logging.ERROR)
 
 MAX_MINUTES_PER_TECH = 10_000_000  # 10,000,000 minutes =  20 years.
+MAX_JOBS_IN_ONE_SLOT = 10
 MAX_TRANSACTION_RETRY = 2
 
 # Done (2020-10-16 10:05:06), replaced  array of "working_time_slots"?
@@ -67,8 +71,14 @@ class CacheOnlySlotServer:
     def __init__(self, env, redis_conn):  # team_id is included in worker_code
         self.env = env
         self.r = redis_conn
+        self.rtree_properties = index.Property()
+        # longitude, latitude, time/minutes, worker id (int)
+        self.rtree_properties.dimension = 4
         self.time_slot_dict = TestingSlotDict()
         self.time_slot_tree = IntervalTree()
+        self.rtree_index = index.Index(properties=self.rtree_properties, interleaved=False)
+
+        # self.reset()
 
     def get_time_slot_key(self, slot: WorkingTimeSlot) -> str:
         #  worker_id, start_minutes, end_minutes, slot_type,  worker_id,start_minutes, end_minutes, slot_type
@@ -87,6 +97,7 @@ class CacheOnlySlotServer:
     def reset(self):
         self.time_slot_dict = TestingSlotDict()
         self.time_slot_tree = IntervalTree()
+        self.rtree_index = index.Index(properties=self.rtree_properties, interleaved=False)
         self.reload_from_redis_server()
         return
 
@@ -121,7 +132,7 @@ class CacheOnlySlotServer:
 
     def add_single_working_time_slot(
         self, worker_code: str, start_minutes: int, end_minutes: int, start_location, end_location
-    ) -> str:
+    ) -> WorkingTimeSlot:
         # assert False
 
         if end_minutes - start_minutes < 1:
@@ -144,7 +155,7 @@ class CacheOnlySlotServer:
         )
         a = self.set_slot(slot)
 
-        return a
+        return slot
 
     def delete_slot__TODEL(
         self, slot_code: str
@@ -228,6 +239,14 @@ class CacheOnlySlotServer:
             changed_slot_codes_list=all_slot_codes_to_delete,
         )
 
+    def get_integer_id_for_slot(
+        self, worker_code, start_minutes, job_seq
+    ) -> int:
+        worker_index = self.env.workers_dict[worker_code].worker_index
+        slot_index = (worker_index * MAX_MINUTES_PER_TECH + int(start_minutes)) * \
+            MAX_JOBS_IN_ONE_SLOT + int(job_seq)
+        return slot_index
+
     def get_interval_begin_end_by_worker_code(
         self, worker_code, start_minutes, end_minutes
     ) -> (int, int):
@@ -276,6 +295,52 @@ class CacheOnlySlotServer:
                 # If not removed, time_slot_tree will have two entries.
                 self.time_slot_tree.remove(an_existing_slot)
         self.time_slot_tree.add(Interval(interval_begin, interval_end, slot))
+
+        worker_code, start_minutes, _ = self._decode_slot_code_info(slot_code)
+
+        worker_index = self.env.workers_dict[worker_code].worker_index
+        log.info(f"worker_code = {worker_code}, worker_index = {worker_index}")
+
+        slot_index_id = self.get_integer_id_for_slot(
+            worker_code=worker_code, start_minutes=start_minutes, job_seq=0)
+
+        self.rtree_index.insert(
+            id=slot_index_id,
+            coordinates=(
+                slot.start_location.geo_longitude,
+                slot.start_location.geo_longitude,
+                slot.start_location.geo_latitude,
+                slot.start_location.geo_latitude,
+                start_minutes,
+                start_minutes,
+                worker_index,
+                worker_index
+            ),
+            obj=slot_code
+        )
+
+        current_start_minutes = start_minutes
+        for j_i, jc in enumerate(slot.assigned_job_codes):
+            job = self.env.jobs_dict[jc]
+            job_start = job.scheduled_start_minutes + job.scheduled_duration_minutes
+            if job_start < current_start_minutes:
+                log.warn(f"Wrong job seq")
+                job_start = current_start_minutes
+            self.rtree_index.insert(
+                id=slot_index_id + j_i + 1,
+                coordinates=(
+                    job.location.geo_longitude,
+                    job.location.geo_longitude,
+                    job.location.geo_latitude,
+                    job.location.geo_latitude,
+                    current_start_minutes,
+                    job_start,
+                    worker_index,
+                    worker_index
+                ),
+                obj=slot_code
+            )
+            current_start_minutes = job.scheduled_start_minutes + job.scheduled_duration_minutes
 
     def release_job_time_slots(self, job: BaseJob) -> Tuple[bool, dict]:
         """
@@ -770,6 +835,20 @@ class CacheOnlySlotServer:
                 # overlapped_jobs.append(slot.referred_object_code)
         return overlapped_jobs
 
+    def get_overlapped_slots_4d_duocylinder(self, geo_center, geo_radius, time_worker_box):
+        query_box = (
+            geo_center.geo_longitude - geo_radius,
+            geo_center.geo_longitude + geo_radius,
+            geo_center.geo_latitude - geo_radius,
+            geo_center.geo_latitude + geo_radius,
+        ) + time_worker_box
+        hits = self.rtree_index.intersection(query_box, objects=True)
+
+        # Remove duplicated.
+        slots = sorted(list(set([s.object for s in hits])))
+
+        return slots
+
     def get_overlapped_slots(self, worker_id, start_minutes, end_minutes):
         (interval_begin, interval_end) = self.get_interval_begin_end_by_worker_code(
             worker_id, start_minutes, end_minutes
@@ -864,8 +943,10 @@ class CacheOnlySlotServer:
         for slot_code in slots_to_add_back:
             if slot_code in SLOT_CODE_SET_FOR_DEBUG:
                 log.debug(f"pause SLOT_CODE_SET_FOR_DEBUG={SLOT_CODE_SET_FOR_DEBUG}")
-
             slot_to_add = slots_to_add_back[slot_code]
+            # slot_to_add.assigned_job_codes = sorted(
+            #     slot_to_add.assigned_job_codes, key=lambda x: self.env.jobs_dict[x].scheduled_start_minutes)
+
             self._set_into_internal_cache(slot_code, slot_to_add)
 
     def _cut_off_fixed_job_from_single_floating_slot(
@@ -1096,33 +1177,32 @@ class CacheOnlySlotServer:
         else:
 
             all_jobs = []
+            sorted_slot_assigned_job_codes = sorted(
+                slot.assigned_job_codes, key=lambda x: self.env.jobs_dict[x].scheduled_start_minutes)
+
             j_start_i = 0
-            for j_i in range(len(slot.assigned_job_codes)):
+            for j_i in range(len(sorted_slot_assigned_job_codes)):
                 if (
-                    self.env.jobs_dict[slot.assigned_job_codes[j_i]].scheduled_start_minutes
+                    self.env.jobs_dict[sorted_slot_assigned_job_codes[j_i]].scheduled_start_minutes
                     <= action_dict.scheduled_start_minutes
                 ):
-                    all_jobs.append(slot.assigned_job_codes[j_i])
+                    all_jobs.append(sorted_slot_assigned_job_codes[j_i])
                     j_start_i = j_i + 1
                 else:
                     j_start_i = j_i
                     break
             all_jobs.append(the_job.job_code)
 
-            for j_new_i in range(j_start_i, len(slot.assigned_job_codes)):
+            for j_new_i in range(j_start_i, len(sorted_slot_assigned_job_codes)):
                 if (
-                    self.env.jobs_dict[slot.assigned_job_codes[j_new_i]].scheduled_start_minutes
+                    self.env.jobs_dict[sorted_slot_assigned_job_codes[j_new_i]
+                                       ].scheduled_start_minutes
                     > action_dict.scheduled_start_minutes
                 ):
-                    all_jobs.append(slot.assigned_job_codes[j_new_i])
+                    all_jobs.append(sorted_slot_assigned_job_codes[j_new_i])
                 else:
                     log.debug(
-                        f"Error, wrong scheduled_start_minutes sequence of {slot.assigned_job_codes} at index  {j_new_i} ")
-
-            # if prev_travel_minutes <= next_travel_minutes:
-            #     all_jobs = [the_job.job_code] +
-            # else:
-            #     all_jobs = slot.assigned_job_codes + [the_job.job_code]
+                        f"Error, wrong scheduled_start_minutes sequence of {sorted_slot_assigned_job_codes} at index  {j_new_i} ")
 
             all_durations = [self.env.jobs_dict[jc].scheduled_duration_minutes for jc in all_jobs]
 
@@ -1137,6 +1217,9 @@ class CacheOnlySlotServer:
             ):
                 error_occurred = True
                 error_messages.append({"message": f"not enough travel in slot {slot_code}"})
+
+            if len(set(sorted_slot_assigned_job_codes) - set(all_jobs)) > 0:
+                log.error(f"lost jobs: {set(sorted_slot_assigned_job_codes) - set(all_jobs)  }")
             slot.assigned_job_codes = all_jobs
             # slot.assigned_job_codes = all_jobs
             # new_slot = WorkingTimeSlot(*current_slot_as_list)
