@@ -4,7 +4,13 @@
     <delete-dialog />
     <div class="headline">Teams</div>
     <v-spacer />
-    <v-btn color="primary" dark class="mb-2" @click="createEditShow()">New</v-btn>
+    <v-btn
+      color="primary"
+      dark
+      class="mb-2"
+      @click="createEditShow()"
+      :disabled="!userInfo || userInfo.role=='User' "
+    >New</v-btn>
     <v-flex xs12>
       <v-layout column>
         <v-flex>
@@ -30,22 +36,14 @@
               :loading="loading"
               loading-text="Loading... Please wait"
             >
+              <template v-slot:item.reset-window="{ item }">
+                <v-icon small class="mr-2" @click="reset_planning_window(item.code)">mdi-reload</v-icon>
+              </template>
               <template v-slot:item.data-table-actions="{ item }">
-                <v-menu bottom left>
-                  <template v-slot:activator="{ on }">
-                    <v-btn icon v-on="on">
-                      <v-icon>mdi-dots-vertical</v-icon>
-                    </v-btn>
-                  </template>
-                  <v-list>
-                    <v-list-item @click="createEditShow(item)">
-                      <v-list-item-title>Edit</v-list-item-title>
-                    </v-list-item>
-                    <v-list-item @click="removeShow(item)">
-                      <v-list-item-title>Delete</v-list-item-title>
-                    </v-list-item>
-                  </v-list>
-                </v-menu>
+                <span class="table_action_icon">
+                  <v-icon small class="mr-2" @click="createEditShow(item)">mdi-pencil</v-icon>
+                  <v-icon small @click="removeShow(item)">mdi-delete</v-icon>
+                </span>
               </template>
             </v-data-table>
           </v-card>
@@ -60,6 +58,7 @@ import { mapFields } from "vuex-map-fields";
 import { mapActions } from "vuex";
 import DeleteDialog from "@/team/DeleteDialog.vue";
 import NewEditSheet from "@/team/NewEditSheet.vue";
+import { mapState } from "vuex";
 export default {
   name: "TeamTable",
 
@@ -75,7 +74,13 @@ export default {
         {
           text: "Planner Service",
           value: "planner_service.code",
-          sortable: true,
+          sortable: false,
+        },
+        {
+          text: "Reset Window",
+          value: "reset-window",
+          sortable: false,
+          align: "center",
         },
         {
           text: "",
@@ -98,9 +103,11 @@ export default {
       "table.rows.items",
       "table.rows.total",
     ]),
+    ...mapState("auth", ["userInfo"]),
   },
 
   mounted() {
+    this.getOrg();
     this.getAll({});
 
     this.$watch(
@@ -118,9 +125,23 @@ export default {
       }
     );
   },
-
+  destroyed() {
+    this.closeCreateEdit();
+  },
   methods: {
-    ...mapActions("team", ["getAll", "createEditShow", "removeShow"]),
+    ...mapActions("team", [
+      "getAll",
+      "createEditShow",
+      "removeShow",
+      "reset_planning_window",
+      "closeCreateEdit",
+    ]),
+    ...mapActions("org", ["getOrg"]),
   },
 };
 </script>
+<style>
+.table_action_icon {
+  white-space: nowrap;
+}
+</style>

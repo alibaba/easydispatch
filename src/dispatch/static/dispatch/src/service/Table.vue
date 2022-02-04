@@ -4,9 +4,7 @@
     <delete-dialog />
     <div class="headline">Services</div>
     <v-spacer />
-    <v-btn color="primary" dark class="mb-2" @click="createEditShow()"
-      >New</v-btn
-    >
+    <v-btn color="primary" dark class="mb-2" @click="createEditShow()">New</v-btn>
     <v-flex xs12>
       <v-layout column>
         <v-flex>
@@ -32,7 +30,7 @@
               :loading="loading"
               loading-text="Loading... Please wait"
             >
-              <template v-slot:item.data-table-actions="{ item }">
+              <!-- <template v-slot:item.data-table-actions="{ item }">
                 <v-menu bottom left>
                   <template v-slot:activator="{ on }">
                     <v-btn icon v-on="on">
@@ -48,6 +46,12 @@
                     </v-list-item>
                   </v-list>
                 </v-menu>
+              </template>-->
+              <template v-slot:item.data-table-actions="{ item }">
+                <span class="table_action_icon">
+                  <v-icon small class="mr-2" @click="createEditShow(item)">mdi-pencil</v-icon>
+                  <v-icon small @click="removeShow(item)">mdi-delete</v-icon>
+                </span>
               </template>
             </v-data-table>
           </v-card>
@@ -67,17 +71,21 @@ export default {
 
   components: {
     DeleteDialog,
-    NewEditSheet
+    NewEditSheet,
   },
   data() {
     return {
       headers: [
-        { text: "ID", value: "id", sortable: true },
         { text: "code", value: "code", sortable: true },
         { text: "Name", value: "name", sortable: true },
         { text: "Desc", value: "description", sortable: true },
-        { text: "", value: "data-table-actions", sortable: false, align: "end" }
-      ]
+        {
+          text: "",
+          value: "data-table-actions",
+          sortable: false,
+          align: "end",
+        },
+      ],
     };
   },
 
@@ -90,31 +98,43 @@ export default {
       "table.options.descending",
       "table.loading",
       "table.rows.items",
-      "table.rows.total"
-    ])
+      "table.rows.total",
+    ]),
   },
 
   mounted() {
     this.getAll({});
 
     this.$watch(
-      vm => [vm.page],
+      (vm) => [vm.page],
       () => {
         this.getAll();
       }
     );
 
     this.$watch(
-      vm => [vm.q, vm.itemsPerPage, vm.sortBy, vm.descending],
+      (vm) => [vm.q, vm.itemsPerPage, vm.sortBy, vm.descending],
       () => {
         this.page = 1;
         this.getAll();
       }
     );
   },
-
+  destroyed() {
+    this.closeCreateEdit();
+  },
   methods: {
-    ...mapActions("service", ["getAll", "createEditShow", "removeShow"])
-  }
+    ...mapActions("service", [
+      "getAll",
+      "createEditShow",
+      "removeShow",
+      "closeCreateEdit",
+    ]),
+  },
 };
 </script>
+<style>
+.table_action_icon {
+  white-space: nowrap;
+}
+</style>

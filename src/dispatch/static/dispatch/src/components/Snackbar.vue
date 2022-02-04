@@ -1,14 +1,14 @@
 <template>
-  <v-snackbar v-model="snackbar.show">
-    {{ snackbar.text }}
-    <v-btn text :color="snackbar.color" @click="closeSnackBar" :timeout="snackbar.timeout">Close</v-btn>
+  <v-snackbar v-model="show" :timeout="timeout">
+    {{ text }}
+    <v-btn text :color="color" @click="closeSnackBar">Close</v-btn>
   </v-snackbar>
 </template>
 
 <script>
 import { mapFields } from "vuex-map-fields";
 import { mapActions } from "vuex";
-
+import _ from "lodash";
 export default {
   name: "SnackbarInfo",
   data() {
@@ -16,7 +16,12 @@ export default {
   },
 
   computed: {
-    ...mapFields("app", ["snackbar"]),
+    ...mapFields("app", [
+      "snackbar.show",
+      "snackbar.timeout",
+      "snackbar.text",
+      "snackbar.color",
+    ]),
   },
   methods: {
     ...mapActions("app", ["closeSnackBar"]),

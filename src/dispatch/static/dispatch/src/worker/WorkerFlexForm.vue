@@ -1,14 +1,14 @@
 <template>
   <v-container grid-list-md>
     <v-form v-model="valid">
-      <v-jsf v-model="formData" :schema="formSchema" :options="formOptions" />
+      <v-jsf v-model="formData" :schema="dataFormSchema" :options="formOptions" />
     </v-form>
   </v-container>
 </template>
 
 <script>
-//import { mapFields } from "vuex-map-fields"
-//import { mapActions } from "vuex"
+import { mapFields } from "vuex-map-fields";
+import { mapActions } from "vuex";
 // https://www.npmjs.com/package/@koumoul/vuetify-jsonschema-form
 
 import Vue from "vue";
@@ -29,27 +29,27 @@ export default {
   name: "WorkerFlexForm",
 
   components: {
-    VJsf
+    VJsf,
   },
   methods: {
     defaultSaveFunc() {
       console.log("default saved. empty!");
-    }
+    },
   },
 
   props: {
     formData: {
       type: Object,
-      default: function() {
+      default: function () {
         return {};
-      }
+      },
     },
     saveFunc: {
       type: Function,
-      default: function() {
+      default: function () {
         return this.defaultSaveFunc;
-      }
-    }
+      },
+    },
   },
 
   data() {
@@ -57,23 +57,14 @@ export default {
       //changedInside: false,
       valid: null,
       formOptions: {},
-      formSchema: {
-        type: "object",
-        properties: {
-          level: {
-            type: "number",
-            title: "Worker's level (integer)"
-          },
-          skills: {
-            type: "array",
-            title: "Worker Skills",
-            items: {
-              type: "string"
-            }
-          }
-        }
-      }
     };
-  }
+  },
+
+  computed: {
+    ...mapFields("org", ["selected.worker_flex_form_schema"]),
+    dataFormSchema: function () {
+      return JSON.parse(JSON.stringify(this.worker_flex_form_schema));
+    },
+  },
 };
 </script>

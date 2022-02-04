@@ -1,8 +1,7 @@
 from typing import Optional
 
 from fastapi.encoders import jsonable_encoder
-from dispatch.config import ONCALL_PLUGIN_SLUG
-from dispatch.service_plugin import flows as service_plugin_flows
+# from dispatch.config import ONCALL_PLUGIN_SLUG
 
 from .models import Service, ServiceCreate, ServiceUpdate
 
@@ -17,6 +16,10 @@ def get_by_name(*, db_session, name: str) -> Optional[Service]:
 
 def get_by_code(*, db_session, code: str) -> Optional[Service]:
     return db_session.query(Service).filter(Service.code == code).first()
+
+
+def get_by_code_and_org_code(*, db_session, code: str, org_id: int) -> Optional[Service]:
+    return db_session.query(Service).filter(Service.code == code, Service.org_id == org_id).first()
 
 
 def get_all(*, db_session):

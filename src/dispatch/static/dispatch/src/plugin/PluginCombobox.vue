@@ -14,8 +14,7 @@
         <v-list-item-content>
           <v-list-item-title>
             No Plugins matching "
-            <strong>{{ search }}</strong
-            >"
+            <strong>{{ search }}</strong>"
           </v-list-item-title>
         </v-list-item-content>
       </v-list-item>
@@ -23,9 +22,7 @@
     <template v-slot:append-item>
       <v-list-item v-if="more" @click="loadMore()">
         <v-list-item-content>
-          <v-list-item-subtitle>
-            Load More
-          </v-list-item-subtitle>
+          <v-list-item-subtitle>Load More</v-list-item-subtitle>
         </v-list-item-content>
       </v-list-item>
     </template>
@@ -40,14 +37,14 @@ export default {
   props: {
     value: {
       type: Object,
-      default: function() {
+      default: function () {
         return {};
-      }
+      },
     },
     label: {
       type: String,
-      defualt: "Plugins"
-    }
+      defualt: "Plugins",
+    },
   },
   data() {
     return {
@@ -55,7 +52,7 @@ export default {
       items: [],
       more: false,
       numItems: 5,
-      search: null
+      search: null,
     };
   },
 
@@ -67,13 +64,13 @@ export default {
       set(value) {
         if (typeof value === "string") {
           let v = {
-            slug: value
+            slug: value,
           };
           this.items.push(v);
         }
         this.$emit("input", value);
-      }
-    }
+      },
+    },
   },
 
   created() {
@@ -88,7 +85,7 @@ export default {
     fetchData(filterOptions) {
       this.error = null;
       this.loading = true;
-      PluginApi.getAll(filterOptions).then(response => {
+      PluginApi.getAll(filterOptions).then((response) => {
         this.items = response.data.items;
         this.total = response.data.total;
 
@@ -99,11 +96,16 @@ export default {
         }
 
         this.loading = false;
+        // dispatch to father
+        let data = response.data.items.filter(
+          (row) => row.slug == filterOptions.q
+        );
+        this.$emit("plugsDataFuc", data.length > 0 ? data[0] : null);
       });
     },
-    getFilteredData: debounce(function(options) {
+    getFilteredData: debounce(function (options) {
       this.fetchData(options);
-    }, 500)
-  }
+    }, 500),
+  },
 };
 </script>

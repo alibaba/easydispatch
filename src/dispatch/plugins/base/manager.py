@@ -120,6 +120,7 @@ class PluginManager(InstanceManager):
             db_session.add(record)
 
         db_session.commit()
+        db_session.close()
         self.add(f"{cls.__module__}.{cls.__name__}")
         return cls
 

@@ -5,12 +5,7 @@
         <v-list-item-content>
           <v-list-item-title class="title">New</v-list-item-title>
         </v-list-item-content>
-        <v-btn
-          icon
-          color="primary"
-          :loading="loading"
-          @click="setSelectedFormDataAndSave(localFlexFormData)"
-        >
+        <v-btn icon color="primary" :loading="loading" @click="submitSaveLocal()">
           <v-icon>save</v-icon>
         </v-btn>
         <v-btn icon color="secondary" @click="closeNewSheet">
@@ -20,14 +15,14 @@
     </template>
     <v-tabs fixed-tabs v-model="tab">
       <v-tab key="details">Details</v-tab>
-      <v-tab key="flex_form">Flex Form</v-tab>
+      <v-tab key="flex_form" v-if="dataFormSchema!=null">Flex Form</v-tab>
     </v-tabs>
     <v-tabs-items v-model="tab">
       <v-tab-item key="details">
         <job-planner-details-tab />
       </v-tab-item>
       <v-tab-item key="flex_form">
-        <JobFlexForm :formData="localFlexFormData" :formSchema="formSchema" />
+        <JobFlexForm :formData="localFlexFormData" :formSchema="dataFormSchema" />
       </v-tab-item>
     </v-tabs-items>
   </v-navigation-drawer>
@@ -40,6 +35,7 @@ import { mapActions } from "vuex";
 import JobPlannerDetailsTab from "@/job/JobPlannerDetailsTab.vue";
 import JobFlexForm from "@/components/FlexForm.vue";
 // import JobLocationTab from "@/job/JobLocationTab.vue"
+import { cloneDeep } from "lodash";
 
 export default {
   name: "JobNewSheet",
@@ -54,56 +50,6 @@ export default {
   data() {
     return {
       tab: null,
-      localFlexFormData: {},
-      formSchema: {
-        type: "object",
-        properties: {
-          job_schedule_type: {
-            type: "string",
-            default: "N",
-            title: "Job Type",
-            description: "This affects timing, N=Normal, FS=Fixed Schedule.",
-            enum: ["N", "FS"],
-          },
-          requested_min_level: {
-            type: "number",
-            default: 1,
-            title: "requested min level (integer)",
-          },
-          requested_skills: {
-            type: "array",
-            default: ["level_1"],
-            title: "requested_skills",
-            items: {
-              type: "string",
-            },
-          },
-          tolerance_start_minutes: {
-            type: "number",
-            default: -1440,
-            title:
-              "requested min tolerance minutes backward, in minutes. One day is 1440 minutes",
-          },
-          tolerance_end_minutes: {
-            type: "number",
-            default: 1440,
-            title:
-              "requested max tolerance minutes forward, in minutes. One day is 1440 minutes",
-          },
-          min_number_of_workers: {
-            type: "number",
-            default: 1,
-            title:
-              "Min number of workers. Bigger than one means shared job among multiple workers",
-          },
-          max_number_of_workers: {
-            type: "number",
-            default: 1,
-            title:
-              "Max number of workers. Bigger than one means shared job among multiple workers",
-          },
-        },
-      },
     };
   },
 
@@ -112,13 +58,34 @@ export default {
       "selected.id",
       "selected.code",
       "selected.description",
+      "selected.flex_form_data",
       "selected.loading",
       "dialogs.showNewSheet",
     ]),
+    ...mapFields("org", ["selected.job_flex_form_schema"]),
+    dataFormSchema: function () {
+      return JSON.parse(JSON.stringify(this.job_flex_form_schema));
+    },
+    localFlexFormData: {
+      get() {
+        return cloneDeep(JSON.parse(JSON.stringify(this.flex_form_data)));
+      },
+      set(value) {
+        this.$emit("input", value);
+      },
+    },
   },
 
   methods: {
     ...mapActions("job", ["setSelectedFormDataAndSave", "closeNewSheet"]),
+    submitSaveLocal() {
+      this.setSelectedFormDataAndSave({
+        flex_form_data: Object.assign(
+          cloneDeep(JSON.parse(JSON.stringify(this.flex_form_data))),
+          this.localFlexFormData
+        ),
+      });
+    },
   },
 };
 </script>

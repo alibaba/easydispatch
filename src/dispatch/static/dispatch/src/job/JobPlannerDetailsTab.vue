@@ -1,8 +1,8 @@
 <template>
   <v-container grid-list-md>
     <v-layout wrap>
-      <v-flex xs6>
-        <ValidationProvider name="Title_2" rules="required" immediate>
+      <v-flex xs12>
+        <ValidationProvider name="Job Code" rules="required" immediate>
           <v-text-field
             v-model="code"
             slot-scope="{ errors, valid }"
@@ -15,68 +15,97 @@
           />
         </ValidationProvider>
       </v-flex>
-      <v-flex xs6>
-        <ValidationProvider name="teamSelect" rules="required" immediate>
-          <team-select
-            v-model="team"
-            slot-scope="{ errors, valid }"
-            label="Team"
-            :error-messages="errors"
-            :success="valid"
-            hint="The team"
-            clearable
-            required
-          ></team-select>
-        </ValidationProvider>
-      </v-flex>
-      <v-flex xs6>
-        <v-text-field v-model="name" label="Job Name" hint="Job Name" clearable />
-      </v-flex>
-      <v-flex xs6>
-        <ValidationProvider name="Title_2" rules="required" immediate>
+
+      <v-flex xs4>
+        <ValidationProvider name="Job Type" rules="required" immediate>
           <v-select
             slot-scope="{ errors, valid }"
             :error-messages="errors"
             :success="valid"
             v-model="job_type"
-            label="Jpb Type"
+            label="Job Type"
             :items="job_type_list"
             hint="Please choose a Job Type."
             clearable
           />
         </ValidationProvider>
-        <!-- <v-text-field v-model="job_type" label="Job Type" hint="Job Type" clearable /> -->
       </v-flex>
-      <v-flex xs12>
+      <v-flex xs4>
+        <ValidationProvider name="Job Status" rules="required" immediate>
+          <v-select
+            v-model="life_cycle_status"
+            :items="life_cycle_status_items"
+            label="Job Status"
+            slot-scope="{ errors, valid }"
+            :error-messages="errors"
+            :success="valid"
+            hint="Job Life Cycle Status"
+            clearable
+            required
+          ></v-select>
+        </ValidationProvider>
+      </v-flex>
+      <v-flex xs4>
+        <ValidationProvider name="Planning Status" rules="required" immediate>
+          <v-select
+            v-model="planning_status"
+            :items="planning_status_items"
+            label="Planning Status"
+            slot-scope="{ errors, valid }"
+            :error-messages="errors"
+            :success="valid"
+            hint="Planning Status(U, I, P, F)"
+            clearable
+            required
+          ></v-select>
+        </ValidationProvider>
+      </v-flex>
+
+      <v-flex xs6>
+        <team-select v-model="team" rules="required"></team-select>
+      </v-flex>
+      <v-flex xs6>
         <location-select
           v-model="location"
           label="Location"
-          hint="The home location"
-          clearable
-          required
+          rules="required"
         ></location-select>
+      </v-flex>
+      <v-flex xs12>
+        <span class="subtitle-2">Address:</span>
+        {{ location && location.geo_address_text }}
       </v-flex>
 
       <v-flex xs12>
+        <v-divider></v-divider>
         <span class="subtitle-2">Requested As:</span>
+        <v-divider></v-divider>
       </v-flex>
 
       <v-flex xs12>
         <v-row>
           <v-col cols="6">
-            <date-picker-menu v-model="requested_start_datetime"></date-picker-menu>
+            <date-picker-menu v-model="requested_start_datetime"
+              >Requested Start Date</date-picker-menu
+            >
           </v-col>
           <v-col cols="6">
-            <time-picker-menu v-model="requested_start_datetime"></time-picker-menu>
+            <time-picker-menu
+              v-model="requested_start_datetime"
+            ></time-picker-menu>
           </v-col>
         </v-row>
       </v-flex>
       <v-flex xs6>
-        <ValidationProvider name="requested_primary_worker" rules="required" immediate>
+        <ValidationProvider
+          name="Requested Primary Worker"
+          rules="required"
+          immediate
+        >
           <worker-select
             v-model="requested_primary_worker"
             slot-scope="{ errors, valid }"
-            label="Requested Primary Worker"
+            label="Requested Primary Worker (Optional)"
             :error-messages="errors"
             :success="valid"
             hint="The job's current commander"
@@ -100,31 +129,24 @@
           />
         </ValidationProvider>
       </v-flex>
-      <v-flex xs6>
-        <ValidationProvider name="Planning Status" rules="required" immediate>
-          <v-text-field
-            v-model="planning_status"
-            slot-scope="{ errors, valid }"
-            label="Planning Status"
-            :error-messages="errors"
-            :success="valid"
-            hint="Planning Status(U, I, P)"
-            clearable
-            required
-          />
-        </ValidationProvider>
+
+      <v-flex xs12>
+        <v-divider></v-divider>
+        <span class="subtitle-2">Scheduled To:</span>
+        <v-divider></v-divider>
       </v-flex>
 
       <v-flex xs12>
-        <span class="subtitle-2">Scheduled To:</span>
-      </v-flex>
-      <v-flex xs12>
         <v-row>
           <v-col cols="6">
-            <date-picker-menu v-model="scheduled_start_datetime"></date-picker-menu>
+            <date-picker-menu
+              v-model="scheduled_start_datetime"
+            ></date-picker-menu>
           </v-col>
           <v-col cols="6">
-            <time-picker-menu v-model="scheduled_start_datetime"></time-picker-menu>
+            <time-picker-menu
+              v-model="scheduled_start_datetime"
+            ></time-picker-menu>
           </v-col>
         </v-row>
       </v-flex>
@@ -145,16 +167,13 @@
           clearable
         />
       </v-flex>
-      <v-flex xs12>
-        <WorkerCombo v-model="scheduled_secondary_workers" label="Scheduled Secondary Workers" />
-      </v-flex>
-      <v-flex xs12>
-        <v-textarea v-model="description" label="Description" hint="Description of job." clearable />
-      </v-flex>
-      <v-flex xs12>
-        <tag-filter-combobox label="Tags" v-model="tags" />
-      </v-flex>
 
+      <v-flex xs12>
+        <WorkerCombo
+          v-model="scheduled_secondary_workers"
+          label="Scheduled Secondary Workers"
+        />
+      </v-flex>
       <v-flex xs12>
         <v-switch
           v-model="auto_planning"
@@ -163,6 +182,50 @@
             auto_planning ? 'Dispatch Automatically' : 'Dispatch Manually'
           "
         />
+      </v-flex>
+
+      <v-flex xs12>
+        <v-divider></v-divider>
+        <span class="subtitle-2">Other Optional Information:</span>
+        <v-divider></v-divider>
+      </v-flex>
+
+      <v-flex xs12>
+        <v-text-field
+          v-model="name"
+          label="Job Name"
+          hint="Job Name"
+          clearable
+        />
+      </v-flex>
+
+      <v-flex xs12>
+        <v-combobox
+          v-model="requested_skills"
+          :items="team_requested_skills"
+          label="requested skills"
+          multiple
+          chips
+          clearable
+          deletable-chips
+        ></v-combobox>
+      </v-flex>
+
+      <InventoryCombobox
+        v-model="requested_items_conbobox"
+        v-bind:items="select_inventory_copy"
+        label="requested items"
+      />
+      <v-flex xs12>
+        <v-textarea
+          v-model="description"
+          label="Description"
+          hint="Description of job."
+          clearable
+        />
+      </v-flex>
+      <v-flex xs12>
+        <tag-filter-combobox label="Tags" v-model="tags" />
       </v-flex>
     </v-layout>
   </v-container>
@@ -179,6 +242,11 @@ import TeamSelect from "@/team/TeamSelect.vue";
 import TagFilterCombobox from "@/tag/TagFilterCombobox.vue";
 import WorkerCombo from "@/worker/WorkerCombobox.vue"; // ee-eslint-disable-line no-unused-vars
 import LocationSelect from "@/location/LocationSelect.vue";
+import InventoryCombobox from "@/item_inventory/InventoryCombobox.vue";
+import { cloneDeep } from "lodash";
+
+import { mapActions, mapMutations } from "vuex";
+import { mapGetters } from "vuex";
 
 extend("required", {
   ...required,
@@ -197,12 +265,23 @@ export default {
     TimePickerMenu,
     DatePickerMenu,
     LocationSelect,
+    InventoryCombobox,
   },
 
   data() {
     return {
-      statuses: ["Active", "Stable", "Closed"],
-      visibilities: ["Open", "Restricted"],
+      team_requested_skills: [],
+      planning_status_items: ["U", "I", "P", "F"],
+      life_cycle_status_items: [
+        "Created",
+        "Onsite_Started",
+        "Completed",
+        "Customer_Approved",
+        "Planner_Approved",
+        "Cancelled",
+      ],
+      // statuses: ["Active", "Stable", "Closed"],
+      // visibilities: ["Open", "Restricted"],
       job_type_list: ["composite", "appt", "visit", "event"],
     };
   },
@@ -215,6 +294,7 @@ export default {
       "selected.description",
       "selected.created_at",
       "selected.planning_status",
+      "selected.life_cycle_status",
       "selected.tags",
       "selected.job_type",
 
@@ -230,9 +310,43 @@ export default {
       "selected.scheduled_duration_minutes",
       "selected.scheduled_primary_worker",
       "selected.scheduled_secondary_workers",
+      "selected.requested_skills",
+      "selected.requested_items_conbobox",
       //
       "selected.auto_planning",
     ]),
+    ...mapFields("item_inventory", ["select_inventory"]),
+
+    select_inventory_copy: {
+      get() {
+        return cloneDeep(this.select_inventory);
+      },
+      set(value) {
+        this.$emit("input", value);
+      },
+    },
+  },
+  methods: {
+    ...mapMutations("job", ["SET_ITEMS"]),
+    ...mapGetters("auth", ["getPermission"]),
+  },
+  watch: {
+    requested_items_conbobox(newVal, oldVal) {
+      if (newVal) {
+        let request_item = newVal.reduce((pre, cur, index) => {
+          return [...pre, cur.text];
+        }, []);
+        this.SET_ITEMS(request_item);
+      }
+    },
+    team(newVal, oldVal) {
+      if (newVal) {
+        this.team_requested_skills =
+          newVal.flex_form_data["requested_skills"] != undefined
+            ? newVal.flex_form_data["requested_skills"]
+            : [];
+      }
+    },
   },
 };
 </script>

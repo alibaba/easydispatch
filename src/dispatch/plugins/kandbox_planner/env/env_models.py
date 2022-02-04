@@ -1,7 +1,9 @@
 # from dataclasses import dataclass
 # import dataclasses
+from enum import Enum
 
 from pydantic.dataclasses import dataclass
+from pydantic import Field
 import pydantic.dataclasses as dataclasses
 from dataclasses import InitVar
 from dataclasses import astuple as python_dataclasses_astuple
@@ -29,11 +31,13 @@ from dispatch.plugins.kandbox_planner.env.env_enums import (
     KandboxMessageSourceType,
     AppointmentStatus,
     ActionScoringResultType,
+    OptimizerSolutionStatus
 )
 
 import typing
 from typing import List, Dict, Any
-
+import logging
+log = logging.getLogger("rllib_env_job2slot")
 
 # @dataclass # 2020-10-26 04:33:38 Leave as named tuple object
 # class LocationTuple (NamedTuple):   # typing.NamedTuple
@@ -76,11 +80,11 @@ class JobLocation(typing.NamedTuple):
     location_code: str
     # location_info: LocationTuple  # maintain the position in env.workers. For compatibility, and also in action, it is based on worker's sequence.
     # Key is  tuple (primary, secondary_1, secondary_2))  Caution: all service area code must be alphabetically sorted for secondary!.
-    historical_serving_worker_distribution: dict
+    historical_serving_worker_distribution: dict = None
 
-    avg_actual_start_minutes: float
-    avg_days_delay: float
-    stddev_days_delay: float
+    avg_actual_start_minutes: float = 0
+    avg_days_delay: float = 0
+    stddev_days_delay: float = 0
     # available_slots: List  # list of [start,end] in linear scale
     # rejected_slots: List
 
@@ -110,6 +114,18 @@ class WorkingTimeSlot:
     total_job_minutes: int = 0
     # If False, this work is over time and when released, it does not recover working slot.
     is_in_working_hour: bool = True
+    # The last time when this worker receives on commend, including moving on map, receive new order, etc.
+    last_command_tick: int = 0
+    # (longigude_index, latitude_index, minute_1, minute_2, minute_3), here minute is absolution minute since data_start_day. Observation is responsible
+    # workermap_grid_index: List[float] = None
+
+    # as demo first, to support item stock based dispatching
+    # in meter cubic. M^3
+    vehicle_type: str = "van"
+    max_volume: float = 0.2
+    # in kilogram. kg
+    max_weight: float = 50
+    loaded_items: Dict = Field(default_factory=dict)
 
     env: InitVar[any] = None
 
@@ -141,22 +157,22 @@ class WorkingTimeSlot:
 
 class TimeSlotJSONEncoder(json.JSONEncoder):
     def default(self, o):
-        if WorkingTimeSlot == type(o):
+        if type(o) in (str, int, float, bool, bytes):
+            return super().default(o)
+        elif type(o) == WorkingTimeSlot:
             return python_dataclasses_astuple(o)
-        return super().default(o)
+        else:
+            return str(o)
 
 
 @dataclass
 class BaseJob:
     """A class for holding Job Information in the RL environment, not in the database"""
-
-    # Attributes Declaration
-    # using Type Hints
-    job_id: int  # id as in database .
-    job_code: str
-    job_index: int  # maintain the position in env.jobs. For compatibility only.
+    job_id: int  # id is same as the pk in database.
+    job_code: str  # Unique Key in Env.
+    job_index: int  # maintain the position in env.jobs. For compatibility only. DO NOT USE IT.
     job_type: JobType
-    job_schedule_type: JobScheduleType  # job_seq: 89, job['job_code']
+    job_schedule_type: JobScheduleType  # attribute-1.
     location: JobLocation
 
     planning_status: JobPlanningStatus
@@ -166,16 +182,11 @@ class BaseJob:
     # scheduled_secondary_worker_ids: List[int]
     # Done, to code, 2020-10-28 17:32:43
 
-    # First one is primary, and the rest are secondary, All secondary must be sorted.
-    scheduled_worker_codes: List[str]
-    scheduled_start_minutes: int  # including day information. day*1440 + minutesa_in_day
-    scheduled_duration_minutes: int
-
     # historical_primary_worker_count: dict
     # historical_secondary_worker_count: dict
     # historical_serving_worker_distribution: dict
-    #
-    requested_skills: dict
+    # 
+    requested_skills: dict  
     requested_start_min_minutes: int
     requested_start_max_minutes: int
     # The preferred time might nobe be avg(min,max). Min max are used to calculate the tolerance only. But the preferred time might be anywhre.
@@ -194,7 +205,15 @@ class BaseJob:
     appointment_status: AppointmentStatus  # = AppointmentStatus.UNKNOWN
     #
     included_job_codes: List[str]
-    new_job_codes: List[str]
+    new_job_codes: List[str]  # all alternative job_code to identify same job.
+    #
+    # First one is primary, and the rest are secondary, All secondary must be sorted.
+    scheduled_worker_codes: Optional[List[str]] = None
+    # including day information. day*1440 + minutesa_in_day
+    scheduled_start_minutes: Optional[int] = 0
+    scheduled_duration_minutes: Optional[int] = 0
+    #
+    requested_items: Dict = Field(default_factory=dict)
     #
     is_changed: bool = False
     is_active: bool = True
@@ -202,7 +221,8 @@ class BaseJob:
     is_appointment_confirmed: bool = True
     is_auto_planning: bool = False
     #
-    retry_horizon_minutes: int = -1
+    retry_minutes: int = -2
+    priority: int = 1  # attribute-2.
 
 
 class Job(BaseJob):
@@ -249,16 +269,26 @@ class Worker:
     skills: dict
     is_active: bool
 
-    historical_job_location_distribution: dict
-    # The total used and limit of overtime minutes are controlled by
     overtime_limits: dict  # key is (day_seq,)
     used_overtime_minutes: dict  # key is day_seq
 
+    historical_job_location_distribution: Any = None
+    # The total used and limit of overtime minutes are controlled by
     daily_max_overtime_minutes: int = 0
     weekly_max_overtime_minutes: int = 0
 
     belongs_to_pair: tuple = None
     curr_slot: WorkingTimeSlot = None
+
+
+# @dataclass
+# class Material:
+#     """The material
+#     """
+
+#     weight: float
+#     volume: float
+#     code: str = "Faked"
 
 
 @dataclass
@@ -287,6 +317,16 @@ class ActionEvaluationScore:
     score_type: str
     message: str
     metrics_detail: dict
+
+
+@dataclass
+class JobsInSlotsDispatchResult:
+    status: OptimizerSolutionStatus
+    changed_action_dict_by_job_code: dict
+    all_assigned_job_codes: list
+    # list of list, each internal list is [start mintues, jobcode, sequence/shift,changed_flag]
+    planned_job_sequence: list
+    result_info: Dict = Field(default_factory=dict)
 
 
 @dataclass
@@ -398,6 +438,37 @@ class KafkaEnvMessage:
     message_source_code: str
 
     payload: List[Any]
+
+
+class KPIStat:
+    """ 
+    """
+
+    def __init__(self):
+        self.cancel_count = 0
+        self.pick_overdue_count = 0
+        self.drop_overdue_count = 0
+        self.instant_reward = 0
+        self.low_instant_reward = 0
+
+    def push_instant_reward(self, r):
+        self.instant_reward += r
+        if self.instant_reward < -10:
+            log.debug(f"Warning, self.instant_reward {self.instant_reward} < -5 ...")
+
+    def pop_instant_reward(self):
+        temp_r = self.instant_reward
+        if self.instant_reward < -10:
+            self.low_instant_reward += 1
+        self.instant_reward = 0
+        return temp_r
+
+    def reset(self):
+        self.cancel_count = 0
+        self.pick_overdue_count = 0
+        self.drop_overdue_count = 0
+        self.instant_reward = 0
+        self.low_instant_reward = 0
 
 
 if __name__ == "__main__":

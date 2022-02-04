@@ -17,42 +17,42 @@ const getDefaultSelectedState = () => {
     required: null,
     multiple: null,
     configuration: null,
-    loading: false
+    loading: false,
   };
 };
 
 const state = {
   selected: {
-    ...getDefaultSelectedState()
+    ...getDefaultSelectedState(),
   },
   dialogs: {
-    showEdit: false
+    showEdit: false,
   },
   table: {
     rows: {
       items: [],
-      total: null
+      total: null,
     },
     options: {
       q: "",
       page: 1,
       itemsPerPage: 10,
       sortBy: ["slug"],
-      descending: [true]
+      descending: [true],
     },
-    loading: false
-  }
+    loading: false,
+  },
 };
 
 const getters = {
-  getField
+  getField,
 };
 
 const actions = {
   getAll: debounce(({ commit, state }) => {
     commit("SET_TABLE_LOADING", true);
     return PluginApi.getAll(state.table.options)
-      .then(response => {
+      .then((response) => {
         commit("SET_TABLE_LOADING", false);
         commit("SET_TABLE_ROWS", response.data);
       })
@@ -82,12 +82,12 @@ const actions = {
             { root: true }
           );
         })
-        .catch(err => {
+        .catch((err) => {
           commit(
             "app/SET_SNACKBAR",
             {
               text: "Plugin not created. Reason: " + err.response.data.detail,
-              color: "red"
+              color: "red",
             },
             { root: true }
           );
@@ -103,12 +103,12 @@ const actions = {
             { root: true }
           );
         })
-        .catch(err => {
+        .catch((err) => {
           commit(
             "app/SET_SNACKBAR",
             {
               text: "Plugin not updated. Reason: " + err.response.data.detail,
-              color: "red"
+              color: "red",
             },
             { root: true }
           );
@@ -126,17 +126,17 @@ const actions = {
           { root: true }
         );
       })
-      .catch(err => {
+      .catch((err) => {
         commit(
           "app/SET_SNACKBAR",
           {
-            text: "Plugin not deleted. Reason: " + err.response.data.detail,
-            color: "red"
+            text: "Plugin not deleted. Reason: Related data cannot be deleted",
+            color: "red",
           },
           { root: true }
         );
       });
-  }
+  },
 };
 
 const mutations = {
@@ -155,7 +155,7 @@ const mutations = {
   },
   RESET_SELECTED(state) {
     state.selected = Object.assign(state.selected, getDefaultSelectedState());
-  }
+  },
 };
 
 export default {
@@ -163,5 +163,5 @@ export default {
   state,
   getters,
   actions,
-  mutations
+  mutations,
 };

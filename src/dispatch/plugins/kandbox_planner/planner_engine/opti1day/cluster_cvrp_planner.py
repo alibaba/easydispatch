@@ -4,21 +4,16 @@ from datetime import datetime, timedelta
 import pandas as pd
 from sklearn.mixture import GaussianMixture
 
-
 from ortools.sat.python import cp_model
 from ortools.constraint_solver import routing_enums_pb2
 from ortools.constraint_solver import pywrapcp
 
-
 import collections
-
 
 import sys
 
-
 from dispatch import config
 import dispatch.plugins.kandbox_planner.util.kandbox_date_util as date_util
-
 
 from dispatch.plugins.kandbox_planner.travel_time_plugin import HaversineTravelTime as TravelTime
 from dispatch.plugins.bases.kandbox_planner import KandboxBatchOptimizerPlugin
@@ -40,6 +35,10 @@ from dispatch.job.models import JobPlanningInfoUpdate
 from dispatch.plugins.kandbox_planner.env.env_enums import LocationType
 from dispatch.plugins.kandbox_planner.env.env_models import JobLocationBase
 
+from size_constrained_clustering import fcm, equal, minmax, shrinkage
+# by default it is euclidean distance, but can select others
+from sklearn.metrics.pairwise import haversine_distances
+
 
 class ClusterCVRPPlanner(KandboxBatchOptimizerPlugin):
 
@@ -47,16 +46,22 @@ class ClusterCVRPPlanner(KandboxBatchOptimizerPlugin):
     slug = "kandbox_cluster_cvrp_planner"
     author = "Kandbox"
     author_url = "https://github.com/qiyangduan/kandbox_dispatch"
-    description = "This is a Batch Optimizer, using Gaussian Mixture for clustering and then ortools for vrp inside each cluster."
+    description = "This is a Batch Optimizer, using Gaussian Mixture or Minmax MaxFlowCut for clustering and then ortools for vrp inside each cluster."
     version = "0.1.0"
-    default_config = {"log_search_progress": True, "max_exec_seconds": 60}
+    default_config = {
+        "log_search_progress": True,
+        "max_exec_seconds": 60,
+        "cluster_algorithm": "minmax"  # "gmm"
+    }
     config_form_spec = {
         "type": "object",
         "properties": {},
     }
 
     def __init__(self, config=None):
-        self.config = config or self.default_config.copy()
+        self.config = self.default_config.copy()
+        if config is not None:
+            self.config.update(config)
 
     def _get_travel_time_2locations(self, loc1, loc2):
         new_time = self.env.travel_router.get_travel_minutes_2locations(
@@ -64,14 +69,16 @@ class ClusterCVRPPlanner(KandboxBatchOptimizerPlugin):
             [loc2[0], loc2[1]],
         )
         if new_time > 200:
-            print([loc1[0], loc1[1]], [loc2[0], loc2[1]], (new_time), "Error, too long")
+            print([loc1[0], loc1[1]], [loc2[0], loc2[1]], (new_time),
+                  "Error, too long")
         # print("travel: ", new_time)
         return int(new_time / 1)
 
     def dispatch_jobs(self, env, rl_agent=None):
         # Real batch, rl_agent is skilpped.
         #
-        assert env.config["nbr_of_days_planning_window"] == 1, "I can do all workers for one day only."
+        assert env.config[
+            "nbr_of_days_planning_window"] == 1, "I can do all workers for one day only."
         if len(env.jobs) < 1:
             print("it is empty, nothing to dispatch!")
             return
@@ -79,26 +86,52 @@ class ClusterCVRPPlanner(KandboxBatchOptimizerPlugin):
 
         # 20, 150 failed for 8 hours.
         slot_keys = list(self.env.slot_server.time_slot_dict.keys())  # [0:12]
-        self.worker_slots_all = [self.env.slot_server.time_slot_dict[key] for key in slot_keys]
+        self.worker_slots_all = [
+            self.env.slot_server.time_slot_dict[key] for key in slot_keys
+        ]
 
         # env.jobs = env.jobs [0:200]
         begin_time = datetime.now()
         print(f"Started dispatching at time: {begin_time}")
 
-        jobs_locs = [
-            [w.job_code, w.location.geo_longitude, w.location.geo_latitude] for w in env.jobs
-        ]
+        jobs_locs = [[
+            w.job_code, w.location.geo_longitude, w.location.geo_latitude
+        ] for w in env.jobs]
         jobs_df = pd.DataFrame.from_records(jobs_locs)
         jobs_df.columns = ['job_code', 'longitude', "latitude"]
 
-        mclusterer = GaussianMixture(n_components=len(
-            slot_keys), tol=0.01, random_state=66, verbose=1)
-        jobs_df['cluster_id'] = mclusterer.fit_predict(jobs_df[['longitude', "latitude"]].values)
-        cluster_count = jobs_df['cluster_id'].max() + 1
-        print("{} clusters".format(cluster_count))
+        job_loc_matrix = jobs_df[['longitude', "latitude"]].values
 
-        avg_long = sum([j.location.geo_longitude for j in self.env.jobs]) / len(self.env.jobs)
-        avg_lat = sum([j.location.geo_latitude for j in self.env.jobs]) / len(self.env.jobs)
+        if self.config["cluster_algorithm"] == "minmax":
+            minmax_cluster_model = minmax.MinMaxKMeansMinCostFlow(
+                len(slot_keys),
+                size_min=int(job_loc_matrix.shape[0] * 0.4 / len(slot_keys)),
+                size_max=int(job_loc_matrix.shape[0] * 1.7 / len(slot_keys)))
+            minmax_cluster_model.fit(job_loc_matrix)
+            # centers = model.cluster_centers_
+            # labels = model.labels_
+            belongs_to = minmax_cluster_model.predict(job_loc_matrix)
+            jobs_df['cluster_id'] = belongs_to
+
+            cluster_count = jobs_df['cluster_id'].max() + 1
+        elif self.config["cluster_algorithm"] == "gmm":
+            mclusterer = GaussianMixture(n_components=len(slot_keys),
+                                         tol=0.01,
+                                         random_state=66,
+                                         verbose=1)
+            jobs_df['cluster_id'] = mclusterer.fit_predict()
+            cluster_count = jobs_df['cluster_id'].max() + 1
+        else:
+            print("Wrong config cluster_algorithm=",
+                  self.config["cluster_algorithm"])
+            return
+
+        print("{} clusters done at {}".format(cluster_count, datetime.now()))
+
+        avg_long = sum([j.location.geo_longitude
+                        for j in self.env.jobs]) / len(self.env.jobs)
+        avg_lat = sum([j.location.geo_latitude
+                       for j in self.env.jobs]) / len(self.env.jobs)
         # DEPOT_AVG_JOB_LOCATION = JobLocationBase(
         #     geo_longitude=avg_long,
         #     geo_latitude=avg_lat,
@@ -122,18 +155,21 @@ class ClusterCVRPPlanner(KandboxBatchOptimizerPlugin):
                 [tuple(j) for j in cluster_df.to_records(index=False)]
 
             self.worker_slots = [self.worker_slots_all[cluster_i]]
+            print("Dispatching cluster {}, len={}, time = {}".format(
+                cluster_i, len(self.cluster_list), datetime.now()))
             self.dispatch_jobs_1_cluster()
 
         total_time = datetime.now() - begin_time
         print(
             f"Done. nbr workers: {len(self.worker_slots_all)}, nbr jobs: {len(self.cluster_list)}, Total Elapsed: {total_time}"
         )
-        print(
-            f"Travel Router: hit rate= {round(self.env.travel_router.redis_router_hit / self.env.travel_router.all_hit,4)}, routing api = {self.env.travel_router.routing_router_hit}, all count = {self.env.travel_router.all_hit}."
-        )
+        # print(
+        #     f"Travel Router: hit rate= {round(self.env.travel_router.redis_router_hit / self.env.travel_router.all_hit,4)}, routing api = {self.env.travel_router.routing_router_hit}, all count = {self.env.travel_router.all_hit}."
+        # )
 
     def dispatch_jobs_1_cluster(self):
         cluster_begin_time = datetime.now()
+
         # Create and register a transit callback.
 
         def distance_callback(from_index, to_index):
@@ -144,8 +180,9 @@ class ClusterCVRPPlanner(KandboxBatchOptimizerPlugin):
             if from_node == to_node:
                 return 0
             return self._get_travel_time_2locations(
-                self.cluster_list[from_node][1:3], self.cluster_list[to_node][1:3]
-            )
+                self.cluster_list[from_node][1:3],
+                self.cluster_list[to_node][1:3])
+
         self.distance_callback_func = distance_callback
         # Create the routing index manager.
         manager = pywrapcp.RoutingIndexManager(len(self.cluster_list), 1, 0)
@@ -153,7 +190,8 @@ class ClusterCVRPPlanner(KandboxBatchOptimizerPlugin):
         # Create Routing Model.
         routing = pywrapcp.RoutingModel(manager)
 
-        transit_callback_index = routing.RegisterTransitCallback(distance_callback)
+        transit_callback_index = routing.RegisterTransitCallback(
+            distance_callback)
 
         # Define cost of each arc.
         routing.SetArcCostEvaluatorOfAllVehicles(transit_callback_index)
@@ -163,7 +201,7 @@ class ClusterCVRPPlanner(KandboxBatchOptimizerPlugin):
         routing.AddDimension(
             transit_callback_index,
             0,  # no slack
-            600,  # vehicle maximum travel distance
+            900,  # vehicle maximum travel distance
             True,  # start cumul to zero
             dimension_name,
         )
@@ -173,8 +211,7 @@ class ClusterCVRPPlanner(KandboxBatchOptimizerPlugin):
         # Setting first solution heuristic.
         search_parameters = pywrapcp.DefaultRoutingSearchParameters()
         search_parameters.first_solution_strategy = (
-            routing_enums_pb2.FirstSolutionStrategy.PATH_CHEAPEST_ARC
-        )
+            routing_enums_pb2.FirstSolutionStrategy.PATH_CHEAPEST_ARC)
         search_parameters.log_search = True
         search_parameters.time_limit.seconds = self.config["max_exec_seconds"]
 
@@ -205,9 +242,11 @@ class ClusterCVRPPlanner(KandboxBatchOptimizerPlugin):
                 plan_output += " {} -> ".format(manager.IndexToNode(index))
                 previous_index = index
                 index = solution.Value(routing.NextVar(index))
-                route_distance += routing.GetArcCostForVehicle(previous_index, index, vehicle_id)
+                route_distance += routing.GetArcCostForVehicle(
+                    previous_index, index, vehicle_id)
             plan_output += "{}\n".format(manager.IndexToNode(index))
-            plan_output += "Distance of the route: {}m\n".format(route_distance)
+            plan_output += "Distance of the route: {}m\n".format(
+                route_distance)
             print(plan_output)
             max_route_distance = max(route_distance, max_route_distance)
         print("Maximum of the route distances: {}m".format(max_route_distance))
@@ -242,18 +281,22 @@ class ClusterCVRPPlanner(KandboxBatchOptimizerPlugin):
                     is_forced_action=False,
                 )
                 internal_result_info = self.env.mutate_update_job_by_action_dict(
-                    a_dict=one_job_action_dict, post_changes_flag=True
-                )
+                    a_dict=one_job_action_dict, post_changes_flag=True)
                 if internal_result_info.status_code != ActionScoringResultType.OK:
                     print(
-                        f"{one_job_action_dict.job_code}: Failed to commit change, error: {str(internal_result_info)} ")
+                        f"{one_job_action_dict.job_code}: Failed to commit change, error: {str(internal_result_info)} "
+                    )
                 else:
-                    print(f"job({one_job_action_dict.job_code}) is planned successfully ...")
+                    print(
+                        f"job({one_job_action_dict.job_code}) is planned successfully ..."
+                    )
 
                 db_job = job_service.get_by_code(
-                    db_session=self.env.kp_data_adapter.db_session, code=job.job_code)
+                    db_session=self.env.kp_data_adapter.db_session,
+                    code=job.job_code)
                 db_worker = worker_service.get_by_code(
-                    db_session=self.env.kp_data_adapter.db_session, code=scheduled_worker_codes[0])
+                    db_session=self.env.kp_data_adapter.db_session,
+                    code=scheduled_worker_codes[0])
 
                 db_job.requested_primary_worker = db_worker
 
@@ -261,18 +304,20 @@ class ClusterCVRPPlanner(KandboxBatchOptimizerPlugin):
                 self.env.kp_data_adapter.db_session.commit()
 
                 print(
-                    f"job({job.job_code}) is updated to new requested_primary_worker = {scheduled_worker_codes[0]} ")
-
-                travel_time = self._get_travel_time_2locations(
-                    prev_location, job.location
+                    f"job({job.job_code}) is updated to new requested_primary_worker = {scheduled_worker_codes[0]} "
                 )
-
-                route_distance = routing.GetArcCostForVehicle(previous_index, index, vehicle_id)
-                next_start_minutes += job.requested_duration_minutes + route_distance
 
                 prev_location = job.location
                 previous_index = index
                 index = solution.Value(routing.NextVar(index))
+
+                # not used.
+                travel_time = self._get_travel_time_2locations(
+                    prev_location, job.location)
+
+                route_distance = routing.GetArcCostForVehicle(
+                    previous_index, index, vehicle_id)
+                next_start_minutes += job.requested_duration_minutes + route_distance
 
             # plan_output += "{}\n".format(manager.IndexToNode(index))
             # plan_output += "Distance of the route: {}m\n".format(route_distance)
@@ -284,10 +329,13 @@ class ClusterCVRPPlanner(KandboxBatchOptimizerPlugin):
 if __name__ == "__main__":
     from pprint import pprint
 
-    opti = Opti1DayPlanner(max_exec_seconds=config.KANDBOX_OPTI1DAY_EXEC_SECONDS)  # 0*60*24
+    opti = Opti1DayPlanner(
+        max_exec_seconds=config.KANDBOX_OPTI1DAY_EXEC_SECONDS)  # 0*60*24
     ss = config.KANDBOX_TEST_OPTI1DAY_START_DAY
     ee = config.KANDBOX_TEST_OPTI1DAY_END_DAY
-    opti.env.purge_planner_job_status(planner_code=opti.planner_code, start_date=ss, end_date=ee)
+    opti.env.purge_planner_job_status(planner_code=opti.planner_code,
+                                      start_date=ss,
+                                      end_date=ee)
     res = opti.dispatch_jobs(start_date=ss, end_date=ee)
     # pprint(res)
 

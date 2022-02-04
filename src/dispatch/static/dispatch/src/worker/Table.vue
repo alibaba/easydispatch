@@ -4,9 +4,7 @@
     <delete-dialog />
     <div class="headline">Workers</div>
     <v-spacer />
-    <v-btn color="primary" dark class="mb-2" @click="createEditShow()"
-      >New</v-btn
-    >
+    <v-btn color="primary" dark class="mb-2" @click="createEditShow()">New</v-btn>
     <v-flex xs12>
       <v-layout column>
         <v-flex>
@@ -33,33 +31,29 @@
               loading-text="Loading... Please wait"
             >
               <template v-slot:item.is_active="{ item }">
-                <v-simple-checkbox
-                  v-model="item.is_active"
-                  disabled
-                ></v-simple-checkbox>
+                <v-simple-checkbox v-model="item.is_active" disabled></v-simple-checkbox>
               </template>
               <template v-slot:item.is_external="{ item }">
-                <v-simple-checkbox
-                  v-model="item.is_external"
-                  disabled
-                ></v-simple-checkbox>
+                <v-simple-checkbox v-model="item.is_external" disabled></v-simple-checkbox>
               </template>
               <template v-slot:item.data-table-actions="{ item }">
-                <v-menu bottom left>
-                  <template v-slot:activator="{ on }">
-                    <v-btn icon v-on="on">
-                      <v-icon>mdi-dots-vertical</v-icon>
-                    </v-btn>
+                <span class="table_action_icon">
+                  <v-icon small class="mr-2" @click="createEditShow(item)">mdi-pencil</v-icon>
+                  <v-icon small @click="removeShow(item)">mdi-delete</v-icon>
+                </span>
+              </template>
+
+              <template v-slot:item.description="{ item }">
+                <v-tooltip bottom>
+                  <template v-slot:activator="{ on, attrs }">
+                    <span
+                      class="overflow_ellipsis_col"
+                      v-bind="attrs"
+                      v-on="on"
+                    >{{item.description}}</span>
                   </template>
-                  <v-list>
-                    <v-list-item @click="createEditShow(item)">
-                      <v-list-item-title>Edit</v-list-item-title>
-                    </v-list-item>
-                    <v-list-item @click="removeShow(item)">
-                      <v-list-item-title>Delete</v-list-item-title>
-                    </v-list-item>
-                  </v-list>
-                </v-menu>
+                  <span>{{item.description}}</span>
+                </v-tooltip>
               </template>
             </v-data-table>
           </v-card>
@@ -79,20 +73,25 @@ export default {
 
   components: {
     DeleteDialog,
-    NewEditSheet
+    NewEditSheet,
   },
   data() {
     return {
       headers: [
         // { text: "ID", value: "id", sortable: true },
         { text: "Code", value: "code", sortable: true },
+        { text: "Team", value: "team.code", sortable: true },
         { text: "Name", value: "name", sortable: true },
         { text: "Description", value: "description", sortable: true },
-        { text: "team", value: "team.code", sortable: true },
         { text: "Active", value: "is_active", sortable: true },
         // { text: "Linked Username", value: "username", sortable: true },
-        { text: "", value: "data-table-actions", sortable: false, align: "end" }
-      ]
+        {
+          text: "",
+          value: "data-table-actions",
+          sortable: false,
+          align: "end",
+        },
+      ],
     };
   },
 
@@ -105,31 +104,45 @@ export default {
       "table.options.descending",
       "table.loading",
       "table.rows.items",
-      "table.rows.total"
-    ])
+      "table.rows.total",
+    ]),
   },
 
   mounted() {
+    this.getOrg();
     this.getAll({});
 
     this.$watch(
-      vm => [vm.page],
+      (vm) => [vm.page],
       () => {
         this.getAll();
       }
     );
 
     this.$watch(
-      vm => [vm.q, vm.itemsPerPage, vm.sortBy, vm.descending],
+      (vm) => [vm.q, vm.itemsPerPage, vm.sortBy, vm.descending],
       () => {
         this.page = 1;
         this.getAll();
       }
     );
   },
-
+  destroyed() {
+    this.closeCreateEdit();
+  },
   methods: {
-    ...mapActions("worker", ["getAll", "createEditShow", "removeShow"])
-  }
+    ...mapActions("worker", [
+      "getAll",
+      "createEditShow",
+      "removeShow",
+      "closeCreateEdit",
+    ]),
+    ...mapActions("org", ["getOrg"]),
+  },
 };
 </script>
+<style>
+.table_action_icon {
+  white-space: nowrap;
+}
+</style>

@@ -1,0 +1,2 @@
+from dispatch.common.utils.kandbox_clear_data import clear_all_worker_jobs
+clear_all_worker_jobs()

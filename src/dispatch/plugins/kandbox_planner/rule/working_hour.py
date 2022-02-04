@@ -57,48 +57,59 @@ class KandboxRulePluginWithinWorkingHour(KandboxRulePlugin):
 
             day_seq = int(job.scheduled_start_minutes / 1440)
             weekday_i = env.env_encode_day_seq_to_weekday(day_seq)
-
-            working_slot_in_the_day = [
-                worker.weekly_working_slots[weekday_i][0] + (24 * 60 * day_seq),
-                worker.weekly_working_slots[weekday_i][1] + (24 * 60 * day_seq),
-            ]
-            cliped_slot = date_util.clip_time_period(
-                p1=working_slot_in_the_day,
-                p2=[
-                    job.scheduled_start_minutes,
-                    job.scheduled_start_minutes + job.scheduled_duration_minutes,
-                ],
-            )
-            if len(cliped_slot) > 1:
-                if (cliped_slot[0] == job.scheduled_start_minutes) & (
-                    cliped_slot[1] == job.scheduled_start_minutes + job.scheduled_duration_minutes
-                ):
-                    overall_message = self.success_message_template.format(
-                        date_util.minutes_to_time_string(job.scheduled_start_minutes),
-                        date_util.minutes_to_time_string(
-                            job.scheduled_start_minutes + job.scheduled_duration_minutes
-                        ),
+            slot_in_day_count = len(worker.weekly_working_slots[weekday_i])
+            slot_intersected=False
+            slot_covered = False
+            for slot_in_day_i, slot_in_day in enumerate(worker.weekly_working_slots[weekday_i]):
+                working_slot_in_the_day = [
+                    slot_in_day[0] + (24 * 60 * day_seq),
+                    slot_in_day[1] + (24 * 60 * day_seq),
+                ]
+                clipped_slot = date_util.clip_time_period(
+                    p1=working_slot_in_the_day,
+                    p2=[
                         job.scheduled_start_minutes,
                         job.scheduled_start_minutes + job.scheduled_duration_minutes,
-                    )
-                    # move on to next worker
-                    continue
-
+                    ],
+                )
+                if len(clipped_slot) > 1:
+                    slot_intersected = True
+                    if (clipped_slot[0] == job.scheduled_start_minutes) & (
+                        clipped_slot[1] == job.scheduled_start_minutes + job.scheduled_duration_minutes
+                    ):
+                        overall_message = self.success_message_template.format(
+                            date_util.minutes_to_time_string(job.scheduled_start_minutes),
+                            date_util.minutes_to_time_string(
+                                job.scheduled_start_minutes + job.scheduled_duration_minutes
+                            ),
+                            job.scheduled_start_minutes,
+                            job.scheduled_start_minutes + job.scheduled_duration_minutes,
+                        )
+                        # move on to next worker
+                        slot_covered = True
+                        break
+            if slot_covered:
+                continue
             available_overtime = env.get_worker_available_overtime_minutes(
                 worker_code=worker_code, day_seq=day_seq
             )
             # if self.config["allow_overtime"]:
-            if available_overtime > 0:
+            if slot_intersected & (available_overtime > 0):
+                start_with_overtime = working_slot_in_the_day[0]
+                if slot_in_day_i ==0:
+                    start_with_overtime -= available_overtime
+
+                end_with_overtime = working_slot_in_the_day[1]
+                if slot_in_day_i == slot_in_day_count - 1:
+                    end_with_overtime += available_overtime
+
+
                 if (
-                    (
-                        working_slot_in_the_day[0] - available_overtime
-                        < job.scheduled_start_minutes
-                    )
-                    & (
-                        working_slot_in_the_day[1] + available_overtime
-                        > job.scheduled_start_minutes + job.scheduled_duration_minutes
-                    )
-                    & (
+                    ( 
+                        start_with_overtime < job.scheduled_start_minutes
+                    ) & (
+                        end_with_overtime > job.scheduled_start_minutes + job.scheduled_duration_minutes
+                    ) & (
                         working_slot_in_the_day[1]
                         - working_slot_in_the_day[0]
                         + available_overtime
@@ -118,7 +129,8 @@ class KandboxRulePluginWithinWorkingHour(KandboxRulePlugin):
                     # move on to next worker
                     print(overall_message)
                     continue
-
+            
+            # If the time slot were ok (i.e. included in any slot), it should have been skipped by continue  
             # If the start time does not fully fall in one working slot for any worker, reject it instantly.
             score = -1
             overall_message = self.message_template.format(

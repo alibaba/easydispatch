@@ -168,11 +168,11 @@ function renderWorker(params, api) {
       {
         type: "text",
         style: {
-          x: 40,
+          x: 0,
           y: -6,
           text: api.value(POS_WORKER_INDEX_name),
           textVerticalAlign: "bottom",
-          textAlign: "center",
+          textAlign: "left",
           textFill: "#fff",
         },
       },
@@ -568,7 +568,7 @@ export default {
       //reset global job dict
       //global_worker_dict = {}
 
-      workers_data.forEach(function(w) {
+      workers_data.forEach(function (w) {
         //for (var key in workers_dict){
         //console.log( key, workers_dict[key] );
         // w.splice(POS_INDEX_node_type, 0, VALUE_WORKER_INDEX_node_type);
@@ -616,7 +616,7 @@ export default {
       //reset global job dict
 
       _that.global_job_dict = {};
-      loaded_data["all_jobs_in_env"].forEach(function(job, index) {
+      loaded_data["all_jobs_in_env"].forEach(function (job, index) {
         _that.global_job_dict[job.job_code] = {
           data_latlng: [job.geo_latitude, job.geo_longitude],
           job_index_in_all: index,
@@ -632,7 +632,7 @@ export default {
         // _that.global_job_dict[job[POS_JOB_INDEX_job_code]]["node_item_style"] = node_itemStyle
       });
 
-      planned_jobs_data.forEach(function(job, index) {
+      planned_jobs_data.forEach(function (job, index) {
         if (!(job[POS_JOB_INDEX_job_code] in _that.global_job_dict)) {
           let primaryJobCode = job[POS_JOB_INDEX_job_code].split("_")[0];
           // console.log(job[POS_JOB_INDEX_job_code], job, _that.global_job_dict[primaryJobCode])
@@ -687,7 +687,7 @@ export default {
         tooltip: {
           enterable: true,
           hideDelay: 800,
-          formatter: function(params) {
+          formatter: function (params) {
             // console.log(params.seriesId)
             var jobInfo;
             var tooltip_str;
@@ -880,7 +880,7 @@ export default {
             },
             data: echarts.util.map(
               this.global_loaded_data.workers_data,
-              function(item, index) {
+              function (item, index) {
                 return [index].concat(item);
               }
             ),
@@ -1154,12 +1154,14 @@ export default {
               break;
             }
           }
-          let from_latlng = this.global_job_dict[
-            params.value[POS_JOB_INDEX_travel_prev_code]
-          ]["data_latlng"];
-          let to_latlng = this.global_job_dict[
-            params.value[POS_JOB_INDEX_job_code]
-          ]["data_latlng"];
+          let from_latlng =
+            this.global_job_dict[params.value[POS_JOB_INDEX_travel_prev_code]][
+              "data_latlng"
+            ];
+          let to_latlng =
+            this.global_job_dict[params.value[POS_JOB_INDEX_job_code]][
+              "data_latlng"
+            ];
 
           this.showDialogMapRoute([
             { lat: from_latlng[0], lng: from_latlng[1] },
@@ -1172,9 +1174,10 @@ export default {
             params.value[POS_JOB_INDEX_prev_location_type]
           );
 
-          let to_latlng = this.global_job_dict[
-            params.value[POS_JOB_INDEX_job_code]
-          ]["data_latlng"];
+          let to_latlng =
+            this.global_job_dict[params.value[POS_JOB_INDEX_job_code]][
+              "data_latlng"
+            ];
 
           this.showDialogMapRoute([
             {
@@ -1387,11 +1390,14 @@ export default {
     initDrag() {
       var myChart = this.chart;
       var _that_vm = this;
-      myChart.on("mousedown", function(param) {
+      myChart.on("mousedown", function (param) {
         if (!_that_vm.chartDraggable || !param || param.seriesIndex == null) {
           return;
         }
         _single_job_drop_check_ajay_lock = false;
+        if (param.value.length <= 6) {
+          return false;
+        }
         let selectedJobEnvIndex =
           _that_vm.global_job_dict[param.value[POS_JOB_INDEX_job_code]]
             .job_index_in_all;
@@ -1438,7 +1444,7 @@ export default {
           _draggingRecord.timeDeparture - _draggingRecord.timeArrival;
       });
 
-      myChart.getZr().on("mousemove", function(event) {
+      myChart.getZr().on("mousemove", function (event) {
         //console.log(event)
         if (!_draggingEl) {
           return;
@@ -1458,7 +1464,7 @@ export default {
         //autoDataZoomWhenDraggingOutside(cursorX, cursorY);
       });
 
-      myChart.getZr().on("mouseup", function() {
+      myChart.getZr().on("mouseup", function () {
         // Drop
         // console.log('mouseup updateRawData, duan 2020-02-19 18:42:23')
 

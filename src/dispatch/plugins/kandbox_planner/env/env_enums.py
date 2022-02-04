@@ -1,4 +1,3 @@
-from dispatch.job.enums import JobPlanningStatus
 from enum import Enum
 
 
@@ -9,6 +8,7 @@ class TimeSlotType(str, Enum):
     FLOATING = "F"
     JOB_FIXED = "J"
     ABSENCE = "E"
+
 
 
 class TimeSlotOperationType(str, Enum):
@@ -26,29 +26,131 @@ class ActionType(str, Enum):
     UNPLAN = "U"  #
 
 
+class ActionCommandType(int, Enum):
+    # Three types of actions:
+    # 0. idle - does nothing
+    # 1. dispatch - plan current unplanned_job to a specifc worker slot. The worker slot index is pointing to obs["slots"]
+    # 2. reposition - select one worker and move him on map to a specifiy longitude/latitude.
+
+    IDLE = 0
+    DISPATCH = 1
+    REPOSITION = 2
+
+    # 2. move - select one worker and move him on map to a specifiy longitude/latitude.
+
+class WorkerType(str, Enum):
+    """ WorkerType defines types of workers with different role of function
+
+    WORKER is one person which can work as primary.
+    Secondary must work with another primary in a shared job. A secondary worker can move on its own, but a vehicle can not.
+    Vehicle: A container that CAN move, which item tracking. 
+        Only the shared, swappable vehicles should be tracked. If a vehicle is permenantly 
+        used by a primary worker, it should be inside primary worker flex form.
+
+    Depot: A container that can NOT move. (MAY be not a worker?)
+    """
+
+    WORKER = "W"
+    SECONDARY = "S"
+    VEHICLE = "V" 
+
+    # DEPOT = "D"
+
 class JobType(str, Enum):
     """
     COMPOSITE is a (virtual) job containing multiple jobs. The included jobs must be assigned to a same set workers.
-    APPOINTMENT is a composite job with permenant P status. The AI engine should not attempt to change its planning status/data. 
-    JOB = "visit"
+    -- A composite will be treated virtual, and its included jobs are scheduled individually, but must be assigned to a same worker.
+    APPOINTMENT is a composite job with permenant P status. The AI engine should not attempt to change its planning status/data.
+    -- An appointment will be treated as one unit and shadow its included jobs.
+    JOB == "visit"
     ABSENCE = "event": when a worker can not performce the job.
     """
+
     COMPOSITE = "composite"
-    APPOINTMENT = "appt"
+    APPOINTMENT = "appt" # appt = composite (or normal) + fixed_time. It may or maynot have included_jobs...
     JOB = "visit"
     ABSENCE = "event"
+    REPLENISH = "replenish"
+    # 2021-10-23 08:15:39 Not same as replenish, I have not yet decided to include it.
+    # LUNCH_BREAK = "lunch_break"
+
+class JobPlanningStatus(str, Enum):
+    """Planning Status for JOB. 
+    \n U == Un-planned. When is Job is U status, the scheduled information (scheduled_start/duration/workers) is ignored. 
+    \n I == In-planning. When is Job is I status, the scheduled attributes must have valid values. 
+    \n P == Planned. When is Job is P status, it is treated as fixed agreement for both worker assignment and datetime. The easydispatch engine will not modify its planning information.
+    \n F == FINISHED. When is Job is F status, it will be moved to historical storage and should not show on planner chart. i.e. FINISHED==CANCELLED . Note: CANCELLED status was removed from this list, because for planning, if a Job is C status, it will be removed.  
+    """
+    IN_PLANNING = "I"
+    UNPLANNED = "U"
+    PLANNED = "P"
+    # CANCELLED = "C"
+    FINISHED = "F"   # maps to visited=V
+    
+# class JobPlanningStatus(str, Enum):
+#     IN_PLANNING = "I"
+#     UNPLANNED = "U"
+#     PLANNED = "P"
+#     COMPLETED = "C"  # maps to visited=V
 
 
-# 'replay' for replay Planned jobs, where allows conflicts. "predict" for training new jobs and predict.
-class EnvRunModeType(str, Enum):
-    PREDICT = "predict"
-    REPLAY = "replay"
+class JobPlanningStatus(str, Enum):
+    """Planning Status for JOB. 
+    \n U == Un-planned. When is Job is U status, the scheduled information (scheduled_start/duration/workers) is ignored. 
+    \n I == In-planning. When is Job is I status, the scheduled attributes must have valid values. 
+    \n P == Planned. When is Job is P status, it is treated as fixed agreement for both worker assignment and datetime. The easydispatch engine will not modify its scheduling information.  
+    \n C == CANCELLED. When is Job is C status, it will be removed. In future, it will be moved to historical storage. DO NOT USE THIS STATUS. 
+    \n F == FINISHED. When is Job is F status, it will be moved to historical storage. 
+    """
+    IN_PLANNING = "I"
+    UNPLANNED = "U"
+    PLANNED = "P"
+    CANCELLED = "C"
+    FINISHED = "F"   # maps to visited=V
+    
+class JobLifeCycleStatus(str, Enum):
+    """Planning Status for JOB. 
+    \n Created: default status for all new jobs. If this column is not used in any given team, the life cycle status should always remain Created. 
+    \n Started: When the worker check in onsite.
+    \n Item_Ready: All items(materials) needed for this job are ready (on the van, or with workers) 
+    \n COMPLETED: The workers have Completed the onsite job.
+    """
+    CREATED = "Created"
+    TRAVEL_STARTED = "Travel_Started"
+    ONSITE_STARTED = "Onsite_Started"
+    ITEM_READY = "Item_Ready"
+    COMPLETED = "Completed"
+    CUSTOMER_APPROVED = "Customer_Approved"
+    PLANNER_APPROVED = "Planner_Approved"
+    CANCELLED = "Cancelled"
+    ARCHIVED = "Archived"
+
+    PAID = "Paid"
+    VIRTUAL_JOB = "VIRTUAL_JOB"
+    UNKNOWN = "UNKNOWN"
 
 
-class OptimizerSolutionStatus(Enum):
-    INFEASIBLE = 1
-    SUCCESS = 0
-    INPUT_VALIDATION_ERROR = 2
+
+JobLifeCycleStatus_SEQUENCE = {
+    JobLifeCycleStatus.CREATED: 0,
+    JobLifeCycleStatus.TRAVEL_STARTED: 3,
+    JobLifeCycleStatus.ONSITE_STARTED: 3,
+    JobLifeCycleStatus.ITEM_READY: 3,
+
+    JobLifeCycleStatus.COMPLETED: 10, 
+
+    JobLifeCycleStatus.CUSTOMER_APPROVED: 20,
+    JobLifeCycleStatus.PLANNER_APPROVED: 30,
+
+    JobLifeCycleStatus.ARCHIVED: 100,
+    JobLifeCycleStatus.CANCELLED: 100,
+
+    JobLifeCycleStatus.UNKNOWN: 100,
+    JobLifeCycleStatus.PAID: 100,
+    JobLifeCycleStatus.VIRTUAL_JOB: 100,
+}
+
+
 
 
 class JobScheduleType(str, Enum):
@@ -67,12 +169,6 @@ class LocationType(str, Enum):
     JOB = "J"
     ABSENCE = "ABS"
 
-
-# class JobPlanningStatus(str, Enum):
-#     IN_PLANNING = "I"
-#     UNPLANNED = "U"
-#     PLANNED = "P"
-#     COMPLETED = "C"  # maps to visited=V
 
 
 class AppointmentStatus(str, Enum):
@@ -93,6 +189,20 @@ AppointmentStatus_SEQUENCE = {
     AppointmentStatus.EXPIRED: 3,
     AppointmentStatus.UNKNOWN: 100,
 }
+
+
+
+
+# 'replay' for replay Planned jobs, where allows conflicts. "predict" for training new jobs and predict.
+class EnvRunModeType(str, Enum):
+    PREDICT = "predict"
+    REPLAY = "replay"
+
+
+class OptimizerSolutionStatus(Enum):
+    SUCCESS = 0
+    INFEASIBLE = 1
+    INPUT_VALIDATION_ERROR = 2
 
 
 class ActionScoringResultType(str, Enum):
@@ -164,3 +274,4 @@ class KandboxMessageSourceType(str, Enum):
     PLANNER_UI = "Planner_UI"
     BATCH_INPUT = "Batch_Input"
     REST_API = "Rest_API"
+    SYSTEM = "SYSTEM"

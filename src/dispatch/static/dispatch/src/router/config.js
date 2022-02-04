@@ -4,7 +4,7 @@ export const publicRoute = [
   {
     path: "*",
     component: () =>
-      import(/* webpackChunkName: "errors-404" */ "@/views/error/NotFound.vue")
+      import(/* webpackChunkName: "errors-404" */ "@/views/error/NotFound.vue"),
   },
   {
     path: "/login",
@@ -15,9 +15,9 @@ export const publicRoute = [
         path: "/login",
         name: "Login",
         component: () =>
-          import(/* webpackChunkName: "auth-login" */ "@/auth/Login.vue")
-      }
-    ]
+          import(/* webpackChunkName: "auth-login" */ "@/auth/Login.vue"),
+      },
+    ],
   },
   {
     path: "/register",
@@ -28,24 +28,64 @@ export const publicRoute = [
         path: "/register",
         name: "Register",
         component: () =>
-          import(/* webpackChunkName: "auth-register" */ "@/auth/Register.vue")
-      }
-    ]
+          import(/* webpackChunkName: "auth-register" */ "@/auth/Register.vue"),
+      },
+    ],
   },
+  {
+    path: "/register_eng",
+    component: AuthLayout,
+    // name: "register in org",
+    // meta: { title: "register in org" },
+    // props: (route) => ({ orgCode: route.query.orgCode}),
+    // component: () =>
+    //   import(/* webpackChunkName: "errors-500" */ "@/auth/RegisterInOrg.vue"),
+    meta: { title: "Register in org", icon: "view_compact", group: "auth" },
+    children: [
+      {
+        path: "/register_eng",
+        name: "RegisterIn",
+        component: () =>
+          import(/* webpackChunkName: "auth-register" */ "@/auth/RegisterOrgWorker.vue"),
+      },
+    ],
+  },   
+  {
+    path: "/register_customer",
+    component: AuthLayout,
+    meta: { title: "Register as a Customer", icon: "view_compact", group: "auth" },
+    children: [
+      {
+        path: "/register_customer",
+        name: "RegisterIn",
+        component: () =>
+          import(/* webpackChunkName: "auth-register" */ "@/auth/RegisterOrgCustomer.vue"),
+      },
+    ],
+  },   
   {
     path: "/404",
     name: "404",
     meta: { title: "Not Found" },
     component: () =>
-      import(/* webpackChunkName: "errors-404" */ "@/views/error/NotFound.vue")
+      import(/* webpackChunkName: "errors-404" */ "@/views/error/NotFound.vue"),
   },
   {
     path: "/500",
     name: "500",
     meta: { title: "Server Error" },
     component: () =>
-      import(/* webpackChunkName: "errors-500" */ "@/views/error/Error.vue")
-  }
+      import(/* webpackChunkName: "errors-500" */ "@/views/error/Error.vue"),
+  },
+  {
+    path: "/edit_job",
+    name: "Edit Job",
+    meta: { title: "Edit Job" },
+    props: (route) => ({ jobId: route.query.jobId, token: route.query.token }),
+    component: () =>
+      import(/* webpackChunkName: "errors-500" */ "@/job/NoTokenEditSheet.vue"),
+  },
+
 ];
 
 // NOTE: The order in which routes are added to the list matters when evaluated. For example, /jobs/report will take precendence over /jobs/:name.
@@ -54,29 +94,29 @@ export const protectedRoute = [
     path: "/",
     component: DefaultLayout,
     meta: { title: "Dispatch", group: "jobs", icon: "" },
-    redirect: "/gantt",
+    redirect: "/jobs",
     children: [
       {
         path: "/403",
         name: "Forbidden",
         meta: { title: "Access Denied", hiddenInMenu: true },
         component: () =>
-          import(/* webpackChunkName: "error-403" */ "@/views/error/Deny.vue")
-      }
-    ]
+          import(/* webpackChunkName: "error-403" */ "@/views/error/Deny.vue"),
+      },
+    ],
   },
   {
     path: "/jobs/status",
     meta: { title: "Status", icon: "", requiresAuth: true },
     component: () =>
-      import(/* webpackChunkName: "jobs-status" */ "@/job/Status.vue")
+      import(/* webpackChunkName: "jobs-status" */ "@/job/Status.vue"),
   },
 
   {
     path: "/jobs/report",
     meta: { title: "Report", icon: "", requiresAuth: true },
     component: () =>
-      import(/* webpackChunkName: "jobs-report" */ "@/job/ReportForm.vue")
+      import(/* webpackChunkName: "jobs-report" */ "@/job/ReportForm.vue"),
   },
   {
     path: "/jobs/types",
@@ -85,8 +125,28 @@ export const protectedRoute = [
       title: "Job Types",
       icon: "view_compact",
       group: "configuration",
-      requiresAuth: true
-    }
+      requiresAuth: true,
+    },
+  },
+  {
+    path: "/liveMap",
+    component: DefaultLayout,
+    meta: {
+      title: "liveMap",
+      icon: "view_compact",
+      group: "dashboard",
+      requiresAuth: true,
+    },
+    children: [
+      {
+        path: "/liveMap",
+        name: "LiveMap",
+        component: () =>
+          import(
+            /* webpackChunkName: "job-dashboard" */ "@/live_map/LiveMap.vue"
+          ),
+      },
+    ],
   },
   {
     path: "/gantt",
@@ -95,16 +155,16 @@ export const protectedRoute = [
       title: "gantt",
       icon: "view_compact",
       group: "gantt",
-      requiresAuth: true
+      requiresAuth: true,
     },
     children: [
       {
         path: "/gantt",
         name: "Gantt",
         component: () =>
-          import(/* webpackChunkName: "job-dashboard" */ "@/gantt/Gantt.vue")
-      }
-    ]
+          import(/* webpackChunkName: "job-dashboard-gantt" */ "@/gantt/Gantt.vue"),
+      },
+    ],
   },
   {
     path: "/jobs",
@@ -113,17 +173,141 @@ export const protectedRoute = [
       title: "Jobs",
       icon: "view_compact",
       group: "jobs",
-      requiresAuth: true
+      requiresAuth: true,
     },
     children: [
       {
         path: "/jobs",
         name: "JobTable",
         component: () =>
-          import(/* webpackChunkName: "job-table" */ "@/job/Table.vue")
-      }
-    ]
+          import(/* webpackChunkName: "job-table" */ "@/job/Table.vue"),
+      },
+    ],
   },
+  {
+    path: "/plan_jobs",
+    component: DefaultLayout,
+    meta: {
+      title: "JobHistory",
+      icon: "view_compact",
+      group: "JobHistory",
+      requiresAuth: true,
+    },
+    children: [
+      {
+        path: "/plan_jobs",
+        name: "JobHistoryTable",
+        component: () =>
+          import(/* webpackChunkName: "job-table_plan_jobs" */ "@/plan_jobs/Table.vue"),
+      },
+    ],
+  }, 
+  {
+    path: "/job_table_4_worker",
+    name: "Table Job for Worker",
+    meta: { title: "Job table for Worker" },
+    component: DefaultLayout,
+    children: [
+      {
+        path: "/job_table_4_worker",
+        name: "Job4WorkerTable",
+        props: () => ({ lifeCycleStatusFilter: null, }),
+        component: () =>
+          import( "@/job/JobTable4Worker.vue"),
+      },
+    ],  
+  },
+  {
+    path: "/job_table_4_worker_current",
+    name: "Table Job for Worker current",
+    meta: { title: "Job table for Worker" },
+    props: () => ({ lifeCycleStatusFilter: ["Created"], }),
+    component: DefaultLayout,
+    children: [
+      {
+        path: "/job_table_4_worker_current",
+        name: "Job4WorkerTableCurrentt",
+        props: () => ({ lifeCycleStatusFilter: ["Created"], }),
+        component: () =>
+          import( "@/job/JobTable4Worker.vue"),
+      },
+    ],  
+  },
+  {
+    path: "/job_table_4_worker_finished",
+    name: "Table Job for Worker finished",
+    meta: { title: "Job table for Worker" },
+    props: () => ({ lifeCycleStatusFilter: ["Onsite_Started"], }),
+    component: DefaultLayout,
+    children: [
+      {
+        path: "/job_table_4_worker_finished",
+        name: "Job4WorkerTableFinished",
+        props: () => ({ lifeCycleStatusFilter: ["Onsite_Started"], }),
+        component: () =>
+          import( "@/job/JobTable4Worker.vue"),
+      },
+    ],  
+  },
+  {
+    path: "/job_edit_4_worker",
+    name: "Edit Job for Worker",
+    meta: { title: "Edit Job for Worker" }, 
+    component: DefaultLayout,
+    children: [
+      {
+        path: "/job_edit_4_worker",
+        name: "JobEdit4Worker",
+        props: (route) => ({ jobId: route.query.jobId, token: route.query.token }),
+        component: () =>
+          import( "@/job/JobEdit4Worker.vue"),
+      },
+    ],
+  },
+  {
+    path: "/job_table_4_customer",
+    name: "Table Job for Customer",
+    meta: { title: "Job table for Customer" },
+    component: DefaultLayout,
+    children: [
+      {
+        path: "/job_table_4_customer",
+        name: "Job4CustomerTable",
+        component: () =>
+          import( "@/job/JobTable4Customer.vue"),
+      },
+    ],  
+  },
+  // {
+  //   path: "/job_edit_4_customer",
+  //   component: DefaultLayout,
+  //   children: [
+  //     {
+  //       path: "/job_edit_4_customer",
+  //       name: "JobEdit4Customer",
+  //       component: () =>
+  //         import( "@/job/JobEdit4Customer.vue"),
+  //     },
+  //   ],
+  //   name: "Edit Job for Customer",
+  //   meta: { title: "Edit Job for Customer" }, 
+  // },
+  // {
+  //   path: "/job_edit_4_worker",
+  //   name: "Edit Job for Worker",
+  //   meta: { title: "Edit Job for Worker" },
+  //   props: (route) => ({ jobId: route.query.jobId, token: route.query.token }),
+  //   component: () =>
+  //     import(/* webpackChunkName: "errors-500" */ "@/job/JobEdit4Worker.vue"),
+  // },
+  // {
+  //   path: "/job_table_4_worker",
+  //   name: "Table Job for Worker",
+  //   meta: { title: "Job table for Worker" },
+  //   props: (route) => ({token: route.query.token }),
+  //   component: () =>
+  //     import(/* webpackChunkName: "errors-500" */ "@/job/JobTable4Worker.vue"),
+  // },
   {
     path: "/services",
     component: DefaultLayout,
@@ -131,16 +315,16 @@ export const protectedRoute = [
       title: "Services",
       icon: "view_compact",
       group: "contacts",
-      requiresAuth: true
+      requiresAuth: true,
     },
     children: [
       {
         path: "/services",
         name: "ServiceTable",
         component: () =>
-          import(/* webpackChunkName: "service-table" */ "@/service/Table.vue")
-      }
-    ]
+          import(/* webpackChunkName: "service-table" */ "@/service/Table.vue"),
+      },
+    ],
   },
   {
     path: "/service_plugin",
@@ -149,7 +333,7 @@ export const protectedRoute = [
       title: "Service Plugins",
       icon: "view_compact",
       group: "contacts",
-      requiresAuth: true
+      requiresAuth: true,
     },
     children: [
       {
@@ -157,10 +341,10 @@ export const protectedRoute = [
         name: "ServicePluginTable",
         component: () =>
           import(
-            /* webpackChunkName: "service-table" */ "@/service_plugin/Table.vue"
-          )
-      }
-    ]
+            /* webpackChunkName: "service-table-plugin" */ "@/service_plugin/Table.vue"
+          ),
+      },
+    ],
   },
   {
     path: "/workers",
@@ -169,16 +353,16 @@ export const protectedRoute = [
       title: "Workers",
       icon: "view_compact",
       group: "contacts",
-      requiresAuth: true
+      requiresAuth: true,
     },
     children: [
       {
         path: "/workers",
         name: "WorkerTable",
         component: () =>
-          import(/* webpackChunkName: "worker-table" */ "@/worker/Table.vue")
-      }
-    ]
+          import(/* webpackChunkName: "worker-table" */ "@/worker/Table.vue"),
+      },
+    ],
   },
   {
     path: "/teams",
@@ -187,16 +371,72 @@ export const protectedRoute = [
       title: "Teams",
       icon: "view_compact",
       group: "contacts",
-      requiresAuth: true
+      requiresAuth: true,
     },
     children: [
       {
         path: "/teams",
         name: "TeamTable",
         component: () =>
-          import(/* webpackChunkName: "team-table" */ "@/team/Table.vue")
-      }
-    ]
+          import(/* webpackChunkName: "team-table" */ "@/team/Table.vue"),
+      },
+    ],
+  },
+  {
+    path: "/items",
+    component: DefaultLayout,
+    meta: {
+      title: "Items",
+      icon: "view_compact",
+      group: "inventory",
+      requiresAuth: true,
+    },
+    children: [
+      {
+        path: "/items",
+        name: "ItemTable",
+        component: () =>
+          import(/* webpackChunkName: "item-table" */ "@/item/Table.vue"),
+      },
+    ],
+  },
+  {
+    path: "/depots",
+    component: DefaultLayout,
+    meta: {
+      title: "Depots",
+      icon: "view_compact",
+      group: "inventory",
+      requiresAuth: true,
+    },
+    children: [
+      {
+        path: "/depots",
+        name: "DepotsTable",
+        component: () =>
+          import(/* webpackChunkName: "depot-table" */ "@/depot/Table.vue"),
+      },
+    ],
+  },
+  {
+    path: "/item_inventory",
+    component: DefaultLayout,
+    meta: {
+      title: "ItemsInventory",
+      icon: "view_compact",
+      group: "inventory",
+      requiresAuth: true,
+    },
+    children: [
+      {
+        path: "/item_inventory",
+        name: "ItemInventoryTable",
+        component: () =>
+          import(
+            /* webpackChunkName: "inventory-table" */ "@/item_inventory/Table.vue"
+          ),
+      },
+    ],
   },
   {
     path: "/tags",
@@ -205,16 +445,16 @@ export const protectedRoute = [
       title: "Tags",
       icon: "view_compact",
       group: "contacts",
-      requiresAuth: true
+      requiresAuth: true,
     },
     children: [
       {
         path: "/tags",
         name: "TagTable",
         component: () =>
-          import(/* webpackChunkName: "tag-table" */ "@/tag/Table.vue")
-      }
-    ]
+          import(/* webpackChunkName: "tag-table" */ "@/tag/Table.vue"),
+      },
+    ],
   },
   {
     path: "/search",
@@ -223,7 +463,7 @@ export const protectedRoute = [
       title: "Search",
       icon: "view_compact",
       group: "search",
-      requiresAuth: true
+      requiresAuth: true,
     },
     children: [
       {
@@ -232,9 +472,9 @@ export const protectedRoute = [
         component: () =>
           import(
             /* webpackChunkName: "search-result-list" */ "@/search/ResultList.vue"
-          )
-      }
-    ]
+          ),
+      },
+    ],
   },
   {
     path: "/plugins",
@@ -243,16 +483,16 @@ export const protectedRoute = [
       title: "Plugins",
       icon: "view_compact",
       group: "configuration",
-      requiresAuth: true
+      requiresAuth: true,
     },
     children: [
       {
         path: "/plugins",
         name: "PluginTable",
         component: () =>
-          import(/* webpackChunkName: "routing-table" */ "@/plugin/Table.vue")
-      }
-    ]
+          import( "@/plugin/Table.vue"),
+      },
+    ],
   },
   {
     path: "/locations",
@@ -261,16 +501,18 @@ export const protectedRoute = [
       title: "Locations",
       icon: "view_compact",
       group: "configuration",
-      requiresAuth: true
+      requiresAuth: true,
     },
     children: [
       {
         path: "/locations",
         name: "LocationTable",
         component: () =>
-          import(/* webpackChunkName: "routing-table" */ "@/location/Table.vue")
-      }
-    ]
+          import(
+             "@/location/Table.vue"
+          ),
+      },
+    ],
   },
   {
     path: "/users",
@@ -279,15 +521,33 @@ export const protectedRoute = [
       title: "Users",
       icon: "view_compact",
       group: "configuration",
-      requiresAuth: true
+      requiresAuth: true,
     },
     children: [
       {
         path: "/users",
         name: "UserTable",
         component: () =>
-          import(/* webpackChunkName: "routing-table" */ "@/auth/Table.vue")
-      }
-    ]
-  }
+          import( "@/auth/Table.vue"),
+      },
+    ],
+  },
+  {
+    path: "/organization",
+    component: DefaultLayout,
+    meta: {
+      title: "Organization",
+      icon: "view_compact",
+      group: "configuration",
+      requiresAuth: true,
+    },
+    children: [
+      {
+        path: "/organization",
+        name: "OrganizationTable",
+        component: () =>
+          import( "@/org/Table.vue"),
+      },
+    ],
+  },
 ];

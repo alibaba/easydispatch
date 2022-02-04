@@ -58,8 +58,8 @@ const mutations = {
     state.refresh.show = true;
   },
   SET_SNACKBAR(state, value) {
-    state.snackbar = value;
-    state.snackbar.show = true;
+    value.show = true;
+    state.snackbar = Object.assign(getDefaulRefreshState(), value);
   },
   SET_LOADING(state, value) {
     state.loading = value;

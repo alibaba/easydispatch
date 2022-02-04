@@ -26,9 +26,12 @@ class KandboxPlannerPluginType(str, Enum):
     kandbox_agent = "kandbox_agent"
     kandbox_batch_optimizer = "kandbox_batch_optimizer"
     kandbox_rule = "kandbox_rule"
+    kandbox_worker_check_rule = "worker_check_rule"
     kandbox_travel_time = "kandbox_travel_time"
     kandbox_data_adapter = "kandbox_data_adapter"
     kandbox_data_generator = "kandbox_data_generator"
+    kandbox_location_service = "kandbox_location_service"
+    kandbox_routing_adapter = "kandbox_routing_adapter"
 
 
 class KandboxPlugin:
@@ -76,7 +79,9 @@ class KandboxEnvProxyPlugin(Plugin):
 
     def get_env(self, config, kp_data_adapter=None):
         # kp_data_adapter=kp_data_adapter,
-        return self.env_class(config=config)
+        new_config = copy.deepcopy(self.default_config)
+        new_config.update(config)
+        return self.env_class(config=new_config)
 
 
 class KandboxEnvPlugin(gym.Env):
@@ -280,4 +285,22 @@ class KandboxTravelTimePlugin(Plugin):
     _schema = PluginOptionModel
 
     def get_travel_minutes_2locations(self, loc_1, loc_2):  # get_travel_time_2locations
+        raise NotImplementedError
+
+
+class KandboxLocationServicePlugin(Plugin):
+    """
+     get location lat lon plugin
+    """
+
+    type = KandboxPlannerPluginType.kandbox_location_service
+    _schema = PluginOptionModel
+
+    def do_post_location(self, payload):  #
+        raise NotImplementedError
+
+    def do_get_location(self, payload):  #
+        raise NotImplementedError
+
+    def get_location(self, payload):  #
         raise NotImplementedError

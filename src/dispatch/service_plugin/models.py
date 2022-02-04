@@ -8,10 +8,10 @@ from enum import Enum
 
 from dispatch.database import Base
 from dispatch.models import DispatchBase
-from dispatch.plugin.models import PluginRead,PluginCreate
+from dispatch.plugin.models import PluginRead, PluginCreate
 
 # To avoid circular model definition
-from dispatch.service.models import ServiceRead,ServiceCreate
+from dispatch.service.models import ServiceRead, ServiceCreate
 
 
 from dispatch.plugins.bases.kandbox_planner import KandboxPlannerPluginType
@@ -26,10 +26,11 @@ class ServicePlugin(Base):
         String, nullable=False, default=KandboxPlannerPluginType.kandbox_env
     )
 
+    org_id = Column(Integer, nullable=False, default=-1)
     # relationships
     service_id = Column(Integer, ForeignKey("service.id"))
     service = relationship("Service")
-    plugin_id = Column(Integer, ForeignKey("plugin.id"))
+    plugin_id = Column(Integer, ForeignKey("dispatch_core.plugin.id"))
     plugin = relationship("Plugin")
 
     config = Column(JSON)  # Column(String, default='{"key_1":["skill_1"]}')
@@ -40,10 +41,9 @@ class ServicePluginBase(DispatchBase):
 
 
 class ServicePluginCreate(ServicePluginBase):
+    org_id: int = -1
     plugin: PluginCreate
     service: ServiceCreate
-    # plugin_id: int
-    # service_id: int
     config: dict = None
     planning_plugin_type: KandboxPlannerPluginType
 

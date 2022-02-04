@@ -134,7 +134,8 @@ const actions = {
         commit(
           "app/SET_SNACKBAR",
           {
-            text: "Service not deleted. Reason: " + err.response.data.detail,
+            text:
+              "Service not deleted. Reason: Related data cannot be deleted",
             color: "red",
           },
           { root: true }

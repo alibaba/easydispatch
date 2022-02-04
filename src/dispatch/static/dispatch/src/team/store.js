@@ -4,6 +4,11 @@ import { getField, updateField } from "vuex-map-fields";
 import { debounce } from "lodash";
 
 const getDefaultSelectedState = () => {
+  let today = new Date();
+  let env_start_day = today
+    .toISOString()
+    .split("T")[0]
+    .replace(/-/g, "");
   return {
     id: null,
     code: null,
@@ -13,8 +18,21 @@ const getDefaultSelectedState = () => {
     description: null,
 
     flex_form_data: {
-      env_start_day: "20210524",
-      nbr_of_days_planning_window: 1,
+      env_start_day: env_start_day,
+      planning_working_days: 1,
+      scoring_factor_standard_travel_minutes: 90,
+      job_address_flag: true,
+      worker_icon: "fa-taxi",
+      job_icon: "fa-user",
+      holiday_days: "",
+      weekly_rest_day: "",
+      default_requested_primary_worker_code: "",
+      travel_min_minutes: 5,
+      travel_speed_km_hour: 19.8,
+      horizon_start_minutes: 1925,
+      respect_initial_travel: false,
+      worker_job_min_minutes: 1,
+      enable_env_start_day_is_other_day: false,
     },
     created_at: null,
     updated_at: null,
@@ -23,6 +41,8 @@ const getDefaultSelectedState = () => {
 };
 
 const state = {
+  worker_icon: "",
+  job_icon: "",
   selected: {
     ...getDefaultSelectedState(),
   },
@@ -76,6 +96,19 @@ const actions = {
     commit("SET_DIALOG_DELETE", false);
     commit("RESET_SELECTED");
   },
+  setSelected({ commit }, team) {
+    commit("SET_SELECTED", team);
+  },
+
+  setSelectedFormDataAndSave({ dispatch }, value) {
+    if (value) {
+      return dispatch("setSelected", value).then(() => {
+        dispatch("save");
+      });
+    } else {
+      return dispatch("save");
+    }
+  },
   save({ commit, dispatch }) {
     if (!state.selected.id) {
       return TeamApi.create(state.selected)
@@ -113,7 +146,7 @@ const actions = {
           commit(
             "app/SET_SNACKBAR",
             {
-              text: "Team not updated. Reason: " + err.response.data.detail,
+              text: "Team not updated. Reason: " + err.response.statusText,
               color: "red",
             },
             { root: true }
@@ -136,15 +169,15 @@ const actions = {
         commit(
           "app/SET_SNACKBAR",
           {
-            text: "Team not deleted. Reason: " + err.response.data.detail,
+            text: "Team not deleted. Reason: Related data cannot be deleted",
             color: "red",
           },
           { root: true }
         );
       });
   },
-  reset_planning_window({ commit, dispatch }) {
-    return TeamApi.reset_planning_window({ team_code: state.selected.code })
+  reset_planning_window({ commit, dispatch }, code) {
+    return TeamApi.reset_planning_window({ team_code: code })
       .then(function() {
         commit(
           "app/SET_SNACKBAR",
@@ -164,6 +197,39 @@ const actions = {
           { root: true }
         );
       });
+  },
+  reset_callback({ commit, dispatch }) {
+    return TeamApi.reset_callback({})
+      .then(function() {
+        commit(
+          "app/SET_SNACKBAR",
+          { text: "reset_callback successfully." },
+          { root: true }
+        );
+      })
+      .catch((err) => {
+        commit(
+          "app/SET_SNACKBAR",
+          {
+            text: "reset_callback error. Reason: " + err.response.data.detail,
+            color: "red",
+          },
+          { root: true }
+        );
+      });
+  },
+  init_icon({ commit, dispatch }, team_id) {
+    return TeamApi.get(team_id).then(function(response) {
+      commit("SET_ICON", {
+        worker_icon: response.data.flex_form_data["worker_icon"],
+        job_icon: response.data.flex_form_data["job_icon"],
+      });
+    });
+  },
+  get_team_by_id({ commit, dispatch }, team_id) {
+    return TeamApi.get(team_id).then(function(response) {
+      commit("SET_SELECTED", response.data);
+    });
   },
 };
 
@@ -186,6 +252,10 @@ const mutations = {
   },
   RESET_SELECTED(state) {
     state.selected = Object.assign(state.selected, getDefaultSelectedState());
+  },
+  SET_ICON(state, value) {
+    state.worker_icon = value.worker_icon;
+    state.job_icon = value.job_icon;
   },
 };
 

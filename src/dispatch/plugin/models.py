@@ -9,6 +9,7 @@ from dispatch.plugins.base import plugins
 
 
 class Plugin(Base):
+    __table_args__ = {"schema": "dispatch_core"}
     id = Column(Integer, primary_key=True)
     title = Column(String)
     slug = Column(String, unique=True)
@@ -31,7 +32,7 @@ class Plugin(Base):
         print("getting by slug", self.slug, p)
         return plugins.get(self.slug)
 
-    search_vector = Column(TSVectorType("title","slug","type"))
+    search_vector = Column(TSVectorType("title", "slug", "type"))
 
 
 # Pydantic models...

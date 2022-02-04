@@ -110,7 +110,7 @@ export default {
     this.ready = true;
 
     var vm = this;
-    vm.getMap(function(mapObject) {
+    vm.getMap(function (mapObject) {
       vm.add2MapObject(mapObject);
     });
   },
@@ -119,7 +119,7 @@ export default {
     return this.layer ? this.layer.remove() : null;
   },
   watch: {
-    waypoints: function(newVal, oldVal) {
+    waypoints: function (newVal, oldVal) {
       // watch it
       console.log(
         "LRoutingMachine waypoints changed to: ",
@@ -131,7 +131,7 @@ export default {
       //this.add()
       if (newVal) {
         var vm = this;
-        vm.getMap(function(mapObject) {
+        vm.getMap(function (mapObject) {
           vm.add2MapObject(mapObject);
         });
       }
@@ -185,7 +185,8 @@ export default {
 
         const options = {
           // serviceUrl: "https://kerrypoc.dispatch.kandbox.com/route/v1",
-          serviceUrl: "https://londondemo1.dispatch.kandbox.com/route/v1",
+          // serviceUrl: "https://londondemo1.dispatch.kandbox.com/route/v1",
+          serviceUrl: "https://routing.openstreetmap.de/routed-bike/route/v1",
           waypoints,
           fitSelectedRoutes,
           autoRoute,
@@ -198,7 +199,6 @@ export default {
 
         // mapObject.invalidateSize();
         // mapObject.setView(global_center_latlong, 8);
-
         const routingLayer = L.Routing.control(options);
         routingLayer.addTo(mapObject);
         this.layer = routingLayer;

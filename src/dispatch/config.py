@@ -1,3 +1,4 @@
+import redis
 from datetime import datetime
 import logging
 import os
@@ -65,23 +66,33 @@ except Exception:
         from starlette.datastructures import Secret
 
 
-config = Config(".env")
+config = Config("dev.env")
 
 LOG_LEVEL = config("LOG_LEVEL", default=logging.WARNING)
+LOG_FILE = config("LOG_FILE", default='dispatch_log_file.csv')
+LOG_FILE_CALL_BACK = config("LOG_FILE_CALL_BACK", default='ipms_apms_rps_callback.csv')
 
 module_levels = {
-    "dispatch.main": logging.ERROR,
-    "recommendation_server": logging.DEBUG,
+    "dispatch.main": logging.INFO,
+    "recommendation_server": logging.INFO,
     "rllib_env_job2slot": logging.ERROR,
     "dispatch.plugins.kandbox_planner.routing.travel_time_routingpy_redis": logging.ERROR,
+    "kandbox_kafka_adapter": logging.INFO,
+    "dispatch.event": logging.ERROR,
+    "dispatch.contrib.uupaotui": logging.ERROR,
+    "dispatch.job.service": logging.INFO,
+    "ipms_apms_rps_callback": logging.INFO,
+    "dispatch.contrib.uupaotui.processor.core": logging.INFO,
+    "dispatch.contrib.baituo.baituo_dispatch": logging.INFO,
+    "zulip": logging.INFO,
 }
 
 
 ENV = config("ENV", default="local")
-
-DISPATCH_UI_URL = config("DISPATCH_UI_URL")
-DISPATCH_HELP_EMAIL = config("DISPATCH_HELP_EMAIL")
-DISPATCH_HELP_SLACK_CHANNEL = config("DISPATCH_HELP_SLACK_CHANNEL")
+DEBUG = False
+DISPATCH_UI_URL = config("DISPATCH_UI_URL", default='https://localhost:8000')
+DISPATCH_HELP_EMAIL = config("DISPATCH_HELP_EMAIL", default='dispatch@example.com')
+DISPATCH_HELP_SLACK_CHANNEL = config("DISPATCH_HELP_SLACK_CHANNEL", default='general')
 
 # authentication
 DISPATCH_AUTHENTICATION_PROVIDER_SLUG = config(
@@ -89,9 +100,10 @@ DISPATCH_AUTHENTICATION_PROVIDER_SLUG = config(
 )
 VUE_APP_DISPATCH_AUTHENTICATION_PROVIDER_SLUG = DISPATCH_AUTHENTICATION_PROVIDER_SLUG
 
-DISPATCH_JWT_SECRET = config("DISPATCH_JWT_SECRET", default=None)
+DISPATCH_JWT_SECRET = config("DISPATCH_JWT_SECRET", default='secret')
 DISPATCH_JWT_ALG = config("DISPATCH_JWT_ALG", default="HS256")
-DISPATCH_JWT_EXP = config("DISPATCH_JWT_EXP", default=8640000)  # Seconds
+# Seconds, 8640000/60/60/24 == 100 days.
+DISPATCH_JWT_EXP = config("DISPATCH_JWT_EXP", default=8640000)
 
 if DISPATCH_AUTHENTICATION_PROVIDER_SLUG == "dispatch-auth-provider-basic":
     if not DISPATCH_JWT_SECRET:
@@ -131,109 +143,26 @@ METRIC_PROVIDERS = config("METRIC_PROVIDERS", cast=CommaSeparatedStrings, defaul
 SENTRY_DSN = config("SENTRY_DSN", cast=Secret, default=None)
 
 # database
-DATABASE_HOSTNAME = config("DATABASE_HOSTNAME")
-DATABASE_CREDENTIALS = config("DATABASE_CREDENTIALS", cast=Secret)
-DATABASE_NAME = config("DATABASE_NAME", default="dispatch")
+
+DATABASE_HOSTNAME = config("DATABASE_HOSTNAME", default='localhost')
+DATABASE_CREDENTIALS = config("DATABASE_CREDENTIALS", cast=Secret, default='')
+DATABASE_NAME = config("DATABASE_NAME", default="")
+PYTEST_FLAG = config('PYTEST_FLAG', cast=bool, default=False)
+
 DATABASE_PORT = config("DATABASE_PORT", default="5432")
 SQLALCHEMY_DATABASE_URI = f"postgresql+psycopg2://{DATABASE_CREDENTIALS}@{DATABASE_HOSTNAME}:{DATABASE_PORT}/{DATABASE_NAME}"
+if PYTEST_FLAG:
+    SQLALCHEMY_DATABASE_URI = f"postgresql+psycopg2://{DATABASE_CREDENTIALS}@{DATABASE_HOSTNAME}:{DATABASE_PORT}/dispatch_test"
 # MASTER_
 
-# job plugins
 INCIDENT_PLUGIN_CONTACT_SLUG = config("INCIDENT_PLUGIN_CONTACT_SLUG", default="dispatch-contact")
-INCIDENT_PLUGIN_CONVERSATION_SLUG = config(
-    "INCIDENT_PLUGIN_CONVERSATION_SLUG", default="slack-conversation"
-)
-INCIDENT_PLUGIN_DOCUMENT_SLUG = config(
-    "INCIDENT_PLUGIN_DOCUMENT_SLUG", default="google-docs-document"
-)
-INCIDENT_PLUGIN_DOCUMENT_RESOLVER_SLUG = config(
-    "INCIDENT_PLUGIN_DOCUMENT_RESOLVER_SLUG", default="dispatch-document-resolver"
-)
-INCIDENT_PLUGIN_EMAIL_SLUG = config(
-    "INCIDENT_PLUGIN_EMAIL_SLUG", default="google-gmail-conversation"
-)
-INCIDENT_PLUGIN_GROUP_SLUG = config(
-    "INCIDENT_PLUGIN_GROUP_SLUG", default="google-group-participant-group"
-)
-INCIDENT_PLUGIN_PARTICIPANT_RESOLVER_SLUG = config(
-    "INCIDENT_PLUGIN_PARTICIPANT_RESOLVER_SLUG", default="dispatch-participant-resolver"
-)
-INCIDENT_PLUGIN_STORAGE_SLUG = config(
-    "INCIDENT_PLUGIN_STORAGE_SLUG", default="google-drive-storage"
-)
 
-INCIDENT_PLUGIN_CONFERENCE_SLUG = config(
-    "INCIDENT_PLUGIN_CONFERENCE_SLUG", default="google-calendar-conference"
-)
-INCIDENT_PLUGIN_TICKET_SLUG = config("INCIDENT_PLUGIN_TICKET_SLUG", default="jira-ticket")
-
-INCIDENT_PLUGIN_TASK_SLUG = config("INCIDENT_PLUGIN_TASK_SLUG", default="google-drive-task")
-
-# job resources
-INCIDENT_CONVERSATION_COMMANDS_REFERENCE_DOCUMENT_ID = config(
-    "INCIDENT_CONVERSATION_COMMANDS_REFERENCE_DOCUMENT_ID"
-)
-INCIDENT_DOCUMENT_INVESTIGATION_SHEET_ID = config("INCIDENT_DOCUMENT_INVESTIGATION_SHEET_ID")
-INCIDENT_FAQ_DOCUMENT_ID = config("INCIDENT_FAQ_DOCUMENT_ID")
-INCIDENT_STORAGE_ARCHIVAL_FOLDER_ID = config("INCIDENT_STORAGE_ARCHIVAL_FOLDER_ID")
-INCIDENT_STORAGE_INCIDENT_REVIEW_FILE_ID = config("INCIDENT_STORAGE_INCIDENT_REVIEW_FILE_ID")
-INCIDENT_STORAGE_EXECUTIVE_REPORT_FILE_ID = config("INCIDENT_STORAGE_EXECUTIVE_REPORT_FILE_ID")
-INCIDENT_STORAGE_RESTRICTED = config("INCIDENT_STORAGE_RESTRICTED", cast=bool, default=True)
-INCIDENT_NOTIFICATION_CONVERSATIONS = config(
-    "INCIDENT_NOTIFICATION_CONVERSATIONS", cast=CommaSeparatedStrings, default=""
-)
-INCIDENT_NOTIFICATION_DISTRIBUTION_LISTS = config(
-    "INCIDENT_NOTIFICATION_DISTRIBUTION_LISTS", cast=CommaSeparatedStrings, default=""
-)
-INCIDENT_ONCALL_SERVICE_ID = config("INCIDENT_ONCALL_SERVICE_ID", default=None)
-if not INCIDENT_ONCALL_SERVICE_ID:
-    INCIDENT_DAILY_SUMMARY_ONCALL_SERVICE_ID = config(
-        "INCIDENT_DAILY_SUMMARY_ONCALL_SERVICE_ID", default=None
-    )
-    if INCIDENT_DAILY_SUMMARY_ONCALL_SERVICE_ID:
-        log.warn(
-            "INCIDENT_DAILY_SUMMARY_ONCALL_SERVICE_ID has been deprecated. Please use INCIDENT_ONCALL_SERVICE_ID instead."
-        )
-        INCIDENT_ONCALL_SERVICE_ID = INCIDENT_DAILY_SUMMARY_ONCALL_SERVICE_ID
-
-INCIDENT_RESOURCE_TACTICAL_GROUP = config(
-    "INCIDENT_RESOURCE_TACTICAL_GROUP", default="google-group-participant-tactical-group"
-)
-INCIDENT_RESOURCE_NOTIFICATIONS_GROUP = config(
-    "INCIDENT_RESOURCE_NOTIFICATIONS_GROUP", default="google-group-participant-notifications-group"
-)
-INCIDENT_RESOURCE_INVESTIGATION_DOCUMENT = config(
-    "INCIDENT_RESOURCE_INVESTIGATION_DOCUMENT", default="google-docs-investigation-document"
-)
-INCIDENT_RESOURCE_INVESTIGATION_SHEET = config(
-    "INCIDENT_RESOURCE_INVESTIGATION_SHEET", default="google-docs-investigation-sheet"
-)
-INCIDENT_RESOURCE_INCIDENT_REVIEW_DOCUMENT = config(
-    "INCIDENT_RESOURCE_INCIDENT_REVIEW_DOCUMENT", default="google-docs-job-review-document"
-)
-INCIDENT_RESOURCE_EXECUTIVE_REPORT_DOCUMENT = config(
-    "INCIDENT_RESOURCE_EXECUTIVE_REPORT_DOCUMENT", default="google-docs-executive-report-document"
-)
-INCIDENT_RESOURCE_CONVERSATION_COMMANDS_REFERENCE_DOCUMENT = config(
-    "INCIDENT_RESOURCE_CONVERSATION_COMMANDS_REFERENCE_DOCUMENT",
-    default="google-docs-conversation-commands-reference-document",
-)
-INCIDENT_RESOURCE_FAQ_DOCUMENT = config(
-    "INCIDENT_RESOURCE_FAQ_DOCUMENT", default="google-docs-faq-document"
-)
-INCIDENT_RESOURCE_INCIDENT_TASK = config(
-    "INCIDENT_RESOURCE_INCIDENT_TASK", default="google-docs-job-task"
-)
-ONCALL_PLUGIN_SLUG = config("ONCALL_PLUGIN_SLUG", default="opsgenie-oncall")
-
-# Job Cost Configuration
-ANNUAL_COST_EMPLOYEE = config("ANNUAL_COST_EMPLOYEE", cast=int, default="650000")
-BUSINESS_HOURS_YEAR = config("BUSINESS_HOURS_YEAR", cast=int, default="2080")
 
 
 # Incident Cost Configuration
 ANNUAL_COST_EMPLOYEE = config("ANNUAL_COST_EMPLOYEE", cast=int, default="650000")
 BUSINESS_HOURS_YEAR = config("BUSINESS_HOURS_YEAR", cast=int, default="2080")
+
 
 # kafka
 KAFKA_BOOTSTRAP_SERVERS = config("KAFKA_BOOTSTRAP_SERVERS", default="localhost:9092")
@@ -244,6 +173,14 @@ REDIS_HOST = config("REDIS_HOST", default="127.0.0.1")
 REDIS_PORT = config("REDIS_PORT", default="6379")
 REDIS_PASSWORD = config("REDIS_PASSWORD", default=None)
 
+if REDIS_PASSWORD == "":
+    redis_pool = redis.ConnectionPool(host=REDIS_HOST, port=REDIS_PORT,
+                                      password=None, decode_responses=True)
+else:
+    redis_pool = redis.ConnectionPool(host=REDIS_HOST, port=REDIS_PORT,
+                                      password=REDIS_PASSWORD, decode_responses=True)
+
+# redis_pool = redis.ConnectionPool(host='10.0.0.1', port=6379, db=0)
 
 # kandbox
 NBR_OF_OBSERVED_WORKERS = config("NBR_OF_OBSERVED_WORKERS", cast=int, default=8)
@@ -256,7 +193,6 @@ DATA_START_DAY = config("DATA_START_DAY", default="20201015")
 
 PRELOAD_ORG_CODE = config("PRELOAD_ORG_CODE", default="0")
 PRELOAD_TEAM_ID = config("PRELOAD_TEAM_ID", default=2)
-TESTING_MODE = config("TESTING_MODE", default="yes")
 
 MIN_START_MINUTES_FROM_NOW = 60
 
@@ -275,6 +211,11 @@ SAY_HELLO_URL = config("SAY_HELLO_URL", default="http://localhost")
 # Those two are not in devenv and should be set differently.
 PRELOAD_KANBOX_ENV = config("PRELOAD_KANBOX_ENV", default="no")
 PLANNER_SERVER_ROLE = config("PLANNER_SERVER_ROLE", default="api")
+# project names like alibaba,x,y,z,pickdrop
+# PROJECT_NAME = config("PROJECT_NAME", default="baseline")
+
+# api_async_task or standalone_recommander
+RECOMMDER_DEPLOYMENT = config("RECOMMDER_DEPLOYMENT", default="api_async_task")
 
 ENABLE_REGISTER = config("ENABLE_REGISTER", default="no")
 
@@ -335,7 +276,7 @@ if os.getenv("RL_PLANNER_AUTOMATIC", default="False") == "True":
     RL_PLANNER_AUTOMATIC = True
 
 SEND_GOOGLE_CALENDAR = False
-google_calendar_token_path = "/tmp/token.pickle"
+google_calendar_token_path = ""
 
 
 POSITION_SLOT_TYPE = 6
@@ -343,9 +284,7 @@ POSITION_ASSIGNED_JOB_INDEX = 7
 
 APPOINTMENT_LOCAL_FILE = os.getenv("APPOINTMENT_LOCAL_FILE")
 
-DEBUGGING_JOB_CODE_SET = {
-    "0524-0-pick-839"  # , "0524-4-pick-517", "0524-4-pick-517"
-}
+DEBUGGING_JOB_CODE_SET = { }
 
 
 DEBUGGING_SLOT_CODE_SET = {
@@ -365,3 +304,57 @@ REDIS_KEY_SEPERATOR = "/"
 
 APPOINTMENT_ON_REDIS_KEY_PREFIX = "A/"
 TRAINED_MODEL_PATH = config("TRAINED_MODEL_PATH", default="/tmp")
+
+
+# Food Delivery
+
+UU_START_FLAG = config('UU_START_FLAG', default=None)
+UU_API_TOKEN = config('UU_API_TOKEN', default=None)
+UU_API_URL = config('UU_API_URL', default=None)
+UU_CITY = config('UU_CITY', default=None)
+UU_MQ_USERNAME = config('UU_MQ_USERNAME', default=None)
+UU_MQ_PASSWORD = config('UU_MQ_PASSWORD', default=None)
+UU_MQ_PORT = config('UU_MQ_PORT', default=None)
+UU_MQ_HOST = config('UU_MQ_HOST', default=None)
+UU_MQ_VIRTUAL_HOST = config('UU_MQ_VIRTUAL_HOST', default=None)
+BACKGROUND_ENV_SYNC_INTERVAL_SECONDS = config('BACKGROUND_ENV_SYNC_INTERVAL_SECONDS', default=20)
+
+# Field Service
+LOCATION_SERVICE_URL = config(
+    'LOCATION_SERVICE_URL', default='')
+LOCATION_SERVICE_TOKEN = config('LOCATION_SERVICE_TOKEN',default='')
+LOCATION_SERVICE_REQUEST_METHOD = config('LOCATION_SERVICE_REQUEST_METHOD', default='POST')
+
+CALLBACK_USER_NAME = config('CALLBACK_USER_NAME', default="")
+CALLBACK_PASSWORD = config('CALLBACK_PASSWORD', default="")
+CALLBACK_TOKEN_URL = config(
+    'CALLBACK_TOKEN_URL', default="")
+APMS_CALLBACK_URL = config(
+    'APMS_CALLBACK_URL', default="http://")
+IPMS_CALLBACK_URL = config(
+    'IPMS_CALLBACK_URL', default="http://")
+PLDT_START_FLAG = config('PLDT_START_FLAG', cast=bool, default=False)
+
+DISPATCH_PICK_DROP_FLAG = config('DISPATCH_PICK_DROP_FLAG', cast=bool, default=False)
+
+WEBZ_SITE = config(
+    'WEBZ_SITE', default="http://localhost:8080")
+
+
+ALEMBIC_TENANT_REVISION_PATH = config(
+    "ALEMBIC_TENANT_REVISION_PATH",
+    default=f"{os.path.dirname(os.path.realpath(__file__))}/database_util/revisions/tenant",
+)
+
+ALEMBIC_CORE_REVISION_PATH = config(
+    "ALEMBIC_TENANT_REVISION_PATH",
+    default=f"{os.path.dirname(os.path.realpath(__file__))}/database_util/revisions/core",
+)
+ALEMBIC_INI_PATH = config(
+    "ALEMBIC_INI_PATH",
+    default=f"{os.path.dirname(os.path.realpath(__file__))}/alembic.ini",
+)
+ALEMBIC_MULTI_TENANT_MIGRATION_PATH = config(
+    "ALEMBIC_MULTI_TENANT_MIGRATION_PATH",
+    default=f"{os.path.dirname(os.path.realpath(__file__))}/database_util/revisions/multi-tenant-migration.sql",
+)

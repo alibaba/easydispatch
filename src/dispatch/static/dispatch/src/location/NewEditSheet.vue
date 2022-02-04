@@ -1,5 +1,5 @@
 <template>
-  <ValidationObserver v-slot="{ invalid, validated }">
+  <ValidationObserver>
     <v-navigation-drawer v-model="showCreateEdit" app clipped right width="500">
       <template v-slot:prepend>
         <v-list-item two-line>
@@ -11,8 +11,7 @@
           <v-btn
             icon
             color="primary"
-            :loading="loading"
-            :disabled="invalid || !validated"
+            :loading="loading" 
             @click="save()"
           >
             <v-icon>save</v-icon>
@@ -30,11 +29,7 @@
                 <span class="subtitle-2">Details</span>
               </v-flex>
               <v-flex xs12>
-                <ValidationProvider
-                  name="location_code"
-                  rules="required"
-                  immediate
-                >
+                <ValidationProvider name="location_code" rules="required" immediate>
                   <v-text-field
                     v-model="location_code"
                     slot-scope="{ errors, valid }"
@@ -47,45 +42,12 @@
                   />
                 </ValidationProvider>
               </v-flex>
-              <v-flex xs6>
-                <ValidationProvider
-                  name="geo_longitude"
-                  rules="required"
-                  immediate
-                >
-                  <v-text-field
-                    v-model="geo_longitude"
-                    slot-scope="{ errors, valid }"
-                    :error-messages="errors"
-                    :success="valid"
-                    label="geo_longitude"
-                    hint="x, or longitude."
-                    clearable
-                    required
-                  />
-                </ValidationProvider>
-              </v-flex>
-              <v-flex xs6>
-                <ValidationProvider
-                  name="geo_latitude"
-                  rules="required"
-                  immediate
-                >
-                  <v-text-field
-                    v-model="geo_latitude"
-                    slot-scope="{ errors, valid }"
-                    :error-messages="errors"
-                    :success="valid"
-                    label="geo_latitude"
-                    hint="y, or geo_latitude."
-                    clearable
-                    required
-                  />
-                </ValidationProvider>
-              </v-flex>
-
               <v-flex xs12>
-                <ValidationProvider name="geo_address_text">
+                <team-select v-show=" 'Customer' != userInfo.role " v-model="team" rules="required"></team-select>
+              </v-flex>
+              
+              <v-flex xs12>
+                <ValidationProvider name="geo_address_text" rules="required" immediate>
                   <v-textarea
                     v-model="geo_address_text"
                     slot-scope="{ errors, valid }"
@@ -98,6 +60,38 @@
                   />
                 </ValidationProvider>
               </v-flex>
+
+              <v-flex xs6>
+                <ValidationProvider name="geo_longitude" rules="required" immediate>
+                  <v-text-field
+                    v-model="geo_longitude"
+                    type="number"
+                    slot-scope="{ errors, valid }"
+                    :error-messages="errors"
+                    :success="valid"
+                    label="geo_longitude"
+                    hint="x, or longitude."
+                    clearable
+                    required
+                  />
+                </ValidationProvider>
+              </v-flex>
+              <v-flex xs6>
+                <ValidationProvider name="geo_latitude" rules="required" immediate>
+                  <v-text-field
+                    v-model="geo_latitude"
+                    type="number"
+                    slot-scope="{ errors, valid }"
+                    :error-messages="errors"
+                    :success="valid"
+                    label="geo_latitude"
+                    hint="y, or geo_latitude."
+                    clearable
+                    required
+                  />
+                </ValidationProvider>
+              </v-flex>
+
             </v-layout>
           </v-container>
         </v-card-text>
@@ -109,12 +103,15 @@
 <script>
 import { mapFields } from "vuex-map-fields";
 import { mapActions } from "vuex";
+import { mapState } from "vuex";
+
 import { ValidationObserver, ValidationProvider, extend } from "vee-validate";
 import { required } from "vee-validate/dist/rules";
+import TeamSelect from "@/team/TeamSelect.vue";
 
 extend("required", {
   ...required,
-  message: "This field is required"
+  message: "This field is required",
 });
 
 export default {
@@ -122,13 +119,15 @@ export default {
 
   components: {
     ValidationObserver,
-    ValidationProvider
+    ValidationProvider,
+    TeamSelect,
   },
 
   data() {
     return {};
   },
   computed: {
+    ...mapState("auth", ["userInfo"]),
     ...mapFields("location", [
       "dialogs.showCreateEdit",
       "selected.loading",
@@ -137,12 +136,13 @@ export default {
       "selected.geo_longitude",
       "selected.geo_latitude",
       "selected.geo_address_text",
-      "selected.geo_json"
-    ])
+      "selected.geo_json",
+      "selected.team",
+    ]),
   },
 
   methods: {
-    ...mapActions("location", ["save", "closeCreateEdit"])
-  }
+    ...mapActions("location", ["save", "closeCreateEdit"]),
+  },
 };
 </script>

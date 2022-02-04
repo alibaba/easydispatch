@@ -1,6 +1,7 @@
 from typing import List, Optional
 
 from fastapi.encoders import jsonable_encoder
+from fastapi.exceptions import HTTPException
 
 from dispatch.plugin import service as plugin_service
 from dispatch.service import service as service_service
@@ -90,9 +91,14 @@ def create(*, db_session, service_plugin_in: ServicePluginCreate) -> ServicePlug
     service = plugin = None
     # service = Service()
     if service_plugin_in.service:
-        service = service_service.get_by_code(
-            db_session=db_session, code=service_plugin_in.service.code
-        )
+        if service_plugin_in.service.org_id or service_plugin_in.service.org_id == 0:
+            service = service_service.get_by_code_and_org_code(
+                db_session=db_session, code=service_plugin_in.service.code, org_id=service_plugin_in.service.org_id
+            )
+        else:
+            service = service_service.get_by_code(
+                db_session=db_session, code=service_plugin_in.service.code
+            )
 
     plugin = Plugin()
     if service_plugin_in.plugin:
@@ -100,9 +106,9 @@ def create(*, db_session, service_plugin_in: ServicePluginCreate) -> ServicePlug
             db_session=db_session, slug=service_plugin_in.plugin.slug)
 
     if service is None or plugin is None:
-        raise HTTPException(status_code=204, detail="service is None or plugin is None.")
+        raise HTTPException(status_code=404, detail="service is None or plugin is None.")
     service_plugin = ServicePlugin(
-        **service_plugin_in.dict(exclude={"service", "plugin"}), service=service, plugin=plugin,
+        **service_plugin_in.dict(exclude={"service", "plugin", "config"}), service_id=service.id, plugin_id=plugin.id, config=plugin.config
     )
 
     db_session.add(service_plugin)

@@ -8,12 +8,7 @@
             <v-list-item-title v-else class="title">New</v-list-item-title>
             <v-list-item-subtitle>Worker</v-list-item-subtitle>
           </v-list-item-content>
-          <v-btn
-            icon
-            color="primary"
-            :loading="loading"
-            @click="submitSaveLocal()"
-          >
+          <v-btn icon color="primary" :loading="loading" @click="submitSaveLocal()">
             <v-icon>save</v-icon>
           </v-btn>
           <v-btn icon color="secondary" @click="closeCreateEdit()">
@@ -22,25 +17,23 @@
         </v-list-item>
       </template>
       <v-tabs fixed-tabs v-model="tab">
-        <v-tab key="workers">Worker Detail</v-tab>
-        <v-tab key="flex_form">flex_form</v-tab>
-        <v-tab key="business_hour">business_hour</v-tab>
+        <v-tab key="workers">WorkerDetail</v-tab>
+        <v-tab key="flex_form" v-if="localFlexFormData!=null">FlexForm</v-tab>
+        <v-tab key="business_hour">BusinessHour</v-tab>
+        <v-tab key="history">History</v-tab>
       </v-tabs>
       <v-tabs-items v-model="tab">
         <v-tab-item key="workers">
           <worker-details-tab />
         </v-tab-item>
         <v-tab-item key="flex_form">
-          <worker-flex-form
-            :saveFunc="saveFormLocal"
-            :formData="localFlexFormData"
-          />
+          <worker-flex-form :saveFunc="saveFormLocal" :formData="localFlexFormData" />
         </v-tab-item>
         <v-tab-item key="business_hour">
-          <worker-tab-business-hour
-            :saveFunc="updatedHours"
-            :businessDays="business_hour__local"
-          />
+          <worker-tab-business-hour :saveFunc="updatedHours" :businessDays="business_hour__local" />
+        </v-tab-item>
+        <v-tab-item key="history">
+          <JobMap />
         </v-tab-item>
       </v-tabs-items>
     </v-navigation-drawer>
@@ -49,17 +42,19 @@
 
 <script>
 import { mapFields } from "vuex-map-fields";
-import { mapActions } from "vuex";
+import { mapActions, mapMutations } from "vuex";
 import { ValidationObserver, extend } from "vee-validate";
 import { required } from "vee-validate/dist/rules";
 import WorkerDetailsTab from "@/worker/WorkerDetailsTab.vue";
 import WorkerFlexForm from "@/worker/WorkerFlexForm.vue";
 import WorkerTabBusinessHour from "@/worker/WorkerTabBusinessHour.vue";
 // import LocationNewEditSheet from "@/location/LocationNewEditSheet.vue"
+import JobMap from "./JobMap";
+import { cloneDeep } from "lodash";
 
 extend("required", {
   ...required,
-  message: "This field is required"
+  message: "This field is required",
 });
 
 export default {
@@ -69,91 +64,73 @@ export default {
     ValidationObserver,
     WorkerDetailsTab,
     WorkerTabBusinessHour,
-    WorkerFlexForm
+    WorkerFlexForm,
+    JobMap,
     // LocationNewEditSheet
   },
   data() {
     return {
       tab: null,
-      localFlexFormData: {},
+      // localFlexFormData: {},
       business_hour__local: {
         sunday: [
           {
             open: "",
             close: "",
             id: "5ca5578b0c5c7",
-            isOpen: false
-          }
+            isOpen: false,
+          },
         ],
         monday: [
           {
             open: "0800",
             close: "1700",
             id: "5ca5578b0c5d1",
-            isOpen: true
-          }
+            isOpen: true,
+          },
         ],
         tuesday: [
           {
             open: "0800",
             close: "1700",
             id: "5ca5578b0c5d8",
-            isOpen: true
-          }
+            isOpen: true,
+          },
         ],
         wednesday: [
           {
             open: "0800",
             close: "1700",
             id: "5ca5578b0c5df",
-            isOpen: true
-          }
+            isOpen: true,
+          },
         ],
         thursday: [
           {
             open: "0800",
             close: "1700",
             id: "5ca5578b0c5e6",
-            isOpen: true
-          }
+            isOpen: true,
+          },
         ],
         friday: [
           {
             open: "0800",
             close: "1700",
             id: "5ca5578b0c5ec",
-            isOpen: true
-          }
+            isOpen: true,
+          },
         ],
         saturday: [
           {
             open: "",
             close: "",
             id: "5ca5578b0c5f8",
-            isOpen: false
-          }
-        ]
-      }
+            isOpen: false,
+          },
+        ],
+      },
     };
-  },
-
-  watch: {
-    flex_form_data: function(newVal, oldVal) {
-      // watch it
-      console.log(
-        "copying flex_form_data after flex_form_data changed: ",
-        newVal,
-        " | it was: ",
-        oldVal
-      );
-      // this.setSelectedFormData(newVal)
-      //if (this.tab == 1) {
-      this.localFlexFormData = JSON.parse(JSON.stringify(this.flex_form_data));
-      this.business_hour__local = JSON.parse(
-        JSON.stringify(this.business_hour)
-      );
-      //}
-    }
   },
 
   computed: {
@@ -164,38 +141,51 @@ export default {
       "selected.flex_form_data",
       "selected.business_hour",
       "selected.loading",
-      "dialogs.showCreateEdit"
-    ])
+      "dialogs.showCreateEdit",
+    ]),
+    localFlexFormData: {
+      get() {
+        return cloneDeep(JSON.parse(JSON.stringify(this.flex_form_data)));
+      },
+      set(value) {
+        this.$emit("input", value);
+      },
+    },
   },
-
+  mounted() {
+    this.selectInventory();
+  },
+  watch: {
+    business_hour: function (newVal, oldVal) {
+      if (newVal) {
+        this.business_hour__local = JSON.parse(JSON.stringify(this.newVal));
+      }
+    },
+  },
   methods: {
+    ...mapMutations("worker", ["SET_SELECTED_BUSINESS_HOUR"]),
     ...mapActions("worker", [
       "save",
       "closeCreateEdit",
-      "setSelectedFormDataAndSave"
+      "setSelectedFormDataAndSave",
     ]),
     //...mapActions("worker", [""])
+    ...mapActions("item_inventory", ["selectInventory"]),
     submitSaveLocal() {
+      this.selectInventory();
       this.setSelectedFormDataAndSave({
-        flex_form_data: this.localFlexFormData,
-        business_hour: this.business_hour__local
+        flex_form_data: Object.assign(
+          cloneDeep(JSON.parse(JSON.stringify(this.flex_form_data))),
+          this.localFlexFormData
+        ),
       });
-      //this.save()
-
-      //ormData
     },
-    updatedHours: function(value) {
-      // do whatever you want here
-      console.log(value);
-      this.business_hour__local = Object.assign(
-        this.business_hour__local,
-        value
-      );
+    updatedHours: function (value) {
+      this.SET_SELECTED_BUSINESS_HOUR(value);
     },
     saveFormLocal(value) {
       this.localFlexFormData = value;
-      //this.setSelectedFormData(value)
-    }
-  }
+    },
+  },
 };
 </script>

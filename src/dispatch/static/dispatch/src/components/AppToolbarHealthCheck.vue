@@ -1,12 +1,5 @@
 <template>
-  <v-app-bar
-    clipped-left
-    clipped-right
-    class="ma-0 pa-0"
-    app
-    color="white"
-    height="70"
-  >
+  <v-app-bar clipped-left clipped-right class="ma-0 pa-0" app color="white" height="70">
     <v-card class="ma-0 pa-0" max-width="240">
       <v-list-item class="ma-0" dense>
         <v-list-item-content class="text-xs-caption">
@@ -14,17 +7,17 @@
             <v-icon small>mdi-home-currency-usd</v-icon>
             {{ singleJobDropCheckOptions.job_code }}
           </v-list-item-title>
-          <v-list-item-subtitle class="text-xs"
-            ><v-icon small>mdi-account</v-icon>
+          <v-list-item-subtitle class="text-xs">
+            <v-icon small>mdi-account</v-icon>
             {{ singleJobDropCheckOptions.scheduled_primary_worker_id }}+{{
-              singleJobDropCheckOptions.scheduled_secondary_worker_ids
-            }}</v-list-item-subtitle
-          >
+            singleJobDropCheckOptions.scheduled_secondary_worker_ids
+            }}
+          </v-list-item-subtitle>
           <v-list-item-subtitle class>
             <v-icon small>mdi-av-timer</v-icon>
             Start:
             {{
-              singleJobDropCheckOptions.scheduled_start_datetime | formatHHMM
+            singleJobDropCheckOptions.scheduled_start_datetime | formatHHMM
             }}
           </v-list-item-subtitle>
         </v-list-item-content>
@@ -37,22 +30,19 @@
         :color="
           ruleOverallStatusStyle[singleJobDropCheckResult.status_code].color
         "
-        >{{
-          ruleOverallStatusStyle[singleJobDropCheckResult.status_code].icon
-        }}</v-icon
       >
+        {{
+        ruleOverallStatusStyle[singleJobDropCheckResult.status_code].icon
+        }}
+      </v-icon>
     </v-avatar>
 
     <v-avatar class="mr-4" v-if="!plannerHealthCheckResultShowFlag">
-      <v-icon> mdi-done</v-icon>
+      <v-icon>mdi-done</v-icon>
     </v-avatar>
 
     <v-chip-group v-if="!singleJobCheckAPICallInProgressFlag" column>
-      <v-tooltip
-        bottom
-        v-for="(res, ind) in singleJobDropCheckResult.messages"
-        :key="res.rule"
-      >
+      <v-tooltip bottom v-for="(res, ind) in singleJobDropCheckResult.messages" :key="res.rule">
         <template v-slot:activator="{ on, attrs }">
           <v-chip
             small
@@ -76,19 +66,14 @@
     </v-chip-group>
 
     <v-spacer />
-    <v-progress-circular
-      v-if="singleJobCheckAPICallInProgressFlag"
-      indeterminate
-      color="primary"
-    ></v-progress-circular>
+    <v-progress-circular v-if="singleJobCheckAPICallInProgressFlag" indeterminate color="primary"></v-progress-circular>
     <!-- v-btn text color="primary" @click="commitChangedJobs()">OK</v-btn -->
-    <v-badge
-      overlap
-      color="green"
-      :content="changedJobCount"
-      v-if="changedJobCount > 0"
-    >
-      <v-btn icon @click="commitChangedJobs()">
+    <v-badge overlap color="green" :content="changedJobCount" v-if="changedJobCount > 0">
+      <v-btn
+        icon
+        @click="commitChangedJobs()"
+        :disabled="singleJobDropCheckResult.status_code=='Error'"
+      >
         <v-icon color="primary">mdi-content-save-all</v-icon>
       </v-btn>
     </v-badge>
@@ -121,6 +106,9 @@ export default {
         "Retain Tech": "mdi-pin",
         "Shared Visit": "mdi-calendar-multiple",
         "Permanent Pair": "mdi-account-multiple-check",
+        "Requested Items": "mdi-format-list-checks",
+        "Requested Vehicle": "mdi-truck-check",
+        "Waste Space": "mdi-delete-outline",
       },
       ruleOverallStatusStyle: {
         OK: { icon: "mdi-checkbox-marked-circle", color: "green" },
@@ -147,7 +135,7 @@ export default {
     changedJobCount: {
       get() {
         let changedJobCount_ = this.global_loaded_data.all_jobs_in_env.reduce(
-          function(n, val) {
+          function (n, val) {
             return n + (val.changed_flag === 1);
           },
           0

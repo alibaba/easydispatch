@@ -6,12 +6,25 @@ import { debounce } from "lodash";
 import UserApi from "./api";
 import TeamApi from "@/team/api";
 
+
 const getDefaultSelectedState = () => {
   return {
     id: null,
     email: null,
     role: null,
     loading: false,
+    default_team_id: null,
+    team: null,
+    managed_teams: null,
+    is_active:false,
+  };
+};
+
+const getDefaultorg = () => {
+  return {
+    code: null,
+    id: null,
+    en_code: null,
   };
 };
 
@@ -23,8 +36,11 @@ const state = {
   selected: {
     ...getDefaultSelectedState(),
   },
+  org: { ...getDefaultorg() },
   dialogs: {
     showEdit: false,
+    showCreateEdit: false,
+    showRemove: false,
   },
   table: {
     rows: {
@@ -40,9 +56,21 @@ const state = {
     },
     loading: false,
   },
+  defaultPermission: ["Owner","Planner",],
+  permissionDict: {
+    "job.button.start": ["Owner","Planner","Worker"],
+    "job.button.finish": ["Owner","Planner","Worker"],
+    "job.button.customer_approve": ["Owner","Planner","Customer"],
+    "job.button.planner_approve": ["Owner","Planner",],
+    "job.button.save": ["Owner","Planner"],
+    "location.button.customer_create_job": [ "Customer"],
+  },
 };
 
 const actions = {
+  showCreateEditDialog({ commit }, value) {
+    commit("SET_DIALOG_CREATE_EDIT", value);
+  },
   getAll: debounce(({ commit, state }) => {
     commit("SET_TABLE_LOADING", true);
     return UserApi.getAll(state.table.options).then((response) => {
@@ -50,6 +78,20 @@ const actions = {
       commit("SET_TABLE_ROWS", response.data);
     });
   }, 200),
+  // selectLoginUsername: debounce(({ commit, state }, filterOptions) => {
+  //   commit("SET_TABLE_LOADING", true);
+  //   return UserApi.select(
+  //     Object.assign(Object.assign({}, state.table.options), filterOptions)
+  //   )
+  //     .then((response) => {
+  //       commit("SET_TABLE_LOADING", false);
+  //       commit("SET_TABLE_ROWS", response.data);
+  //     })
+  //     .catch(() => {
+  //       commit("SET_TABLE_LOADING", false);
+  //     });
+  // }, 200),
+
   editShow({ commit }, plugin) {
     commit("SET_DIALOG_EDIT", true);
     if (plugin) {
@@ -60,9 +102,33 @@ const actions = {
     commit("SET_DIALOG_EDIT", false);
     commit("RESET_SELECTED");
   },
-  save({ commit, dispatch }) {
+  saveOrg({ commit }) {
+    if (state.org.code) {
+      return UserApi.create_org(state.org)
+        .then((response) => {
+          commit("SET_ORG_EN_CODE", response.data);
+          commit("SET_DIALOG_CREATE_EDIT", false);
+          commit(
+            "app/SET_SNACKBAR",
+            { text: "org created successfully." },
+            { root: true }
+          );
+        })
+        .catch((err) => {
+          commit(
+            "app/SET_SNACKBAR",
+            {
+              text: "org not created. Reason: " + err.response.data.detail,
+              color: "red",
+            },
+            { root: true }
+          );
+        });
+    }
+  },
+  save({ commit, dispatch }, param) {
     if (!state.selected.id) {
-      return UserApi.create(state.selected)
+      return UserApi.create(Object.assign(state.selected, param))
         .then(() => {
           dispatch("closeEdit");
           dispatch("getAll");
@@ -71,6 +137,9 @@ const actions = {
             { text: "User created successfully." },
             { root: true }
           );
+          if (param.password && param.is_me) {
+            dispatch("basicLogin", Object.assign(state.selected, param));
+          }
         })
         .catch((err) => {
           commit(
@@ -83,8 +152,14 @@ const actions = {
           );
         });
     } else {
-      return UserApi.update(state.selected.id, state.selected)
+      return UserApi.update(
+        state.selected.id,
+        Object.assign(state.selected, param)
+      )
         .then(() => {
+          if (param.password && param.is_me) {
+            dispatch("basicLogin", Object.assign(state.selected, param));
+          }
           dispatch("closeEdit");
           dispatch("getAll");
           commit(
@@ -137,20 +212,7 @@ const actions = {
       .then(function(res) {
         commit("SET_USER_LOGIN", res.data.token);
 
-        router.push({ path: "/gantt" });
-      })
-      .catch((err) => {
-        commit(
-          "app/SET_SNACKBAR",
-          { text: err.response.data.detail, color: "red" },
-          { root: true }
-        );
-      });
-  },
-  register({ dispatch, commit }, payload) {
-    UserApi.register(payload.email, payload.password)
-      .then(function() {
-        dispatch("basicLogin", payload);
+        router.push({ path: "/jobs" });
       })
       .catch((err) => {
         commit(
@@ -162,13 +224,27 @@ const actions = {
   },
   login({ dispatch, commit }, payload) {
     commit("SET_USER_LOGIN", payload.token);
-    dispatch("loginRedirect", payload.redirectUri).then(() => {
-      dispatch("createExpirationCheck");
-    });
+    if (payload.redirectUri != undefined){
+      dispatch("loginRedirect", payload.redirectUri).then(() => {
+        dispatch("createExpirationCheck");
+      });
+    }
   },
   logout({ commit }) {
     commit("SET_USER_LOGOUT");
     router.push({ path: "/login" });
+  },
+  register({ dispatch, commit }, payload) {
+    UserApi.register(payload).then(function() {
+        dispatch("basicLogin", payload);
+        commit("SET_ORG_EN_CODE", "");
+      }).catch((err) => {
+        commit(
+          "app/SET_SNACKBAR",
+          { text: err.response.data.detail, color: "red" },
+          { root: true }
+        );
+      });
   },
   createExpirationCheck({ state, commit }) {
     // expiration time minus 10 min
@@ -194,10 +270,21 @@ const actions = {
       });
     });
   },
+  removeShow({ commit }, data) {
+    commit("SET_DIALOG_DELETE", true);
+    commit("SET_SELECTED", data);
+  },
+  closeRemove({ commit }) {
+    commit("SET_DIALOG_DELETE", false);
+    commit("RESET_SELECTED");
+  },
 };
 
 const mutations = {
   updateField,
+  SET_DIALOG_DELETE(state, value) {
+    state.dialogs.showRemove = value;
+  },
   SET_SELECTED(state, value) {
     state.selected = Object.assign(state.selected, value);
   },
@@ -232,6 +319,12 @@ const mutations = {
     state.accessToken = null;
     localStorage.removeItem("token");
   },
+  SET_DIALOG_CREATE_EDIT(state, value) {
+    state.dialogs.showCreateEdit = value;
+  },
+  SET_ORG_EN_CODE(state, info) {
+    state.org.en_code = info;
+  },
 };
 
 const getters = {
@@ -239,6 +332,19 @@ const getters = {
   accessToken: () => state.accessToken,
   email: () => state.userInfo.email,
   exp: () => state.userInfo.exp,
+  getPermission: (state) => (p) =>
+  {
+    let localPermission = state.defaultPermission;
+    if (p in state.permissionDict) {
+      localPermission=state.permissionDict[p]
+    }
+    // console.log(p, localPermission)
+    if (state.userInfo) {
+      return localPermission.includes(state.userInfo.role);
+    } else {
+      return false
+    }
+  },
 };
 
 export default {

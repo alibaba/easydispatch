@@ -165,6 +165,7 @@ def clear_all_worker_jobs():
     session.execute("delete from job_scheduled_secondary_workers;")
     session.execute("delete from job;") 
     session.execute("delete from worker;")
+    session.execute("delete from location;")
     session.execute("commit;")
     click.secho("Success. clear_all_worker_jobs is done.", fg="yellow")
 

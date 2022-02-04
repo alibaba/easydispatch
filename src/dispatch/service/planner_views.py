@@ -1,9 +1,14 @@
+
+from dispatch.worker import service as workerService
+from dispatch.job import service as jobService
 import logging
 from dispatch.config import DATA_START_DAY
+from dispatch.plugins.kandbox_planner.data_adapter.kafka_adapter import KafkaAdapter
 from dispatch.plugins.kandbox_planner.env.env_enums import (
     ActionType,
     ActionScoringResultType,
     AppointmentStatus,
+    JobPlanningStatus,
 )
 from dispatch.plugins.kandbox_planner.env.env_models import ActionDict, ActionEvaluationScore
 import json
@@ -22,7 +27,7 @@ from dispatch import config
 from dispatch.auth.models import DispatchUser
 from dispatch.auth.service import get_current_user
 from dispatch.team import service as team_service
-from dispatch.database import get_db, search_filter_sort_paginate
+from dispatch.database import get_db
 from dispatch.plugins.kandbox_planner.util.kandbox_date_util import get_current_day_string
 from dispatch.service.planner_service import (
     get_default_active_planner,
@@ -30,7 +35,9 @@ from dispatch.service.planner_service import (
     reset_planning_window_for_team,
     run_batch_optimizer
 )
-from dispatch.team.models import Team
+
+from dispatch.org import service as org_service
+
 from dispatch.service.planner_models import (
     GenericJobPredictActionInput,
     GenericJobPredictActionOutput,
@@ -43,8 +50,11 @@ from dispatch.service.planner_models import (
     ResetPlanningWindowInput
 
 )
-
-
+from dispatch.config import (
+    REDIS_HOST,
+    REDIS_PORT,
+    REDIS_PASSWORD)
+import redis
 import dataclasses
 
 planner_router = APIRouter()
@@ -102,7 +112,8 @@ async def get_worker_job_dataset(
 ):
     # print(f"force_reload = {force_reload}")
     org_code = current_user.org_code
-    planner = get_default_active_planner(org_code=org_code, team_id=team_id)
+    planner = get_default_active_planner(
+        org_code=org_code, team_id=team_id, force_reload=force_reload)
 
     if start_day is None:  # request_in.
         start_day = get_current_day_string()
@@ -418,3 +429,50 @@ def run_batch_optimizer_view(
         team_id=team.id,)
 
     return JSONResponse(result_info)
+
+
+@planner_router.get(
+    "/get_planed_jobs/",
+    summary="get_planed_jobs history planed data. ",
+)
+async def get_planed_jobs(
+    db_session: Session = Depends(get_db),
+    team_id: int = Query(None, alias="team_id"),
+    start_datatime: str = Query(None, alias="start_datatime"),
+    end_datatime: str = Query(None, alias="end_datatime"),
+):
+
+    if not team_id:
+        raise HTTPException(status_code=400, detail="team_id  is requrce")
+
+    start_time = datetime.strptime(start_datatime, config.KANDBOX_DATETIME_FORMAT_ISO_SPACE)
+    end_time = datetime.strptime(end_datatime, config.KANDBOX_DATETIME_FORMAT_ISO_SPACE)
+    all_workers = workerService.get_by_team(db_session=db_session, team_id=team_id)
+    all_jobs = jobService.get_by_team_and_status(db_session=db_session, team_id=team_id, start_time=start_time, end_time=end_time, planning_status_list=[
+                                                 JobPlanningStatus.PLANNED, 
+                                                 JobPlanningStatus.IN_PLANNING, 
+                                                 JobPlanningStatus.FINISHED]) #  JobPlanningStatus.CANCELLED,
+
+    res = []
+    for worker in all_workers:
+        _data = {
+            "id": worker.id,
+            "name": worker.code,
+            "gtArray": [],
+        }
+        for job in all_jobs:
+            if worker.id != job.scheduled_primary_worker_id:
+                continue
+            start = datetime.strftime(job.scheduled_start_datetime, config.KANDBOX_DATETIME_FORMAT_ISO_SPACE
+                                      )
+            end = datetime.strftime(job.scheduled_start_datetime + timedelta(minutes=job.scheduled_duration_minutes), config.KANDBOX_DATETIME_FORMAT_ISO_SPACE
+                                    )
+
+            _data['gtArray'].append({
+                "id": job.id,
+                "name": job.code,
+                "start": start,
+                "end": end
+            })
+        res.append(_data)
+    return JSONResponse(res)

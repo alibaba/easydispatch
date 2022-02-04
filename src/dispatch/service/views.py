@@ -9,7 +9,8 @@ from sqlalchemy.orm import Session
 from dispatch import config
 from dispatch.auth.models import DispatchUser
 from dispatch.auth.service import get_current_user
-from dispatch.database import get_db, search_filter_sort_paginate
+from dispatch.database import get_db
+from dispatch.database_util.service import common_parameters, search_filter_sort_paginate
 from dispatch.plugins.kandbox_planner.util.kandbox_date_util import get_current_day_string
 from dispatch.service.planner_service import get_active_planner
 from sqlalchemy.exc import IntegrityError
@@ -34,39 +35,20 @@ from dispatch.config import NBR_OF_OBSERVED_WORKERS, MINUTES_PER_DAY, MAX_NBR_OF
 router = APIRouter()
 
 
-@router.get("/", response_model=ServicePagination)
-def get_services(
-    db_session: Session = Depends(get_db),
-    page: int = 1,
-    items_per_page: int = Query(5, alias="itemsPerPage"),
-    query_str: str = Query(None, alias="q"),
-    sort_by: List[str] = Query(None, alias="sortBy[]"),
-    descending: List[bool] = Query(None, alias="descending[]"),
-    fields: List[str] = Query(None, alias="field[]"),
-    ops: List[str] = Query(None, alias="op[]"),
-    values: List[str] = Query(None, alias="value[]"),
-):
+@router.get(
+    "/", response_model=ServicePagination
+)
+def get_service_plugins(*, common: dict = Depends(common_parameters)):
     """
-    Retrieve all services.
     """
-    return search_filter_sort_paginate(
-        db_session=db_session,
-        model="Service",
-        query_str=query_str,
-        page=page,
-        items_per_page=items_per_page,
-        sort_by=sort_by,
-        descending=descending,
-        fields=fields,
-        values=values,
-        ops=ops,
-    )
+    return search_filter_sort_paginate(model="Service", **common)
 
 
 @router.post("/", response_model=ServiceRead)
 def create_service(
     *,
     db_session: Session = Depends(get_db),
+    current_user: DispatchUser = Depends(get_current_user),
     service_in: ServiceCreate = Body(
         ...,
         example={
@@ -81,18 +63,21 @@ def create_service(
     Create a new service.
     """
     service = get_by_code(db_session=db_session, code=service_in.code)
+    service_in.org_id = current_user.org_id
     if service:
         raise HTTPException(
             status_code=400,
             detail=f"The service with this code ({service_in.code}) already exists.",
         )
+    service_in.org_id = current_user.org_id
     service = create(db_session=db_session, service_in=service_in)
     return service
 
 
 @router.put("/{service_id}", response_model=ServiceRead)
 def update_service(
-    *, db_session: Session = Depends(get_db), service_id: int, service_in: ServiceUpdate
+    *, db_session: Session = Depends(get_db),
+    current_user: DispatchUser = Depends(get_current_user), service_id: int, service_in: ServiceUpdate
 ):
     """
     Update an existing service.
@@ -100,6 +85,8 @@ def update_service(
     service = get(db_session=db_session, service_id=service_id)
     if not service:
         raise HTTPException(status_code=404, detail="The service with this id does not exist.")
+
+    service_in.org_id = current_user.org_id
     service = update(db_session=db_session, service=service, service_in=service_in)
     return service
 

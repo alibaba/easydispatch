@@ -72,7 +72,10 @@ export default {
           }
           return v;
         });
-        this.$emit("input", this._workers);
+        this.$emit(
+          "input",
+          this._workers.filter((row) => row.code != undefined)
+        );
       },
     },
   },
@@ -82,17 +85,14 @@ export default {
   },
 
   methods: {
-    fetchData(filterOptions) {
+    fetchData: debounce(function (filterOptions) {
       this.error = null;
       this.loading = true;
       WorkerApi.getAll(filterOptions).then((response) => {
         this.items = response.data.items;
         this.loading = false;
       });
-    },
-    getFilteredData: debounce(function (options) {
-      this.fetchData(options);
-    }, 500),
+    }, 200),
   },
 };
 </script>

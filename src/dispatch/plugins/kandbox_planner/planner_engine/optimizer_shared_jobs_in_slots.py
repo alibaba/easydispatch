@@ -84,7 +84,7 @@ class OptimizerJobsInSlots:
                 f"JOB:{job_code_1}:JOB:{job_code_2}: very long travel time: {new_time} minutes")
         return int(new_time / 1)
 
-    def dispatch_jobs_in_slots(self, working_time_slots: list):
+    def dispatch_jobs_in_slots(self, working_time_slots: list=[], last_job_count=1):
         """Assign jobs to workers."""
         num_slots = len(working_time_slots)
 
@@ -413,7 +413,7 @@ class OptimizerJobsInSlots:
         # j_file.write('')
         to_print_json_list = []
         final_result = {"status": OptimizerSolutionStatus.SUCCESS,
-                        "changed_action_dict_by_job_code": {}, "not_changed_job_codes": []}
+                        "changed_action_dict_by_job_code": {}, "all_assigned_job_codes": []}
         for slot_i in range(num_slots):
             to_print_json_list.append([])
             num_jobs = len(working_time_slots[slot_i].assigned_job_codes)
@@ -429,6 +429,8 @@ class OptimizerJobsInSlots:
                     changed_flag = False
                 else:
                     changed_flag = True
+                final_result.all_assigned_job_codes.append(
+                    all_jobs_in_slots[slot_i][shift].job_code)
                 if changed_flag:
                     this_job_code = all_jobs_in_slots[slot_i][shift].job_code
 
@@ -442,11 +444,8 @@ class OptimizerJobsInSlots:
                         scheduled_duration_minutes=all_jobs_in_slots[slot_i][shift].scheduled_duration_minutes,
                         # slot_code_list =
                     )
-                    final_result["changed_action_dict_by_job_code"][all_jobs_in_slots[slot_i]
+                    final_result.changed_action_dict_by_job_code[all_jobs_in_slots[slot_i]
                                                                     [shift].job_code] = one_job_action_dict
-                else:
-                    final_result["not_changed_job_codes"].append(
-                        all_jobs_in_slots[slot_i][shift].job_code)
 
                 one_job_result = [
                     solver.Value(shift_start_time_dict[slot_i][shift]),
@@ -455,15 +454,15 @@ class OptimizerJobsInSlots:
                     changed_flag
                 ]
                 to_print_json_list[slot_i].append(one_job_result)
-                # final_result["changed_action_dict_by_job_code"][all_jobs_in_slots [slot_i][shift].job_code] = one_job_result
-        res_slots = []
+                # final_result.changed_action_dict_by_job_code[all_jobs_in_slots [slot_i][shift].job_code] = one_job_result
+        planned_job_sequence = []
         for job_list in to_print_json_list:
-            res_slots.append(sorted(
+            planned_job_sequence.append(sorted(
                 job_list,
                 key=lambda item: item[0],
                 reverse=False,
             ))
-        final_result["slots"] = res_slots
+        final_result.planned_job_sequence = planned_job_sequence
         log.debug(final_result)
 
         return final_result

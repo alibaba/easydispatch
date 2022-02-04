@@ -2,10 +2,16 @@
   <v-layout wrap>
     <edit-sheet />
     <new-sheet />
-    <!--<delete-dialog />-->
+    <delete-dialog />
     <div class="headline">Jobs</div>
     <v-spacer />
-    <v-btn color="primary" dark class="ml-2" @click="showNewSheet()">New</v-btn>
+    <v-btn
+      color="primary"
+      dark
+      class="ml-2"
+      @click="showNewSheet()"
+      :disabled="!userInfo || userInfo.role=='User' "
+    >New</v-btn>
     <v-flex xs12>
       <v-layout column>
         <v-flex>
@@ -31,45 +37,29 @@
               :loading="loading"
               loading-text="Loading... Please wait"
             >
-              <template v-slot:item.cost="{ item }">
-                {{
-                item.cost | toUSD
-                }}
-              </template>
-              <template v-slot:item.commander="{ item }">
-                <div v-if="item.commander">
-                  <v-chip class="ma-2" pill small :href="item.commander.weblink">
-                    <div v-if="item.commander.name">{{ item.commander.name }}</div>
-                    <div v-else>{{ item.commander.code }}</div>
-                  </v-chip>
-                </div>
-              </template>
-              <template v-slot:item.reporter="{ item }">
-                <div v-if="item.reporter">
-                  <v-chip class="ma-2" pill small :href="item.reporter.weblink">
-                    <div v-if="item.reporter.name">{{ item.reporter.name }}</div>
-                    <div v-else>{{ item.reporter.code }}</div>
-                  </v-chip>
-                </div>
-              </template>
               <template v-slot:item.reported_at="{ item }">
                 {{
                 item.reported_at | formatDate
                 }}
               </template>
-              <template v-slot:item.data-table-actions="{ item }">
-                <v-menu bottom left>
-                  <template v-slot:activator="{ on }">
-                    <v-btn icon v-on="on">
-                      <v-icon>mdi-dots-vertical</v-icon>
-                    </v-btn>
+              <template v-slot:item.description="{ item }">
+                <v-tooltip bottom>
+                  <template v-slot:activator="{ on, attrs }">
+                    <span
+                      class="overflow_ellipsis_col"
+                      v-bind="attrs"
+                      v-on="on"
+                    >{{item.description}}</span>
                   </template>
-                  <v-list>
-                    <v-list-item @click="showEditSheet(item)">
-                      <v-list-item-title>Edit</v-list-item-title>
-                    </v-list-item>
-                  </v-list>
-                </v-menu>
+                  <span>{{item.description}}</span>
+                </v-tooltip>
+              </template>
+
+              <template v-slot:item.data-table-actions="{ item }">
+                <span class="table_action_icon">
+                  <v-icon small class="mr-2" @click="showEditSheet(item)">mdi-pencil</v-icon>
+                  <v-icon small @click="removeShow(item)">mdi-delete</v-icon>
+                </span>
               </template>
             </v-data-table>
           </v-card>
@@ -84,6 +74,8 @@ import { mapFields } from "vuex-map-fields";
 import { mapActions } from "vuex";
 import EditSheet from "@/job/EditSheet.vue";
 import NewSheet from "@/job/NewSheet.vue";
+import DeleteDialog from "@/job/DeleteDialog.vue";
+import { mapState } from "vuex";
 
 export default {
   name: "JobTable",
@@ -91,25 +83,36 @@ export default {
   components: {
     EditSheet,
     NewSheet,
+    DeleteDialog,
   },
 
   props: ["name"],
-
   data() {
     return {
+      scheduled_worker_filter: null,
       headers: [
         // { text: "ID", value: "id", align: "left" },
-        { text: "Job Name", value: "name" },
         { text: "Job Code", value: "code" },
-        ,
+        { text: "Team", value: "team.code", sortable: true },
         { text: "Status", value: "planning_status" },
-        { text: "Description", value: "description" },
-        { text: "Requested Worker", value: "requested_primary_worker.code" },
-        { text: "Requested Start", value: "requested_start_datetime" },
-        { text: "Requested Minutes", value: "requested_duration_minutes" },
-        { text: "Scheduled Primary", value: "scheduled_primary_worker.code" },
+        {
+          text: "Scheduled Primary",
+          value: "scheduled_primary_worker.code",
+          sortable: false,
+          filter: (value) => {
+            if (!this.scheduled_worker_filter) return true;
+            return value
+              .toLowerCase()
+              .startsWith(this.scheduled_worker_filter.toLowerCase());
+            //return value == this.status_filter
+          },
+        },
         { text: "scheduled Start", value: "scheduled_start_datetime" },
         { text: "Scheduled Minutes", value: "scheduled_duration_minutes" },
+        // { text: "Requested Worker", value: "requested_primary_worker.code" },
+        // { text: "Requested Start", value: "requested_start_datetime" },
+        // { text: "Requested Minutes", value: "requested_duration_minutes" },
+        // { text: "Description", value: "description" },
         {
           text: "",
           value: "data-table-actions",
@@ -133,9 +136,11 @@ export default {
       "table.rows.items",
       "table.rows.total",
     ]),
+    ...mapState("auth", ["userInfo"]),
   },
 
   mounted() {
+    this.getOrg();
     // process our props
     if (this.name) {
       this.q = this.name;
@@ -164,14 +169,32 @@ export default {
       }
     );
   },
-
+  destroyed() {
+    this.closeEditSheet();
+    this.closeNewSheet();
+  },
   methods: {
     ...mapActions("job", [
       "getAll",
       "showNewSheet",
       "showEditSheet",
       "removeShow",
+      "closeNewSheet",
+      "closeEditSheet",
     ]),
+    ...mapActions("org", ["getOrg"]),
   },
 };
 </script>
+<style>
+.overflow_ellipsis_col {
+  display: block;
+  max-width: 200px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.table_action_icon {
+  white-space: nowrap;
+}
+</style>

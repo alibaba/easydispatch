@@ -13,7 +13,7 @@
             color="primary"
             :loading="loading"
             :disabled="invalid || !validated"
-            @click="save()"
+            @click="submitSaveLocal()"
           >
             <v-icon>save</v-icon>
           </v-btn>
@@ -22,89 +22,59 @@
           </v-btn>
         </v-list-item>
       </template>
-      <v-card flat>
-        <v-card-text>
-          <v-container grid-list-md>
-            <v-layout wrap>
-              <v-flex xs12>
-                <span class="subtitle-2">Team Details</span>
-              </v-flex>
-              <v-flex xs12>
-                <ValidationProvider name="TeamCode" rules="required" immediate>
-                  <v-text-field
-                    v-model="code"
-                    slot-scope="{ errors, valid }"
-                    label="Code"
-                    :error-messages="errors"
-                    :success="valid"
-                    hint="The unique key for the team."
-                    clearable
-                    required
-                  />
-                </ValidationProvider>
-              </v-flex>
-              <v-flex xs12>
-                <ValidationProvider name="Name" rules="required" immediate>
-                  <v-text-field
-                    v-model="name"
-                    slot-scope="{ errors, valid }"
-                    :error-messages="errors"
-                    :success="valid"
-                    label="Name"
-                    hint="A name for your team."
-                    clearable
-                    required
-                  />
-                </ValidationProvider>
-              </v-flex>
-              <v-flex xs12>
-                <service-select v-model="planner_service" />
-              </v-flex>
-              <v-flex xs12>
-                <span class="subtitle-2">Planning Window</span>
-              </v-flex>
-
-              <v-flex xs12>
-                <ValidationProvider name="env_start_day" rules="required" immediate>
-                  <v-text-field
-                    v-model="flex_form_data.env_start_day"
-                    slot-scope="{ errors, valid }"
-                    :error-messages="errors"
-                    :success="valid"
-                    label="Planning Start Day"
-                    hint="Planning Start Day in format of YYYYMMDD"
-                    clearable
-                    required
-                  />
-                </ValidationProvider>
-              </v-flex>
-
-              <v-flex xs12>
-                <ValidationProvider name="nbr_of_days_planning_window" rules="required" immediate>
-                  <v-text-field
-                    v-model="flex_form_data.nbr_of_days_planning_window"
-                    slot-scope="{ errors, valid }"
-                    :error-messages="errors"
-                    :success="valid"
-                    label="Planning Days"
-                    hint="How many days to plan e.g. 1, 2, 3, ..."
-                    clearable
-                    required
-                  />
-                </ValidationProvider>
-              </v-flex>
-              <v-flex xs12>
-                <v-btn
-                  color="primary"
-                  dark
-                  class="mb-2"
-                  @click="reset_planning_window()"
-                >ResetPlanningWindow</v-btn>
-              </v-flex>
-            </v-layout>
-          </v-container>
-        </v-card-text>
-      </v-card>
+      <v-tabs fixed-tabs v-model="tab">
+        <v-tab key="team">Team Detail</v-tab>
+        <v-tab key="flex_form">Flex Form</v-tab>
+      </v-tabs>
+      <v-tabs-items v-model="tab">
+        <v-tab-item key="team">
+          <v-card flat>
+            <v-card-text>
+              <v-container grid-list-md>
+                <v-layout wrap>
+                  <v-flex xs12>
+                    <span class="subtitle-2">Team Details</span>
+                  </v-flex>
+                  <v-flex xs12>
+                    <ValidationProvider name="TeamCode" rules="required" immediate>
+                      <v-text-field
+                        v-model="code"
+                        slot-scope="{ errors, valid }"
+                        label="Code"
+                        :error-messages="errors"
+                        :success="valid"
+                        hint="The unique key for the team."
+                        clearable
+                        required
+                      />
+                    </ValidationProvider>
+                  </v-flex>
+                  <v-flex xs12>
+                    <ValidationProvider name="Name" rules="required" immediate>
+                      <v-text-field
+                        v-model="name"
+                        slot-scope="{ errors, valid }"
+                        :error-messages="errors"
+                        :success="valid"
+                        label="Name"
+                        hint="A name for your team."
+                        clearable
+                        required
+                      />
+                    </ValidationProvider>
+                  </v-flex>
+                  <v-flex xs12>
+                    <ServiceSelect v-model="planner_service" rules="required" />
+                  </v-flex>
+                </v-layout>
+              </v-container>
+            </v-card-text>
+          </v-card>
+        </v-tab-item>
+        <v-tab-item key="flex_form">
+          <TeamFlexForm :formData="localFlexFormData" :formSchema="dataFormSchema" />
+        </v-tab-item>
+      </v-tabs-items>
     </v-navigation-drawer>
   </ValidationObserver>
 </template>
@@ -115,6 +85,8 @@ import { mapActions } from "vuex";
 import { ValidationObserver, ValidationProvider, extend } from "vee-validate";
 import { required } from "vee-validate/dist/rules";
 import ServiceSelect from "@/service/ServiceSelect.vue";
+import TeamFlexForm from "@/components/FlexForm.vue";
+import { cloneDeep } from "lodash";
 extend("required", {
   ...required,
   message: "This field is required",
@@ -127,8 +99,15 @@ export default {
     ValidationObserver,
     ValidationProvider,
     ServiceSelect,
+    TeamFlexForm,
   },
-
+  data() {
+    let today = new Date();
+    let env_start_day = today.toISOString().split("T")[0].replace(/-/g, "");
+    return {
+      tab: null,
+    };
+  },
   computed: {
     ...mapFields("team", [
       "selected.id",
@@ -140,10 +119,35 @@ export default {
       "selected.loading",
       "dialogs.showCreateEdit",
     ]),
+    ...mapFields("org", ["selected.team_flex_form_schema"]),
+    // 计算属性的 getter
+    dataFormSchema: function () {
+      return JSON.parse(JSON.stringify(this.team_flex_form_schema));
+    },
+    localFlexFormData: {
+      get() {
+        return cloneDeep(JSON.parse(JSON.stringify(this.flex_form_data)));
+      },
+      set(value) {
+        this.$emit("input", value);
+      },
+    },
   },
 
   methods: {
-    ...mapActions("team", ["save", "closeCreateEdit", "reset_planning_window"]),
+    ...mapActions("team", [
+      "save",
+      "closeCreateEdit",
+      "setSelectedFormDataAndSave",
+    ]),
+    submitSaveLocal() {
+      this.setSelectedFormDataAndSave({
+        flex_form_data: Object.assign(
+          cloneDeep(JSON.parse(JSON.stringify(this.flex_form_data))),
+          this.localFlexFormData
+        ),
+      });
+    },
   },
 };
 </script>

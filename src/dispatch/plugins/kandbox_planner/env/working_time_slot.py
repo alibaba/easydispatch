@@ -20,7 +20,7 @@ from dispatch.plugins.kandbox_planner.env.env_enums import (
 from dispatch.plugins.kandbox_planner.env.env_models import (
     ActionDict,
     BaseJob,
-    LocationTuple,
+    Worker,
     TimeSlotJSONEncoder,
     WorkingTimeSlot,
     JobLocationBase,
@@ -117,6 +117,8 @@ class WorkingTimeSlotServer:
             return None
 
     def get_slot(self, redis_handler, slot_code, raise_exception=True) -> WorkingTimeSlot:
+        if redis_handler is None:
+            redis_handler = self.r
         redis_handler.watch(slot_code)
         slot_on_redis = redis_handler.get(slot_code)
         if slot_on_redis is None:
@@ -153,8 +155,10 @@ class WorkingTimeSlotServer:
         return self.r.set(slot_code, json.dumps(slot, cls=TimeSlotJSONEncoder))
 
     def add_single_working_time_slot(
-        self, worker_code: str, start_minutes: int, end_minutes: int, start_location, end_location
+        self, w: Worker, start_minutes: int, end_minutes: int, start_location, end_location
     ) -> WorkingTimeSlot:
+        # assert False
+
         if end_minutes - start_minutes < 1:
             return None
         # It is such a luxury to have fake start / end for every day. So I used None to denote start/end of time slots in one original slot.
@@ -169,15 +173,21 @@ class WorkingTimeSlotServer:
             next_slot_code=None,
             start_location=start_location_base,
             end_location=end_location_base,
-            worker_id=worker_code,
+            worker_id=w.worker_code,
             available_free_minutes=end_minutes - start_minutes,
             assigned_job_codes=[],
+            vehicle_type=w.flex_form_data.get("vehicle_type", "van"),
+            max_volume=w.flex_form_data.get("capacity_max_volume", 1),
+            max_weight=w.flex_form_data.get("capacity_max_weight", 1),
+            loaded_items={
+                "paper tower": 6,
+                "paper roll": 8,
+                "Ultraprotect Spray": 5,
+                "Foam Soap": 8,
+                "Body and Hair Gel": 9
+            }
         )
         a = self.set_slot(slot)
-        self.env.kafka_server.post_changed_slot_codes(
-            message_type=KafkaMessageType.UPDATE_WORKING_TIME_SLOTS,
-            changed_slot_codes_list=[self.get_time_slot_key(slot)],
-        )
 
         return slot
 
@@ -559,6 +569,73 @@ class WorkingTimeSlotServer:
             { "messages": [ { "message": "success", "deleted": len(slots_to_delete), "added": len(slots_to_add_back), } ] },
         )
 
+
+    def set_assigned_job_codes(self, slot_code: str, job_codes) -> Tuple[bool, dict]:
+        """ 
+        """
+        trx_i = 0
+        # https://redis-py-doc.readthedocs.io/en/2.7.0/README.html#pipelines
+        with self.r.pipeline() as pipe:
+            while trx_i < MAX_TRANSACTION_RETRY:
+                # recommended_slot_delete_list = []
+                # recommended_slot_update_list = []
+
+                try: 
+                    if slot_code in config.DEBUGGING_SLOT_CODE_SET:
+                        log.debug("debug atomic_slot_delete_and_add_back")
+
+                    # Check that this slot is not locked by appointment recomemndation.
+
+                    the_slot_lock_code = self.env.get_recommened_locked_slot_redis_key(slot_code)
+                    pipe.watch(the_slot_lock_code)
+                    the_slot_lock = pipe.get(the_slot_lock_code)
+                    if (the_slot_lock is not None)  :
+                        log.warn(f"set_assigned_job_codes:job_codes:{job_codes}: The target slot ({slot_code}) is locked by recommendation while trying cut off slot.  ")
+
+                    # Now read from redis and check the slot is still valid/alive
+                    pipe.watch(slot_code)
+                    slot_redis = pipe.get(slot_code)
+                    if slot_redis is None:
+                        log.error(f"slot_redis ({slot_code}) is None while trying cut off")
+                        return (
+                            False,
+                            {"messages": [{"message": f"set_assigned_job_codes:job_codes:{job_codes}: The target slot ({slot_code})  Rejected because of internal error: slot on redis ({slot_code}) is None while trying cut off"}]},
+                        )
+                    current_slot_as_list = json.loads(slot_redis)
+                    slot = WorkingTimeSlot(*current_slot_as_list)
+
+                    if slot.slot_type != TimeSlotType.FLOATING:
+                        log.error(f"set_assigned_job_codes:job_codes:{job_codes}: The target slot ({slot_code}) The only matched slot is not free/movable.   " )
+                        return (
+                            False,
+                            {"messages": [{"message": f"no slots, target slot ({slot_code})"}]},
+                        )
+                    slot.assigned_job_codes = job_codes
+
+
+                    self.atomic_slot_delete_and_add_back(
+                        redis_handler=pipe,
+                        slots_to_delete=[],
+                        slots_to_add_back={slot_code:slot},
+                    )
+
+                    return (
+                        True,
+                        {"messages": [{
+                                    "message": "success",
+                                    "deleted": 0,
+                                    "added": 1,
+                                    }]
+                        },
+                    )
+                except redis.WatchError:
+                    # another client must have changed 'slot' between the time we started WATCHing it and the pipeline's execution.
+                    log.warn(f"WatchError: Transaction interruppted. Counter: {trx_i}, I will retry")
+                    # continue
+                trx_i += 1
+        if trx_i >= MAX_TRANSACTION_RETRY:
+            log.error(f"failed to add slot, trx_i >= MAX_TRANSACTION_RETRY = {MAX_TRANSACTION_RETRY}")
+            return (False,{"messages":"Internal error trx_i >= MAX_TRANSACTION_RETRY"} )
 
     def cut_off_time_slots(self, action_dict: ActionDict, probe_only=False) -> Tuple[bool, dict]:
         """

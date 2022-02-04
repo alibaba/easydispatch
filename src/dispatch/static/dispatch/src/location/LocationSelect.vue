@@ -1,54 +1,66 @@
 <template>
-  <v-combobox
-    v-model="location"
-    prepend-icon="person"
-    :items="items"
-    item-text="location_code"
-    :search-input.sync="search"
-    :menu-props="{ maxHeight: '400' }"
-    :label="label"
-    :loading="loading"
-    @update:search-input="fetchData({ q: $event })"
-  >
-    <template v-slot:no-data>
-      <v-list-item>
-        <v-list-item-content>
-          <v-list-item-title>
-            No Locations matching "
-            <strong>{{ search }}</strong
-            >".
-          </v-list-item-title>
-        </v-list-item-content>
-      </v-list-item>
-    </template>
-  </v-combobox>
+  <ValidationProvider :rules="rules" immediate>
+    <v-combobox
+      v-model="location"
+      prepend-icon="place"
+      :items="items"
+      item-text="location_code"
+      :search-input.sync="search"
+      :menu-props="{ maxHeight: '400' }"
+      :label="label"
+      :loading="loading"
+      @update:search-input="fetchData({ q: $event })"
+      slot-scope="{ errors, valid }"
+      :error-messages="errors"
+      :success="valid"
+      hint="select a team."
+      message="This field is required"
+      required
+    >
+      <template v-slot:no-data>
+        <v-list-item>
+          <v-list-item-content>
+            <v-list-item-title>
+              No Locations matching "
+              <strong>{{ search }}</strong>".
+            </v-list-item-title>
+          </v-list-item-content>
+        </v-list-item>
+      </template>
+    </v-combobox>
+  </ValidationProvider>
 </template>
 
 <script>
 import LocationApi from "@/location/api";
 import { cloneDeep } from "lodash";
+import { ValidationProvider } from "vee-validate";
 export default {
   name: "LocationSelect",
   props: {
+    rules: [String],
     value: {
       type: Object,
-      default: function() {
+      default: function () {
         return {};
-      }
+      },
     },
     label: {
       type: String,
-      default: function() {
+      default: function () {
         return "Location";
-      }
-    }
+      },
+    },
   },
 
+  components: {
+    ValidationProvider,
+  },
   data() {
     return {
       loading: false,
       items: [],
-      search: null
+      search: null,
     };
   },
 
@@ -59,8 +71,8 @@ export default {
       },
       set(value) {
         this.$emit("input", value);
-      }
-    }
+      },
+    },
   },
 
   created() {
@@ -71,11 +83,11 @@ export default {
     fetchData(filterOptions) {
       this.error = null;
       this.loading = true;
-      LocationApi.getAll(filterOptions).then(response => {
+      LocationApi.getAll(filterOptions).then((response) => {
         this.items = response.data.items;
         this.loading = false;
       });
-    }
-  }
+    },
+  },
 };
 </script>

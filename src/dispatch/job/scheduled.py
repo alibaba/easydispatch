@@ -3,73 +3,31 @@ from datetime import datetime
 import json
 
 import pandas as pd
+import numpy as np
+
 from schedule import every
 from sqlalchemy import func
 
 from dispatch.decorators import background_task
-from dispatch.enums import Visibility
-from dispatch.extensions import sentry_sdk
 from dispatch.job.models import Job
+from dispatch.team.models import TeamUpdate
 from dispatch.worker import service as worker_service
-from dispatch.worker.models import Worker
-from dispatch.location.models import Location
-
-from dispatch.plugins.base import plugins
-from dispatch.plugins.kandbox_planner.data_adapter.kplanner_db_adapter import KPlannerDBAdapter
+from dispatch.worker.models import Worker, WorkerUpdate
+from dispatch.location.models import Location, LocationUpdate
 from dispatch.scheduler import scheduler
 from dispatch.service import service as service_service
-from dispatch.tag import service as tag_service
-from dispatch.tag.models import Tag
 
 
-from .enums import JobPlanningStatus
-from .service import calculate_cost, get_all, get_all_by_status, get_all_last_x_hours_by_status
+from collections import Counter
+
+from dispatch.plugins.kandbox_planner.env.env_enums import JobPlanningStatus, JobType
 
 log = logging.getLogger(__name__)
 
-
-@scheduler.add(every(1).hours, name="job-tagger")
-@background_task
-def auto_tagger(db_session):
-    """Attempts to take existing tags and associate them with jobs."""
-    tags = tag_service.get_all(db_session=db_session).all()
-    log.debug(f"Fetched {len(tags)} tags from database.")
-
-    tag_strings = [t.name.lower() for t in tags if t.discoverable]
-    phrases = build_term_vocab(tag_strings)
-    matcher = build_phrase_matcher("dispatch-tag", phrases)
-
-    p = plugins.get(
-        INCIDENT_PLUGIN_STORAGE_SLUG
-    )  # this may need to be refactored if we support multiple document types
-
-    for job in get_all(db_session=db_session).all():
-        log.debug(f"Processing job. Name: {job.name}")
-
-        doc = job.job_document
-        try:
-            mime_type = "text/plain"
-            text = p.get(doc.resource_id, mime_type)
-        except Exception as e:
-            log.debug(f"Failed to get document. Reason: {e}")
-            sentry_sdk.capture_exception(e)
-            continue
-
-        extracted_tags = list(set(extract_terms_from_text(text, matcher)))
-
-        matched_tags = (
-            db_session.query(Tag)
-            .filter(func.upper(Tag.name).in_([func.upper(t) for t in extracted_tags]))
-            .all()
-        )
-
-        job.tags.extend(matched_tags)
-        db_session.commit()
-
-        log.debug(f"Associating tags with job. Job: {job.name}, Tags: {extracted_tags}")
+# TODO, at night.
 
 
-@scheduler.add(every(3000).seconds, name="calc_historical_location_features")
+@scheduler.add(every(60 * 60 * 24).seconds, name="calc_historical_location_features")
 @background_task
 def calc_historical_location_features(db_session=None):
     """Calculates the cost of all jobs."""
@@ -85,37 +43,105 @@ def calc_historical_location_features_real_func(db_session=None):
     job_loc_df = pd.read_sql(
         db_session.query(
             Job.scheduled_primary_worker_id,
+            Worker.code.label("scheduled_primary_worker_code"),
             Job.id.label("job_id"),
             Job.scheduled_start_datetime,
             Job.scheduled_duration_minutes,
             Job.requested_start_datetime,
+            Job.flex_form_data,
             Job.location_id,
             Location.geo_longitude,
             Location.geo_latitude,
         )
         .filter(Job.location_id == Location.id)
-        .filter(Job.planning_status != JobPlanningStatus.unplanned)
+        .filter(Job.scheduled_primary_worker_id == Worker.id)
+        .filter(Job.planning_status.in_((JobPlanningStatus.FINISHED,)))
         .statement,
         db_session.bind,
     )
     if job_loc_df.count().max() < 1:
         # raise ValueError("job_loc_df.count().max() < 1, no data to proceed")
-        print(
+        log.error(
             "calc_historical_location_features_real_func: job_loc_df.count().max() < 1, no data to proceed"
         )
         return
 
-    from dispatch.plugins.kandbox_planner.util.kandbox_date_util import (
-        extract_minutes_from_datetime,
-    )
+    def get_actual_primary_worker_code(x):
+        if "actual_primary_worker_code" in x["flex_form_data"]:
+            return x["flex_form_data"]["actual_start_datetime"]
+        else:
+            return x["scheduled_primary_worker_code"]
 
-    job_loc_df["actual_start_minutes"] = job_loc_df.apply(
-        lambda x: extract_minutes_from_datetime(x["scheduled_start_datetime"]),
+    job_loc_df["actual_primary_worker_code"] = job_loc_df.apply(
+        lambda x: get_actual_primary_worker_code(x),
         axis=1,
     )
-    job_loc_df["days_delay"] = job_loc_df.apply(
-        lambda x: (x["scheduled_start_datetime"] - x["requested_start_datetime"]).days, axis=1
+    # actual_start_datetime
+    # job_loc_df["days_delay"] = job_loc_df.apply(
+    #     lambda x: (x["scheduled_start_datetime"] - x["requested_start_datetime"]).days, axis=1
+    # )
+
+    worker_job_gmm_df = (
+        job_loc_df.groupby(["actual_primary_worker_code"])
+        .agg(
+            # job_count=pd.NamedAgg(column='location_code', aggfunc='count')
+            avg_geo_longitude=pd.NamedAgg(column="geo_longitude", aggfunc="mean"),
+            avg_geo_latitude=pd.NamedAgg(column="geo_latitude", aggfunc="mean"),
+            std_geo_longitude=pd.NamedAgg(column="geo_longitude", aggfunc="std"),
+            std_geo_latitude=pd.NamedAgg(column="geo_latitude", aggfunc="std"),
+            list_geo_longitude=pd.NamedAgg(column="geo_longitude", aggfunc=list),
+            list_geo_latitude=pd.NamedAgg(column="geo_latitude", aggfunc=list),
+            # cov_geo =pd.NamedAgg(column=("geo_longitude","geo_latitude"), aggfunc=np.cov),
+            job_count=pd.NamedAgg(column="scheduled_primary_worker_id", aggfunc="count"),
+        )
+        .reset_index()
+    )  # .sort_values(['location_code'], ascending=True)
+
+    def get_cov(x):
+        arr = np.array([x["list_geo_longitude"], x["list_geo_latitude"], ])
+        arr_cov = np.cov(arr)
+        return arr_cov.tolist()
+    worker_job_gmm_df["cov_geo"] = worker_job_gmm_df.apply(
+        lambda x: get_cov(x),
+        axis=1,
     )
+    worker_job_gmm_df = worker_job_gmm_df[worker_job_gmm_df["job_count"] > 2]
+
+    worker_job_gmm_df["job_history_feature_data"] = worker_job_gmm_df.apply(
+        lambda x: {
+            "mean": {"longitude": x["avg_geo_longitude"], "latitude": x["avg_geo_latitude"]},
+            "std": {"longitude": x["std_geo_longitude"], "latitude": x["std_geo_latitude"]},
+            "cov": x["cov_geo"],
+            "job_count": x["job_count"],
+        },
+        axis=1,
+    )
+
+    for _, w in worker_job_gmm_df.iterrows():
+        worker = worker_service.get_by_code(
+            db_session=db_session,
+            code=w["actual_primary_worker_code"])
+
+        worker.job_history_feature_data = w["job_history_feature_data"]
+        db_session.add(worker)
+        db_session.commit()
+
+        # a=worker.__dict__
+        # # a["team"]=worker.team.__dict__
+        # # a["team"]=TeamUpdate(**worker.team.__dict__)
+        # # a["location"]=LocationUpdate(**worker.location.__dict__)
+        # # a["job_history_feature_data"] = w["job_history_feature_data"]
+        # # worker_in = WorkerUpdate(**a)
+        # worker_in = worker
+        # worker_in.job_history_feature_data = w["job_history_feature_data"]
+
+        # new_worker = worker_service.update(
+        #     db_session=db_session,
+        #     worker=worker,
+        #     worker_in=worker_in)
+        # print(worker)
+    print(f"{worker_job_gmm_df.count().max()} workers are updated.")
+    return
 
     loc_gmm_df = (
         job_loc_df.groupby(["location_id"])
@@ -125,6 +151,7 @@ def calc_historical_location_features_real_func(db_session=None):
             avg_geo_latitude=pd.NamedAgg(column="geo_latitude", aggfunc="mean"),
             std_geo_longitude=pd.NamedAgg(column="geo_longitude", aggfunc="std"),
             std_geo_latitude=pd.NamedAgg(column="geo_latitude", aggfunc="std"),
+            cov_geo=pd.NamedAgg(column=["geo_longitude", "geo_latitude"], aggfunc=np.cov),
             job_count=pd.NamedAgg(column="scheduled_primary_worker_id", aggfunc="count"),
             list_scheduled_worker_code=pd.NamedAgg(
                 column="scheduled_primary_worker_id", aggfunc=list
@@ -138,7 +165,6 @@ def calc_historical_location_features_real_func(db_session=None):
         )
         .reset_index()
     )  # .sort_values(['location_code'], ascending=True)
-    from collections import Counter
 
     loc_gmm_df["job_historical_worker_service_dict"] = loc_gmm_df.apply(
         lambda x: Counter(x["list_scheduled_worker_code"]),

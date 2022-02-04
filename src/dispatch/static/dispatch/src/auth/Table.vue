@@ -1,6 +1,7 @@
 <template>
   <v-layout wrap>
     <new-edit-sheet />
+    <delete-dialog />
     <div class="headline">Users</div>
     <v-spacer />
     <v-flex xs12>
@@ -26,8 +27,13 @@
               :items-per-page.sync="itemsPerPage"
               :sort-by.sync="sortBy"
               :sort-desc.sync="descending"
-              @click:row="editShow"
             >
+              <template v-slot:item.data-table-actions="{ item }">
+                <span class="table_action_icon">
+                  <v-icon small class="mr-2" @click="editShow(item)">mdi-pencil</v-icon>
+                  <v-icon small @click="removeShow(item)">mdi-delete</v-icon>
+                </span>
+              </template>
             </v-data-table>
           </v-card>
         </v-flex>
@@ -40,18 +46,28 @@
 import { mapFields } from "vuex-map-fields";
 import { mapActions } from "vuex";
 import NewEditSheet from "@/auth/editSheet.vue";
+import DeleteDialog from "@/auth/DeleteDialog.vue";
 export default {
   name: "UserTable",
 
   components: {
-    NewEditSheet
+    NewEditSheet,
+    DeleteDialog,
   },
   data() {
     return {
       headers: [
         { text: "Email", value: "email", sortable: true },
-        { text: "Role", value: "role", sortable: true }
-      ]
+        { text: "Role", value: "role", sortable: true },
+        { text: "Default Team", value: "team.code", sortable: true },
+        { text: "Active", value: "is_active", sortable: true },
+        {
+          text: "",
+          value: "data-table-actions",
+          sortable: false,
+          align: "end",
+        },
+      ],
     };
   },
 
@@ -64,23 +80,31 @@ export default {
       "table.options.descending",
       "table.options.loading",
       "table.rows.items",
-      "table.rows.total"
-    ])
+      "table.rows.total",
+    ]),
   },
 
   mounted() {
     this.getAll({});
 
     this.$watch(
-      vm => [vm.q, vm.page, vm.itemsPerPage, vm.sortBy, vm.descending],
+      (vm) => [vm.q, vm.page, vm.itemsPerPage, vm.sortBy, vm.descending],
       () => {
         this.getAll();
       }
     );
   },
-
+  destroyed() {
+    this.closeEdit();
+  },
   methods: {
-    ...mapActions("auth", ["getAll", "editShow"])
-  }
+    ...mapActions("auth", ["getAll", "editShow", "removeShow", "closeEdit"]),
+    doRegisterCode() {},
+  },
 };
 </script>
+<style>
+.table_action_icon {
+  white-space: nowrap;
+}
+</style>

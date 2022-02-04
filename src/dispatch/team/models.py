@@ -1,10 +1,9 @@
 from datetime import datetime
 from typing import List, Optional
 
-from sqlalchemy import Column, ForeignKey, Integer, PrimaryKeyConstraint, String, Table, JSON
+from sqlalchemy import Column, ForeignKey, Integer, UniqueConstraint, String, Table, JSON
 from sqlalchemy.orm import relationship
 from sqlalchemy_utils import TSVectorType
-
 from dispatch.database import Base
 from dispatch.models import TimeStampMixin, DispatchBase
 from dispatch.service.models import ServiceCreate
@@ -43,6 +42,8 @@ class Team(Base, TimeStampMixin):
         )
     )
 
+    __table_args__ = (UniqueConstraint('code', 'org_id', name='uix_org_team_1'),)
+
     # code = Column(String, nullable=False)
     # 2020-08-09 13:18:47 , I have decided service->team. Each service belong to a team and in service, you can get_rl_planner_service_for_team_id (team.id). This is LRU cached instance. Maximum one RL service per team.
     """
@@ -57,9 +58,11 @@ class Team(Base, TimeStampMixin):
 class TeamBase(DispatchBase):
     """ A team is the scope of one dispatching planner instance. The jobs in each team will be assigned to workers in the same team."""
 
+    id: Optional[str] = None
     code: str = Field(
         default=None, title="Code", description="The unique team code.",)
     name: Optional[str]
+    org_id: Optional[str] = None
     description: Optional[str]
     planner_service: Optional[ServiceCreate]
     flex_form_data: Optional[dict] = {}
@@ -78,8 +81,8 @@ class TeamUpdate(TeamBase):
 class TeamRead(TeamBase):
     id: int
     planner_service: Optional[ServiceCreate]
-    created_at: datetime
-    updated_at: datetime
+    created_at: Optional[datetime]
+    updated_at: Optional[datetime]
 
 
 class TeamPagination(DispatchBase):

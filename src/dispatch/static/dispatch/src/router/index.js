@@ -22,10 +22,14 @@ const authProviderSlug =
 
 // router guards
 router.beforeEach((to, from, next) => {
-  if (to.fullPath == "/register") {
+  // console.log(to.fullPath, to.path)
+  if (["/register", "/login", "/register_eng", "/register_customer", "/edit_job", "/job_edit_4_worker"].includes(to.path)) {
     next();
   } else {
     //store.dispatch("app/setLoading", true)
+    // if (to.path == "/edit_job") {
+    //   next();
+    // } else {
     if (!store.state.auth.status.loggedIn) {
       if (authProviderSlug === "dispatch-auth-provider-pkce") {
         pkceAuthProvider.login(to, from, next);
@@ -42,6 +46,7 @@ router.beforeEach((to, from, next) => {
       }
       next();
     }
+    // }
   }
 });
 

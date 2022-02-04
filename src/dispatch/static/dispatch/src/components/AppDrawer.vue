@@ -5,7 +5,7 @@
       :settings="scrollSettings"
     >
       <v-list dense>
-        <template v-for="item in menus">
+        <template v-for="item in filteredMenus">
           <!--group with subitems-->
           <v-list-group
             v-if="item.items"
@@ -127,7 +127,21 @@ export default {
     computeLogo() {
       return "/static/m.png";
     },
-    ...mapState("app", ["toggleDrawer"])
+    filteredMenus() {
+      let vm_that = this
+      const newMenu = this.menus.filter(function(menuItem){
+          let roles = menuItem.visibleRoles;
+          if (roles){
+            return roles.includes(vm_that.userInfo.role)
+          } else{ 
+            return ["Owner","Planner"].includes(vm_that.userInfo.role)
+          }
+      });
+
+      return newMenu;
+    },
+    ...mapState("app", ["toggleDrawer"]),
+    ...mapState("auth", ["userInfo"]),
   },
   created() {},
 

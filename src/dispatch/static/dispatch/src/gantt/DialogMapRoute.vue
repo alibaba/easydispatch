@@ -6,27 +6,18 @@
     content-class="centered-dialog"
     max-width="900px"
   >
-    <v-card height="800px">
+    <v-card>
       <v-card-title>
-        <span class="headline" v-if="job !== null"
-          >Routing - {{ job.job_code }}</span
-        >
+        <span class="headline" v-if="job !== null">Routing - {{ job.job_code }}</span>
         <v-spacer />
 
-        <v-btn color="primary" dark class="ml-2" @click="closeDialogMapRoute()"
-          >Close</v-btn
-        >
+        <v-btn color="primary" text @click="closeDialogMapRoute()">Close</v-btn>
       </v-card-title>
       <v-card-text>
         <v-container>
           <v-row>
             <v-col cols="12">
-              <l-map
-                ref="myRoutingMap"
-                :zoom="zoom"
-                :center="latLongCenter"
-                style="height: 650px; width: 800px"
-              >
+              <l-map ref="myRoutingMap" :zoom="zoom" :center="latLongCenter" style="height: 460px">
                 <l-tile-layer :url="osmUrl" :attribution="attribution" />
                 <l-routing-machine :waypoints="latLongWayPoints" />
               </l-map>
@@ -70,7 +61,7 @@ export default {
     };
   },
   // https://cn.vuejs.org/v2/guide/components-edge-cases.html
-  provide: function() {
+  provide: function () {
     return {
       getMap: this.getMap,
     };
@@ -81,7 +72,7 @@ export default {
       let filterOptions = {};
       return filterOptions;
     },
-    getMap: function(found) {
+    getMap: function (found) {
       var vm = this;
       function checkForMap() {
         if (vm.$refs.myRoutingMap) {

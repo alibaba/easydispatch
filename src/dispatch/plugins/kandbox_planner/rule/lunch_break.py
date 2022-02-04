@@ -14,8 +14,6 @@ from dispatch.plugins.kandbox_planner.env.env_models import (
 
 from dispatch.plugins.kandbox_planner.env.env_enums import TimeSlotType
 
-POSITION_SLOT_TYPE = 6
-
 
 class KandboxRulePluginLunchBreak(KandboxRulePlugin):
 
@@ -33,26 +31,43 @@ class KandboxRulePluginLunchBreak(KandboxRulePlugin):
     description = "Rule lunch_hour_break for GYM for RL."
     version = "0.1.0"
 
-    default_config = {}
+    default_config = {
+        "lunch_break_minutes":30,
+        "lunch_start_hour":12,
+        "lunch_end_hour":14,
+    }
     config_form_spec = {
         "type": "object",
-        "properties": {},
+        "properties": {
+            "lunch_break_minutes": {
+                "type": "number",
+                "default": 30,
+                "title": "Lunch break Minutes (integer)"
+            },
+            "lunch_start_hour": {
+                "type": "number",
+                "default": 12,
+                "title": "Minimum start hour (integer)"
+            },
+            "lunch_end_hour": {
+                "type": "number",
+                "default": 14,
+                "title": "Maximum start hour (integer)"
+            },
+        },
     }
 
     def evalute_normal_single_worker_n_job(self, env=None, job=None):  # worker = None,
         # action_dict = env.decode_action_into_dict(action)
         # if (action_dict['scheduled_start_minutes'] > 14*60 ) | (action_dict['scheduled_start_minutes'] + action_dict['scheduled_duration_minutes']< 12*60  ):
-        # scheduled_start_minutes_local = job.scheduled_start_minutes % (24 * 60)
-        LUNCH_START_HOUR = 12
-        LUNCH_END_HOUR = 14
-        MINIMUM_LUNCH_BREAK_MINUTES = 30
+        # scheduled_start_minutes_local = job.scheduled_start_minutes % (24 * 60) 
         score = 1
         metrics_detail = {"status_code": "OK"}
 
         action_day = int(job.scheduled_start_minutes / 24 / 60)
 
-        job_lunch_start = action_day * 24 * 60 + (LUNCH_START_HOUR * 60)
-        job_lunch_end = action_day * 24 * 60 + (LUNCH_END_HOUR * 60)
+        job_lunch_start = action_day * 24 * 60 + (self.config["lunch_start_hour"] * 60)
+        job_lunch_end = action_day * 24 * 60 + (self.config["lunch_end_hour"] * 60)
         overlap_lunch = date_util.clip_time_period(
             [job_lunch_start, job_lunch_end],
             [
@@ -71,7 +86,7 @@ class KandboxRulePluginLunchBreak(KandboxRulePlugin):
             )
             return score_res
 
-        overall_message = f"Lunch break > {MINIMUM_LUNCH_BREAK_MINUTES} minutes"
+        overall_message = f"Lunch break > {self.config['lunch_break_minutes']} minutes"
         # scheduled_start_minutes = job.scheduled_start_minutes
         job_start_minutes = job.scheduled_start_minutes
         job_end_minutes = job.scheduled_start_minutes + job.scheduled_duration_minutes
@@ -118,10 +133,10 @@ class KandboxRulePluginLunchBreak(KandboxRulePlugin):
                     # raise LookupError("unknown slot type - E?")
                     pass  # lunch break in dairy events/absence
 
-            if total_avail_lunch_break < MINIMUM_LUNCH_BREAK_MINUTES:
+            if total_avail_lunch_break < self.config["lunch_break_minutes"]:
                 # For now, lunch break does not enforce to -1, lowest is 0, as warning
                 score = 0
-                overall_message = f"total_avail_lunch_break = {total_avail_lunch_break}, which is less than MINIMUM({MINIMUM_LUNCH_BREAK_MINUTES}) for worker {worker_id}"
+                overall_message = f"total_avail_lunch_break = {total_avail_lunch_break}, which is less than MINIMUM({self.config['lunch_break_minutes']}) for worker {worker_id}"
 
         score_res = ActionEvaluationScore(
             score=score,

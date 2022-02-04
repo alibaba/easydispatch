@@ -6,7 +6,7 @@ import dispatch.plugins.kandbox_planner.util.kandbox_date_util as date_util
 
 from datetime import datetime
 from datetime import timedelta
-
+from tqdm import tqdm
 from pprint import pprint
 from dispatch import config
 
@@ -71,6 +71,26 @@ class KPlannerAPIAdapter:
             except:
                 print("Failed to save worker: ", response)
 
+    def update_all_workers(self, worker_list):
+
+        for myobj in worker_list:
+            url = "{}/workers/worker_code/{}".format(self.service_url, myobj['code'])
+
+            response = requests.put(
+                url,
+                json=myobj,
+                headers={
+                    "Content-Type": "application/json",
+                    "Authorization": "Bearer {}".format(self.access_token),
+                },
+            )
+
+            try:
+                # Convert JSON to dict and print
+                print("updated worker: ", response.json()["code"])
+            except:
+                print("Failed to updated worker: ", response)
+
     def delete_all_workers(self):
         url = "{}/kpdata/workers/".format(self.service_url)
         response = requests.get(
@@ -115,7 +135,7 @@ class KPlannerAPIAdapter:
 
     def insert_all_orders(self, jobs_list):
         url = "{}/jobs/".format(self.service_url)
-        for myobj in jobs_list:
+        for myobj in tqdm(jobs_list):
             myobj["team_code"] = self.team_code
 
             # log.debug(url)
@@ -131,9 +151,24 @@ class KPlannerAPIAdapter:
             # print(response)
             # Convert JSON to dict and print
             try:
-                print("Saved job: ", response.json()["code"])
+                print("Saved job: ", response.json()["data"]["code"])
             except:
                 print("Failed to save job", response)
+
+    def get_all_orders(self):
+        url = "{}/jobs/?q=&page=1&itemsPerPage=-1&sortBy[]=scheduled_start_datetime&descending[]=false".format(
+            self.service_url
+        )
+        response = requests.get(
+            url,
+            headers={
+                "Content-Type": "application/json",
+                "Authorization": "Bearer {}".format(self.access_token),
+            },
+        )
+        resp_json = response.json()
+
+        return resp_json
 
     def delete_all_orders(self):
         url = "{}/kpdata/jobs/".format(

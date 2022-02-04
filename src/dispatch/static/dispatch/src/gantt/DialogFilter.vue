@@ -6,23 +6,12 @@
           <span class="headline">Filters</span>
           <v-spacer></v-spacer>
           <v-btn text color="primary" @click="setDialogFilterVisible(false)">Cancel</v-btn>
-          <v-btn text color="primary" :disabled="invalid || !validated" @click="fetchData">OK</v-btn>
+          <v-btn text color="primary" @click="fetchData">OK</v-btn>
         </v-card-title>
         <v-list dense>
           <v-list-item>
             <v-list-item-content>
-              <ValidationProvider name="teamSelect" rules="required" immediate>
-                <team-select
-                  v-model="plannerFilters_team"
-                  slot-scope="{ errors, valid }"
-                  label="Team"
-                  :error-messages="errors"
-                  :success="valid"
-                  hint="The team"
-                  clearable
-                  required
-                ></team-select>
-              </ValidationProvider>
+              <team-select v-model="plannerFilters_team" rules="required"></team-select>
             </v-list-item-content>
           </v-list-item>
           <v-list-item>
@@ -66,7 +55,7 @@
           </v-list-item>
           <v-list-item>
             <v-list-item-content>
-              <v-switch v-model="forceReloadFlag" class="mx-4" label="force reload" disabled></v-switch>
+              <v-switch v-model="forceReloadFlag" class="mx-4" label="force reload"></v-switch>
             </v-list-item-content>
           </v-list-item>
         </v-list>
@@ -169,7 +158,8 @@ export default {
         d.substr(0, 4) + "-" + d.substr(4, 2) + "-" + d.substr(6, 2);
       let endDateInTeam = this.addDays(
         startDateInTeam,
-        parseInt(team.flex_form_data.nbr_of_days_planning_window)
+        parseInt(team.flex_form_data.planning_working_days) +
+          parseInt(team.flex_form_data.begin_skip_minutes || 0 / 1440)
       )
         .toISOString()
         .substr(0, 10);
@@ -188,7 +178,7 @@ export default {
   mounted() {
     this.plannerFilters_windowDates = [this.defaultStart, this.defaultEnd];
     let that = this;
-    if (this.userInfo.default_team_id) {
+    if (this.userInfo.default_team_id && this.userInfo.default_team_id != -1) {
       console.log("dialog mounted, then I am changing default_team_id");
       AuthApi.getUserInfo().then((res) => {
         TeamApi.get(res.data.default_team_id) //
@@ -199,9 +189,10 @@ export default {
               that.plannerFilters_team
             );
             that.plannerWindowMinMax = that.plannerFilters_windowDates;
-            if (that.plannerFilters.team == null) {
-              that.fetchData();
-            }
+            that.fetchData();
+            // if (that.plannerFilters.team == null) {
+            //   that.fetchData();
+            // }
 
             console.log(
               "loaded default team info",
@@ -241,8 +232,9 @@ export default {
 
   watch: {
     plannerFilters_team(newTeam) {
-      if (newTeam) {
+      if (newTeam && newTeam.code) {
         console.log(`plannerFilters_team is changed to ${newTeam.code}`);
+        // debugger;
         try {
           this.plannerFilters_windowDates =
             this.getPlannerWindowDateFromTeam(newTeam);
@@ -251,7 +243,9 @@ export default {
           this.$store.commit(
             "app/SET_SNACKBAR",
             {
-              text: "This team has no valid plannign window. Please choose a different one.",
+              text:
+                "This team has not a valid planning window. Please choose a different team." +
+                err,
             },
             { root: true }
           );

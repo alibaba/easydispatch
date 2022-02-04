@@ -60,7 +60,7 @@ class Opti1DayPlanner(KandboxBatchOptimizerPlugin):
         # print("travel: ", new_time)
         return int(new_time / 1)
 
-    def dispatch_jobs(self, en, rl_agent=None):
+    def dispatch_jobs(self, env, rl_agent=None):
         # Real batch, rl_agent is skilpped.
         self.kandbox_env = env
         GENERATOR_START_DATE = datetime.strptime(

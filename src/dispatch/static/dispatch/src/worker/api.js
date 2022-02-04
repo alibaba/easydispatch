@@ -7,6 +7,10 @@ export default {
     return API.get(`${resource}/`, { params: { ...options } });
   },
 
+  select(options) {
+    return API.get(`${resource}/select/`, { params: { ...options } });
+  },
+
   get(termId) {
     return API.get(`${resource}/${termId}`);
   },
@@ -21,5 +25,5 @@ export default {
 
   delete(termId) {
     return API.delete(`${resource}/${termId}`);
-  }
+  },
 };

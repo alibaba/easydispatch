@@ -1,3 +1,4 @@
+from redis.exceptions import LockError
 import threading
 import redis
 from dispatch.plugins.kandbox_planner.env.env_enums import EnvRunModeType
@@ -9,7 +10,8 @@ from typing import Optional, List
 from fastapi.encoders import jsonable_encoder
 
 # from prompt_toolkit.log import logger
-from dispatch.config import REDIS_HOST, REDIS_PORT, REDIS_PASSWORD, ONCALL_PLUGIN_SLUG
+# , ONCALL_PLUGIN_SLUG
+from dispatch.config import REDIS_HOST, REDIS_PORT, REDIS_PASSWORD
 
 from dispatch.database import SessionLocal
 from dispatch.plugins.base import plugins
@@ -106,7 +108,7 @@ def update_env_config(*, db_session, service_plugin_id: int, new_config_dict: di
 
 def auto_exec_rl_planner_over_unplanned(planner=None):
     env = planner["planner_env"]
-    observation = env._get_observation_numerical()
+    # observation = env._get_observation_numerical()
     # done = (env.current_job_i >= len(env.jobs))
 
     done = not (env._move_to_next_unplanned_job())
@@ -117,7 +119,7 @@ def auto_exec_rl_planner_over_unplanned(planner=None):
             print("pause for config.DEBUGGING_JOB_CODE_SET")
         action_list = planner["planner_agent"].predict_action_list()
 
-        observation, reward, done, info = env.step(action_list[0])
+        _observation, _reward, done, _info = env.step(action_list[0])
 
         b_dict = planner["planner_env"].decode_action_into_dict(action_list[0])
         log.debug(b_dict)
@@ -129,11 +131,12 @@ def load_planner(
     *, org_code: str, team_id: int, start_day: str, nbr_of_days_planning_window: int = 7
 ):
 
-    kpdb = KPlannerDBAdapter(team_id=team_id)
+    kpdb = KPlannerDBAdapter(org_code=org_code, team_id=team_id)
     db_session = kpdb.db_session
     team = db_session.query(Team).filter(Team.id == team_id).first()
-    service = db_session.query(Service).filter(Service.id == team.service_id).one()
-
+    service = db_session.query(Service).filter(Service.id == team.service_id).one_or_none()
+    if not service:
+        raise Exception(f"service is null,{team.service_id}")
     rules = service_plugin_service.get_by_service_id_and_type(
         db_session=db_session,
         service_id=service.id,
@@ -144,6 +147,16 @@ def load_planner(
     for rule_plugin_record in rules:
         rule_plugin = plugins.get_class(rule_plugin_record.plugin.slug)
         env_rules.append(rule_plugin(config=rule_plugin_record.config))  # json.loads
+
+    worker_check_rules_plugins = service_plugin_service.get_by_service_id_and_type(
+        db_session=db_session,
+        service_id=service.id,
+        service_plugin_type=KandboxPlannerPluginType.kandbox_worker_check_rule,
+    )
+    worker_check_rules = []
+    for rule_plugin_record in worker_check_rules_plugins:
+        rule_plugin = plugins.get_class(rule_plugin_record.plugin.slug)
+        worker_check_rules.append(rule_plugin(config=rule_plugin_record.config))  # json.loads
 
     service_id = team.service_id
     envs = service_plugin_service.get_by_service_id_and_type(
@@ -159,7 +172,7 @@ def load_planner(
         env_config.update(envs[0].config)
     # if "env_config" in team.flex_form_data.keys():
     env_config.update(team.flex_form_data)
-
+    env_config["nbr_of_days_planning_window"] = env_config["planning_working_days"]
     # env_config = (
     #     envs[0].config if envs[0].config is not None else envs[0].plugin.config
     # )  #  json.loads()
@@ -170,8 +183,27 @@ def load_planner(
         env_config["nbr_of_days_planning_window"] = nbr_of_days_planning_window
     # this blocks rules_slug_config_list from env.
     env_config["rules"] = env_rules
+    env_config["worker_check_rules"] = worker_check_rules
 
     env_config["service_plugin_id"] = envs[0].id
+    # routing
+    routing_plug_list = service_plugin_service.get_by_service_id_and_type(
+        db_session=db_session,
+        service_id=service_id,
+        service_plugin_type=KandboxPlannerPluginType.kandbox_routing_adapter,
+    )
+    if routing_plug_list:
+        routing_plugin = plugins.get(routing_plug_list[0].plugin.slug)
+    else:
+        routing_plugin = plugins.get('kanbox_planner_routing_haversine_proxy')
+
+    if REDIS_PASSWORD == "":
+        redis_conn = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, password=None)
+    else:
+        redis_conn = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, password=REDIS_PASSWORD)
+    travel_router = routing_plugin(
+        env=routing_plug_list[0].config if routing_plug_list and routing_plug_list[0].config else {}, redis_conn=redis_conn)
+    env_config['travel_router'] = travel_router
 
     env_proxy_plugin = plugins.get(envs[0].plugin.slug)
     new_env = env_proxy_plugin().get_env(config=env_config)
@@ -284,12 +316,14 @@ def get_active_planner(
 def get_default_active_planner(
     org_code: str,
     team_id: int,
+    force_reload: bool = False,
 ):
     planner = get_active_planner(
         org_code=org_code,
         team_id=int(team_id),
         start_day=config.DEFAULT_START_DAY,
         nbr_of_days_planning_window=-1,
+        force_reload=force_reload,
     )
 
     return planner
@@ -319,11 +353,15 @@ def reset_planning_window_for_team(org_code, team_id):
     lock_key = "lock_env/env_{}_{}".format(org_code, team_id)
 
     log.debug(f"Trying to get lock for clearing env = {team_env_key}")
+    flag = True
     with redis_conn.lock(
-        lock_key, timeout=60
+        lock_key, timeout=60, blocking_timeout=5
     ) as lock:
+        flag = False
         for key in redis_conn.scan_iter(f"{team_env_key}/*"):
             redis_conn.delete(key)
+    if flag:
+        raise LockError("Cannot get a lock ")
     log.info(f"All redis records are cleared for env = {team_env_key}")
 
     planner = get_active_planner(
@@ -342,12 +380,12 @@ def reset_planning_window_for_team(org_code, team_id):
 
 def run_batch_optimizer(org_code, team_id):
 
-    clear_team_data_for_redispatching(org_code, team_id)
+    # clear_team_data_for_redispatching(org_code, team_id)
     result_info, planner = reset_planning_window_for_team(org_code, team_id)
     rl_env = planner["planner_env"]
 
     planner["batch_optimizer"].dispatch_jobs(env=rl_env, rl_agent=planner["planner_agent"])
-    log.info(f"Finished dispatching {len(rl_env.jobs_dict)} jobs for env={rl_env.jobs_dict}...")
+    log.info(f"Finished dispatching {len(rl_env.jobs_dict)} ")
 
     result_info = {"status": "OK", "jobs_dispatched": len(rl_env.jobs_dict)}
     return result_info

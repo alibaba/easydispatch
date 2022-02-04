@@ -197,6 +197,7 @@ export default {
           value: "job_type",
           width: "20",
           filter: (value) => {
+            // console.log("job type fitler", value,this.job_type_filter )
             if (!this.job_type_filter) return true;
             return value
               .toLowerCase()
@@ -210,7 +211,11 @@ export default {
           width: "20",
           filter: (value) => {
             if (!this.changed_flag_filter) return true;
-            return value == this.changed_flag_filter;
+            if (this.changed_flag_filter == 1) {
+              return value == this.changed_flag_filter || value == true;
+            } else {
+              return value == this.changed_flag_filter || value == false;
+            }
           },
         },
 
@@ -255,13 +260,26 @@ export default {
   mounted() {
     //this.plannerFilters.windowDates = [this.defaultStart(), this.defaultEnd()]
   },
-
+  destroyed: function () {
+    this.SET_PLANNER_SCORE_SHOW_FLAG(false);
+    this.setDefaultEnvLoadData();
+    // this.$store.commit("gantt/SET_PLANNER_FILTERS", {
+    //   team: null, //{ id: 2 }
+    //   windowDates: null, //["2020-10-13", "2020-10-14"],
+    //   forceReloadFlag: false,
+    // });
+    // this.$store.commit("gantt/SET_DEFAULT_PLANNER_SCORE_STATS");
+  },
   methods: {
     ...mapActions("gantt", [
       "showActionWithRecommendation",
       "runBatchOptimizer",
+      "setDefaultEnvLoadData",
     ]),
-    ...mapMutations("gantt", ["SET_PLANNER_FILTERS"]),
+    ...mapMutations("gantt", [
+      "SET_PLANNER_FILTERS",
+      "SET_PLANNER_SCORE_SHOW_FLAG",
+    ]),
     defaultTeam() {},
     setDialogFilterVisible(visibleFlag) {
       this.$store.commit("gantt/SET_DIALOG_FILTER_VISIBLE", visibleFlag);

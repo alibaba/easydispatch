@@ -2,8 +2,10 @@
 import logging
 from math import radians, cos, sin, asin, sqrt
 import requests
-
+from typing import List
+import numpy as np
 from dispatch.plugins.bases.kandbox_planner import KandboxTravelTimePlugin
+from dispatch.plugins.kandbox_planner.env.env_enums import LocationType
 
 from dispatch.plugins.kandbox_planner.util.cache_dict import CacheDict
 
@@ -63,10 +65,12 @@ class HaversineTravelTime(KandboxTravelTimePlugin):
     """
 
     # travel_speed = 40
+    slug = "internal_haversine"
 
-    def __init__(self, travel_speed=30, min_minutes=5):
+    def __init__(self, travel_speed=30, min_minutes=5, max_minutes=None, travel_mode=None):
         self.travel_speed = travel_speed
         self.min_minutes = min_minutes
+        self.max_minutes = max_minutes
 
     def haversine(self, lon1, lat1, lon2, lat2):
         """
@@ -91,17 +95,34 @@ class HaversineTravelTime(KandboxTravelTimePlugin):
             return 0
 
         # For training purpose 2021-03-31 20:43:01
-        # if (len(loc_1) > 2) and (loc_1[2] == "H"):
-        #     return 0
-        # if (len(loc_2) > 2) and (loc_2[2] == "H"):
-        #     return 0
+        if (len(loc_1) > 2) and (loc_1[2] == LocationType.HOME):
+            return 0
+        if (len(loc_2) > 2) and (loc_2[2] == LocationType.HOME):
+            return 0
 
         distance = self.haversine(loc_1[0], loc_1[1], loc_2[0], loc_2[1])
         travel_time = distance / (self.travel_speed / 60)  # 60 minuts per hour
         # print('travel_time: ',loc_1, loc_2, "--: ", travel_time)
         if travel_time < self.min_minutes:
-            travel_time = self.min_minutes
+            return self.min_minutes
+        if self.max_minutes is not None:
+            if travel_time > self.max_minutes:
+                return self.max_minutes
+                # print([loc_1[0], loc_1[1], loc_2[0], loc_2[1]], (travel_time), "Error, too long")
+
         return travel_time
+
+    def get_travel_minutes_matrix(self, loc_list: List):  # get_travel_time_2locations
+
+        matrix = np.zeros((len(loc_list), len(loc_list)))
+        for i in range(len(loc_list)):
+            for j in range(1, len(loc_list)):
+                matrix[i][j] = int(self.get_travel_minutes_2locations(
+                    loc_list[i],
+                    loc_list[j]
+                ) * 10)
+
+        return matrix
 
 
 class OSRMTravelTime(KandboxTravelTimePlugin):
@@ -109,30 +130,76 @@ class OSRMTravelTime(KandboxTravelTimePlugin):
     Has the following members
     """
 
-    travel_mode = "car"
+    # travel_mode = "driving/foot"
 
-    def __init__(self, travel_mode="car"):
+    def __init__(self, travel_mode="foot", travel_speed=5, min_minutes=1, max_minutes=240):
+        self.speed_km_hour = 5 if travel_mode == 'foot' else 50
+        self.speed_meter_minute = round(self.speed_km_hour * 1000 / 60, 1)
+        self.min_minutes = min_minutes
+        self.max_minutes = max_minutes
         self.travel_mode = travel_mode
-        self.url_template = (
-            "https://kerrypoc.dispatch.kandbox.com/route/v1/driving/{},{};{},{}?steps=false&overview=false"
-            # "http://127.0.0.1:5000/route/v1/driving/{},{};{},{}?steps=false&overview=false"
+
+        # curl 'http://127.0.0.1:5000/route/v1/foot/114.7669601,25.6842057;114.9252620,25.8584520?steps=false&overview=false&generate_hints=false'
+        self.route_url_template = (
+            # "https://kerrypoc.dispatch.kandbox.com/route/v1/driving/{},{};{},{}?steps=false&overview=false&generate_hints=false"
+            "http://127.0.0.1:5000/route/v1/{}/{},{};{},{}?steps=false&overview=false&generate_hints=false"
         )
+
+        self.table_url_template = (
+            "http://127.0.0.1:5000/table/v1/{}/{}?annotations=distance"
+        )
+        # curl 'http://127.0.0.1:5000/table/v1/driving/114.7770000,25.6688760;114.7669601,25.6842057'
+
+        # curl 'http://127.0.0.1:5000/table/v1/foot/114.7770000,25.6688760;114.7669601,25.6842057?annotations=distance'
 
     def get_travel_minutes_2locations(self, loc_1, loc_2):  # get_travel_time_2locations
 
-        url = self.url_template.format(loc_1[0], loc_1[1], loc_2[0], loc_2[1])
+        url = self.route_url_template.format(
+            self.travel_mode, loc_1[0], loc_1[1], loc_2[0], loc_2[1]
+        )
         # print(url)
         response = requests.get(url)
         resp_json = response.json()
         try:
             travel_time = resp_json["routes"][0]["duration"] / 60
         except KeyError:
-            print(resp_json)
-            travel_time = 9999
+            log.debug(f"failed to get distance ({(loc_1, loc_2)}) {str(resp_json)}")
+            travel_time = self.max_minutes
             return travel_time
         if travel_time < 1:
             travel_time = 1
-        return travel_time
+        return round(travel_time, 2)
+
+    def get_travel_minutes_matrix(self, loc_list: List):  # get_travel_time_2locations
+        if len(loc_list) < 1:
+            return None
+        loc = loc_list[0]
+        waypoints = "{},{}".format(round(loc[0], 5), round(loc[1], 5))
+        for loc in loc_list[1:]:
+            waypoints += ";{},{}".format(round(loc[0], 5), round(loc[1], 5))
+
+        url = self.table_url_template.format(self.travel_mode, waypoints)
+        response = requests.get(url)
+        try:
+            resp_json = response.json()
+            if resp_json["code"] != "Ok":
+                log.error(f"Not code==Ok, Failed to get table: {loc_list} {resp_json}")
+                return None
+            dist_list = resp_json["distances"]
+            matrix = np.array(dist_list)
+        except KeyError:
+            log.error(f"KeyError: Failed to get table: {loc_list} {resp_json}")
+            return None
+        for i in range(len(loc_list)):
+            matrix[i][0] = 0
+        for i in range(len(loc_list)):
+            for j in range(1, len(loc_list)):
+                if matrix[i][j] is None:
+                    matrix[i][j] = self.max_minutes
+                else:
+                    matrix[i][j] = round(matrix[i][j] / 300, 2)
+
+        return matrix
 
 
 if __name__ == "__main__":

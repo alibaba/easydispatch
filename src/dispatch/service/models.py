@@ -4,6 +4,7 @@ from sqlalchemy.ext.hybrid import hybrid_property
 
 from sqlalchemy import Boolean, Column, ForeignKey, Integer, PrimaryKeyConstraint, String, Table
 from sqlalchemy.orm import backref, relationship
+from sqlalchemy.sql.schema import UniqueConstraint
 from sqlalchemy_utils import TSVectorType
 
 from dispatch.database import Base
@@ -17,14 +18,17 @@ class Service(TimeStampMixin, Base):
     id = Column(Integer, primary_key=True)
     service_type = Column(String, default="realtime_heuristic_planner")  # RL, batch
     is_active = Column(Boolean, default=True)
-    code = Column(String, unique=True)
+    code = Column(String, nullable=False)
     name = Column(String)
     description = Column(String)
+    org_id = Column(Integer, nullable=False, default=-1)
 
     search_vector = Column(TSVectorType("code", "name", "description"))
 
 
 # Pydantic models...
+
+
 class ServiceBase(DispatchBase):
     """ One planner service is consisted of at least three elements:
     \n - One environment, with a plugin type of kandbox_env_proxy
@@ -39,6 +43,7 @@ class ServiceBase(DispatchBase):
     service_type: str = "realtime_heuristic_planner"
     description: Optional[str] = None
     is_active: Optional[bool] = None
+    org_id: int = -1
 
 
 class ServiceCreate(ServiceBase):
@@ -46,7 +51,7 @@ class ServiceCreate(ServiceBase):
 
 
 class ServiceUpdate(ServiceBase):
-    pass
+    org_id: int = -1
 
 
 class ServiceRead(ServiceBase):

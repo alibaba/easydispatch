@@ -1,60 +1,128 @@
 <template>
-  <ValidationObserver v-slot="{ invalid, validated }">
-    <v-navigation-drawer v-model="showEditSheet" app clipped right width="800">
-      <template v-slot:prepend>
-        <v-list-item two-line>
-          <v-list-item-content>
-            <v-list-item-title class="title">{{ name }}</v-list-item-title>
-            <v-list-item-subtitle
-              >Reported - {{ updated_at | formatDate }}</v-list-item-subtitle
-            >
-          </v-list-item-content>
-          <v-btn
-            icon
-            color="primary"
-            :loading="loading"
-            :disabled="invalid || !validated"
-            @click="submitSaveWithFormValue()"
+  <v-navigation-drawer v-model="showEditSheet" app clipped right width="800">
+    <template v-slot:prepend>
+      <v-list-item two-line>
+        <v-list-item-content>
+          <v-list-item-title class="title">{{ name }}</v-list-item-title>
+          <v-list-item-subtitle
+            >Last Updated - {{ updated_at | formatDate }}</v-list-item-subtitle
           >
-            <v-icon>save</v-icon>
-          </v-btn>
-          <v-btn icon color="secondary" @click="closeEditSheet">
-            <v-icon>close</v-icon>
-          </v-btn>
-        </v-list-item>
-      </template>
-      <v-tabs fixed-tabs v-model="tab">
-        <v-tab key="jobs">Job Detail</v-tab>
-        <v-tab key="flex_form">Flex Form</v-tab>
-        <v-tab key="participants">Participants</v-tab>
-        <v-tab key="timeline">Timeline</v-tab>
-      </v-tabs>
-      <v-tabs-items v-model="tab">
-        <v-tab-item key="jobs">
-          <job-planner-details-tab />
-        </v-tab-item>
-        <v-tab-item key="flex_form">
-          <JobFlexForm :formData="localFlexFormData" :formSchema="formSchema" />
-        </v-tab-item>
-        <v-tab-item key="participants">
-          <job-participants-tab />
-        </v-tab-item>
-        <v-tab-item key="timeline">
-          <job-timeline-tab />
-        </v-tab-item>
-      </v-tabs-items>
-    </v-navigation-drawer>
-  </ValidationObserver>
+        </v-list-item-content>
+
+        <v-btn
+          v-show="getPermission()('job.button.start')"
+          icon
+          color="primary"
+          @click="
+            updateJobLifeCycle({
+              userEmail: userInfo.email,
+              workerComment: 'NA',
+              newStatus: 'Onsite_Started',
+            })
+          "
+          :disabled="'Created' != life_cycle_status"
+        >
+          <v-icon>mdi-airplane-landing</v-icon>
+        </v-btn>
+
+        <v-btn
+          v-show="getPermission()('job.button.finish')"
+          icon
+          color="primary"
+          @click="
+            updateJobLifeCycle({
+              userEmail: userInfo.email,
+              workerComment: 'NA',
+              newStatus: 'Completed',
+            })
+          "
+          :disabled="'Onsite_Started' != life_cycle_status"
+        >
+          <v-icon>mdi-airplane-takeoff</v-icon>
+        </v-btn>
+
+        <v-btn
+          v-show="getPermission()('job.button.customer_approve')"
+          icon
+          color="primary"
+          @click="
+            updateJobLifeCycle({
+              userEmail: userInfo.email,
+              workerComment: 'NA',
+              newStatus: 'Customer_Approved',
+            })
+          "
+          :disabled="'Completed' != life_cycle_status"
+        >
+          <v-icon>mdi-check-circle</v-icon>
+        </v-btn>
+
+        <v-btn
+          v-show="getPermission()('job.button.planner_approve')"
+          icon
+          color="primary"
+          @click="
+            updateJobLifeCycle({
+              userEmail: userInfo.email,
+              workerComment: 'NA',
+              newStatus: 'Planner_Approved',
+            })
+          "
+          :disabled="'Customer_Approved' != life_cycle_status"
+        >
+          <v-icon>mdi-credit-card-check</v-icon>
+        </v-btn>
+
+        <v-btn
+          v-show="getPermission()('job.button.save')"
+          icon
+          color="primary"
+          :loading="loading"
+          @click="submitSaveLocal()"
+          :disabled="['Worker'].includes(userInfo.role)"
+        >
+          <v-icon>save</v-icon>
+        </v-btn>
+        <v-btn icon color="secondary" @click="closeEditSheet">
+          <v-icon>close</v-icon>
+        </v-btn>
+      </v-list-item>
+    </template>
+    <v-tabs fixed-tabs v-model="tab">
+      <v-tab key="jobs">Job Detail</v-tab>
+      <v-tab key="flex_form" v-if="dataFormSchema != null">Flex Form</v-tab>
+      <v-tab key="timeline">Timeline</v-tab>
+    </v-tabs>
+    <v-tabs-items v-model="tab">
+      <v-tab-item key="jobs">
+        <job-planner-details-tab />
+      </v-tab-item>
+      <v-tab-item key="flex_form">
+        <JobFlexForm
+          :formData="localFlexFormData"
+          :formSchema="dataFormSchema"
+        />
+      </v-tab-item>
+
+      <v-tab-item key="timeline">
+        <job-timeline-tab />
+      </v-tab-item>
+    </v-tabs-items>
+  </v-navigation-drawer>
 </template>
 
 <script>
 import { mapFields } from "vuex-map-fields";
 import { mapActions } from "vuex";
+import { mapGetters } from "vuex";
+import { mapState } from "vuex";
+
 import { ValidationObserver } from "vee-validate";
 
 import JobTimelineTab from "@/job/TimelineTab.vue";
 import JobPlannerDetailsTab from "@/job/JobPlannerDetailsTab.vue";
 import JobFlexForm from "@/components/FlexForm.vue";
+import { cloneDeep } from "lodash";
 
 export default {
   name: "JobEditSheet",
@@ -63,70 +131,18 @@ export default {
     ValidationObserver,
     JobPlannerDetailsTab, //a
     JobTimelineTab,
-    JobFlexForm
-  }, 
+    JobFlexForm,
+  },
   data() {
     return {
       tab: null,
-      localFlexFormData: {},
-      formSchema: {
-        type: "object",
-        properties: {
-          job_schedule_type: {
-            type: "string",
-            default: "N",
-            title: "Job Type",
-            description: "This affects timing, N=Normal, FS=Fixed Schedule.",
-            enum: ["N", "FS"]
-          },
-          requested_min_level: {
-            type: "number",
-            default: 1,
-            title: "requested min level (integer)"
-          },
-          requested_skills: {
-            type: "array",
-            default: ["level_1"],
-            title: "requested_skills",
-            items: {
-              type: "string"
-            }
-          },
-          tolerance_start_minutes: {
-            type: "number",
-            default: -1440,
-            title: "requested min tolerance minutes backward, in minutes. One day is 1440 minutes"
-          },
-          tolerance_end_minutes: {
-            type: "number",
-            default: 1440,
-            title: "requested max tolerance minutes forward, in minutes. One day is 1440 minutes"
-          },
-          min_number_of_workers: {
-            type: "number",
-            default: 1,
-            title: "Min number of workers. Bigger than one means shared job among multiple workers"
-          },
-          max_number_of_workers: {
-            type: "number",
-            default: 1,
-            title: "Max number of workers. Bigger than one means shared job among multiple workers"
-          },
-        }
-      }
     };
   },
-  watch: {
-    flex_form_data: function(newVal) {
-      // watch it
-      console.log("flex_form_data changed: ", newVal);
-      // this.setSelectedFormData(newVal)
-      //if (this.tab == 1) {
-      this.localFlexFormData = JSON.parse(JSON.stringify(newVal));
-      //}
-    }
+  mounted() {
+    this.selectInventory();
   },
   computed: {
+    ...mapState("auth", ["userInfo"]),
     ...mapFields("job", [
       "selected.id",
       "selected.name",
@@ -135,15 +151,40 @@ export default {
       "selected.updated_at",
       "selected.team",
       "selected.loading",
-      "dialogs.showEditSheet"
-    ])
+      "selected.life_cycle_status",
+      "dialogs.showEditSheet",
+    ]),
+    ...mapFields("org", ["selected.job_flex_form_schema"]),
+    // 计算属性的 getter
+    dataFormSchema: function () {
+      return JSON.parse(JSON.stringify(this.job_flex_form_schema));
+    },
+    localFlexFormData: {
+      get() {
+        return cloneDeep(JSON.parse(JSON.stringify(this.flex_form_data)));
+      },
+      set(value) {
+        this.$emit("input", value);
+      },
+    },
   },
-
   methods: {
-    ...mapActions("job", ["setSelectedFormDataAndSave", "closeEditSheet"]),
-    submitSaveWithFormValue() {
-      this.setSelectedFormDataAndSave(this.localFlexFormData);
-    }
-  }
+    ...mapActions("job", [
+      "setSelectedFormDataAndSave",
+      "closeEditSheet",
+      "updateJobLifeCycle",
+    ]),
+    ...mapActions("item_inventory", ["selectInventory"]),
+    ...mapGetters("auth", ["getPermission"]),
+    submitSaveLocal() {
+      this.selectInventory();
+      this.setSelectedFormDataAndSave({
+        flex_form_data: Object.assign(
+          cloneDeep(JSON.parse(JSON.stringify(this.flex_form_data))),
+          this.localFlexFormData
+        ),
+      });
+    },
+  },
 };
 </script>

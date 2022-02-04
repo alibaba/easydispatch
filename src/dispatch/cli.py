@@ -31,7 +31,7 @@ import time
 from .database import Base, SessionLocal, engine
 from .exceptions import DispatchException
 from .logging import configure_logging
-from .main import *  # noqa
+# from .main import *  # noqa
 from .plugins.base import plugins
 from .scheduler import scheduler
 
@@ -72,22 +72,16 @@ def plugins_group():
 @click.option("--nbr_jobs", default=1, help="how many jobs to generate")
 @click.option("--job_start_index", default=20, help="how many jobs to generate")
 @click.option("--auto_planning_flag", default=1, help="auto or not, 1 is yes/true")
-def populate_data(username, password, start_day, end_day, team_code, dispatch_days, dataset, generate_worker, nbr_jobs, job_start_index, auto_planning_flag):
+@click.option("--service_url", default="https://dispatch.easydispatch.uk/api/v1", help="Redirect generation to a different server")
+def populate_data(username, password, start_day, end_day, team_code, dispatch_days, dataset, generate_worker, nbr_jobs, job_start_index, auto_planning_flag, service_url):
     """Shows all available plugins"""
     log.debug(f"Populating sample data wtih username={username}, dataset = {dataset}...")
 
     # from dispatch.plugins.kandbox_planner.data_generator.london_data_generator import generate_all
     if dataset == "veo":
         from dispatch.plugins.kandbox_planner.data_generator.veo_data_generator import generate_all
-    if dataset == "london_realtime":
-        from dispatch.contrib.plugins.data_generator.london_pick_drop_data_generator import generate_all
-
-    elif dataset == "beijing":
-        from dispatch.plugins.kandbox_planner.data_generator.beijing_data_generator import (
-            generate_all,
-        )
-
-    org_engine = engine
+    else:
+        raise ValueError("No such dataset.")
     ORG_SQLALCHEMY_DATABASE_URI = config.SQLALCHEMY_DATABASE_URI
 
     # print("org_engine .SQLALCHEMY_DATABASE_URI=", config.SQLALCHEMY_DATABASE_URI)
@@ -99,7 +93,7 @@ def populate_data(username, password, start_day, end_day, team_code, dispatch_da
 
     generate_all(
         {
-            "service_url": "http://localhost:8000/api/v1",
+            "service_url": service_url,  # "http://localhost:8000/api/v1",
             "username": username,
             "password": password,
             "start_day": start_day,
@@ -184,7 +178,7 @@ def sync_triggers():
             "code",
             "name",
             "description",
-            "auth_username",
+            # "auth_username",
         ],
     )
     sync_trigger(
@@ -230,19 +224,15 @@ def metadata_dump(sql, *multiparams, **params):
     print(sql.compile(dialect=engine.dialect))
 
 
-@dispatch_database.command("init")
-def init_database():
+@dispatch_database.command("init database")
+def database_init():
     """Initializes a new database."""
-    from sqlalchemy_utils import create_database, database_exists
+    click.echo("Initializing new database...")
+    from .database_util.manage import (
+        init_database,
+    )
 
-    if not database_exists(str(config.SQLALCHEMY_DATABASE_URI)):
-        print("Database does not exist. I will create a new one.")
-        create_database(str(config.SQLALCHEMY_DATABASE_URI))
-    Base.metadata.create_all(engine)
-    alembic_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "alembic.ini")
-    alembic_cfg = AlembicConfig(alembic_path)
-    alembic_command.stamp(alembic_cfg, "head")
-
+    init_database(engine)
     click.secho("Success.", fg="green")
 
 
@@ -352,32 +342,64 @@ def drop_database(yes):
     help="Don't emit SQL to database - dump to standard output instead.",
 )
 @click.option("--revision", nargs=1, default="head", help="Revision identifier.")
-def upgrade_database(tag, sql, revision):
+@click.option("--revision-type", type=click.Choice(["core", "tenant"]))
+def upgrade_database(tag, sql, revision, revision_type):
     """Upgrades database schema to newest version."""
-    from sqlalchemy_utils import database_exists, create_database
-    from alembic.migration import MigrationContext
+    import sqlalchemy
+    from sqlalchemy import inspect
+    from sqlalchemy_utils import database_exists
+    from alembic import command as alembic_command
+    from alembic.config import Config as AlembicConfig
 
-    org_engine = engine
-    ORG_SQLALCHEMY_DATABASE_URI = config.SQLALCHEMY_DATABASE_URI
+    from .database import engine
 
-    # print("config.SQLALCHEMY_DATABASE_URI=", config.SQLALCHEMY_DATABASE_URI)
-    alembic_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "alembic.ini")
-    alembic_cfg = AlembicConfig(alembic_path)
-    if not database_exists(str(ORG_SQLALCHEMY_DATABASE_URI)):  #
-        create_database(str(ORG_SQLALCHEMY_DATABASE_URI))
-        Base.metadata.create_all(org_engine)
-        alembic_command.stamp(alembic_cfg, "head")
+    from .database_util.manage import (
+        get_core_tables,
+        get_tenant_tables,
+        init_database,
+        setup_fulltext_search,
+    )
+
+    alembic_cfg = AlembicConfig(config.ALEMBIC_INI_PATH)
+
+    if not database_exists(str(config.SQLALCHEMY_DATABASE_URI)):
+        click.secho("Found no database to upgrade, initializing new database...")
+        init_database(engine)
     else:
-        conn = org_engine.connect()
-        context = MigrationContext.configure(conn)
-        current_rev = context.get_current_revision()
-        if not current_rev:
-            Base.metadata.create_all(org_engine)
-            alembic_command.stamp(alembic_cfg, "head")
-        else:
+        conn = engine.connect()
+
+        # detect if we need to convert to a multi-tenant schema structure
+        schema_names = inspect(engine).get_schema_names()
+        if "dispatch_core" not in schema_names:
+            click.secho("Detected single tenant database, converting to multi-tenant...")
+            conn.execute(sqlalchemy.text(open(config.ALEMBIC_MULTI_TENANT_MIGRATION_PATH).read()))
+
+            # init initial triggers
+            conn.execute("set search_path to dispatch_core")
+            setup_fulltext_search(conn, get_core_tables())
+
+            tenant_tables = get_tenant_tables()
+            for t in tenant_tables:
+                t.schema = "dispatch_organization_default"
+
+            conn.execute("set search_path to dispatch_organization_default")
+            setup_fulltext_search(conn, tenant_tables)
+
+        if revision_type:
+            if revision_type == "core":
+                path = config.ALEMBIC_CORE_REVISION_PATH
+
+            elif revision_type == "tenant":
+                path = config.ALEMBIC_TENANT_REVISION_PATH
+
+            alembic_cfg.set_main_option("script_location", path)
             alembic_command.upgrade(alembic_cfg, revision, sql=sql, tag=tag)
-    sync_triggers()
-    click.secho("Success. The database is upgraded.", fg="green")
+        else:
+            for path in [config.ALEMBIC_CORE_REVISION_PATH, config.ALEMBIC_TENANT_REVISION_PATH]:
+                alembic_cfg.set_main_option("script_location", path)
+                alembic_command.upgrade(alembic_cfg, revision, sql=sql, tag=tag)
+
+    click.secho("Success.", fg="green")
 
 
 @dispatch_database.command("heads")
@@ -407,14 +429,23 @@ def history_database():
     help="Don't emit SQL to database - dump to standard output instead.",
 )
 @click.option("--revision", nargs=1, default="head", help="Revision identifier.")
-def downgrade_database(tag, sql, revision):
+@click.option("--revision-type", type=click.Choice(["core", "tenant"]), default="core")
+def downgrade_database(tag, sql, revision, revision_type):
     """Downgrades database schema to next newest version."""
-    alembic_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "alembic.ini")
-    alembic_cfg = AlembicConfig(alembic_path)
+    from alembic import command as alembic_command
+    from alembic.config import Config as AlembicConfig
 
     if sql and revision == "-1":
         revision = "head:-1"
 
+    alembic_cfg = AlembicConfig(config.ALEMBIC_INI_PATH)
+    if revision_type == "core":
+        path = config.ALEMBIC_CORE_REVISION_PATH
+
+    elif revision_type == "tenant":
+        path = config.ALEMBIC_TENANT_REVISION_PATH
+
+    alembic_cfg.set_main_option("script_location", path)
     alembic_command.downgrade(alembic_cfg, revision, sql=sql, tag=tag)
     click.secho("Success.", fg="green")
 
@@ -438,9 +469,6 @@ def stamp_database(revision, tag, sql):
 
 
 @dispatch_database.command("revision")
-@click.option(
-    "-d", "--directory", default=None, help=('migration script directory (default is "migrations")')
-)
 @click.option("-m", "--message", default=None, help="Revision message")
 @click.option(
     "--autogenerate",
@@ -450,6 +478,7 @@ def stamp_database(revision, tag, sql):
         "operations, based on comparison of database to model"
     ),
 )
+@click.option("--revision-type", type=click.Choice(["core", "tenant"]))
 @click.option(
     "--sql", is_flag=True, help=("Don't emit SQL to database - dump to standard output " "instead")
 )
@@ -471,22 +500,50 @@ def stamp_database(revision, tag, sql):
     "--rev-id", default=None, help=("Specify a hardcoded revision id instead of generating " "one")
 )
 def revision_database(
-    directory, message, autogenerate, sql, head, splice, branch_label, version_path, rev_id
+    message, autogenerate, revision_type, sql, head, splice, branch_label, version_path, rev_id
 ):
     """Create new database revision."""
-    alembic_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "alembic.ini")
-    alembic_cfg = AlembicConfig(alembic_path)
-    alembic_command.revision(
-        alembic_cfg,
-        message,
-        autogenerate=autogenerate,
-        sql=sql,
-        head=head,
-        splice=splice,
-        branch_label=branch_label,
-        version_path=version_path,
-        rev_id=rev_id,
-    )
+    import types
+    alembic_cfg = AlembicConfig(config.ALEMBIC_INI_PATH)
+
+    if revision_type:
+        if revision_type == "core":
+            path = config.ALEMBIC_CORE_REVISION_PATH
+        elif revision_type == "tenant":
+            path = config.ALEMBIC_TENANT_REVISION_PATH
+
+        alembic_cfg.set_main_option("script_location", path)
+        alembic_cfg.cmd_opts = types.SimpleNamespace(cmd="revision")
+        alembic_command.revision(
+            alembic_cfg,
+            message,
+            autogenerate=autogenerate,
+            sql=sql,
+            head=head,
+            splice=splice,
+            branch_label=branch_label,
+            version_path=version_path,
+            rev_id=rev_id,
+        )
+
+    else:
+        for path in [
+            config.ALEMBIC_CORE_REVISION_PATH,
+            config.ALEMBIC_TENANT_REVISION_PATH,
+        ]:
+            alembic_cfg.set_main_option("script_location", path)
+            alembic_cfg.cmd_opts = types.SimpleNamespace(cmd="revision")
+            alembic_command.revision(
+                alembic_cfg,
+                message,
+                autogenerate=autogenerate,
+                sql=sql,
+                head=head,
+                splice=splice,
+                branch_label=branch_label,
+                version_path=version_path,
+                rev_id=rev_id,
+            )
     click.secho("Success. The database scripts are revised.", fg="green")
 
 
@@ -616,7 +673,7 @@ IPython: {IPython.__version__}"""
 @click.option(
     "--org_code", default="0", help="Organization Code, for multi tenancy, internal usage only."
 )
-@click.option("--team_id", default=2, help="int team_id")
+@click.option("--team_id", default=1, help="int team_id")
 @click.option("--reset_window", default="no", help="Whether or not reset the planning window.")
 @click.option("--start_day", default="2020112", help="start_day in format yyyymmdd")
 @click.option("--end_day", default="20201014", help="end_day in format yyyymmdd")
@@ -648,18 +705,15 @@ def start_rec(org_code, team_id, reset_window, start_day, end_day):
         )
     else:
         planner = get_default_active_planner(org_code=org_code, team_id=team_id)
+        rl_env = planner["planner_env"]
 
-    rl_env = planner["planner_env"]
-    rl_env.run_mode = EnvRunModeType.REPLAY
     log.info(
         f"Started Recommender for(org_code={org_code}, team_id={team_id}), kafka topic = {rl_env.kafka_server.get_env_window_topic_name()}  use Ctrl-C to exit ..."
     )
-
     i = 0
     while True:
-        rl_env.mutate_check_env_window_n_replay()
-
-        if i % 300 == 0:
+        check_env_n_act(planner=planner)
+        if i % 30 == 1:
             log.info(
                 f"Continuing after {i} loops, {int(i/60/60/24)} days, {int((i/60) % (60*60*24))} minutes, env_inst_code = {rl_env.env_inst_code}, kafka_input_window_offset = {rl_env.kafka_input_window_offset}, kafka_slot_changes_offset = {rl_env.kafka_slot_changes_offset}"
             )
@@ -668,7 +722,9 @@ def start_rec(org_code, team_id, reset_window, start_day, end_day):
 
         i = i + 1
 
-    print("Recommendation Done.")
+    # print("Recommendation Done.")
+    # rl_env.run_mode = EnvRunModeType.REPLAY
+    # rl_env.mutate_check_env_window_n_replay()
 
 
 @dispatch_server.command("train")

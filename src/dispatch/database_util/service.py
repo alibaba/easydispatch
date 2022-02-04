@@ -1,0 +1,383 @@
+from sqlalchemy.orm.session import sessionmaker
+from dispatch.database import engine
+from itertools import groupby
+import logging
+import json
+
+from typing import List
+from pydantic.error_wrappers import ErrorWrapper, ValidationError
+from pydantic import BaseModel
+from pydantic.types import Json, constr
+
+from fastapi import Depends, Query
+
+from sqlalchemy import or_, orm, func, desc
+import sqlalchemy
+
+from sqlalchemy_filters import apply_pagination, apply_sort, apply_filters
+from sqlalchemy_filters.exceptions import BadFilterFormat, FieldNotFound
+from sqlalchemy_filters.filters import build_filters, get_named_models
+
+
+from dispatch.exceptions import FieldNotFoundError, InvalidFilterError
+from dispatch.auth.models import DispatchUser, UserRoles
+from dispatch.auth.service import get_current_user, get_current_role
+# from dispatch.enums import UserRoles, Visibility
+from dispatch.fulltext.composite_search import CompositeSearch
+
+from dispatch.location.models import Location
+from dispatch.location import service as location_service
+
+
+from dispatch.database import (
+    Base,
+    get_class_by_tablename,
+    get_model_name_by_tablename,
+    get_db,
+)
+from dispatch.job.models import Job
+from dispatch.team.models import Team
+from dispatch.worker.models import Worker
+
+
+log = logging.getLogger(__file__)
+
+# allows only printable characters
+QueryStr = constr(regex=r"^[ -~]+$", min_length=1)
+
+
+# def restricted_incident_filter(query: orm.Query, current_user: DispatchUser, role: UserRoles):
+#     """Adds additional incident filters to query (usually for permissions)."""
+#     if role == UserRoles.member:
+#         # We filter out resticted incidents for users with a member role if the user is not an incident participant
+#         query = (
+#             query.join(Participant, Incident.id == Participant.incident_id)
+#             .join(IndividualContact)
+#             .filter(
+#                 or_(
+#                     Incident.visibility == Visibility.open,
+#                     IndividualContact.email == current_user.email,
+#                 )
+#             )
+#         )
+#     return query.distinct()
+
+
+def restricted_job_filter(query: orm.Query, current_user: DispatchUser, role: UserRoles):
+    """Adds additional incident type filters to query (usually for permissions)."""
+
+    if current_user:
+        if role == UserRoles.WORKER:
+            query = (query
+                .join(Worker, Worker.id == Job.scheduled_primary_worker_id)
+                .join(DispatchUser, DispatchUser.id == Worker.dispatch_user_id)
+                .filter(DispatchUser.email == current_user.email))
+            query.distinct()
+        elif role == UserRoles.PLANNER:
+            team_list = [i.id for i in current_user.managed_teams]
+            team_list.append(current_user.default_team_id)
+            query = query.filter(Job.team_id.in_(set(team_list)))
+        elif role == UserRoles.CUSTOMER:
+            # team_list = [i.id for i in current_user.managed_teams]
+            locs = location_service.get_by_auth_email(db_session=query.session, email=current_user.email)
+            loc_id_list = [i.id for i in locs]
+            query = query.filter(Job.location_id.in_(set(loc_id_list)))
+
+    return query
+
+
+def restricted_location_filter(query: orm.Query, current_user: DispatchUser, role: UserRoles):
+    """Adds additional incident type filters to query (usually for permissions)."""
+
+    if current_user: 
+        if role == UserRoles.CUSTOMER:
+            # team_list = [i.id for i in current_user.managed_teams]
+            query = query.filter(Location.dispatch_user_id==current_user.id)
+
+    return query
+
+
+def restricted_team_filter(query: orm.Query, current_user: DispatchUser, role: UserRoles):
+    """Adds additional incident type filters to query (usually for permissions)."""
+
+    if current_user:
+        if role == UserRoles.PLANNER:
+            team_list = [i.id for i in current_user.managed_teams]
+            team_list.append(current_user.default_team_id)
+            query = query.filter(Team.id.in_(set(team_list)))
+        elif role in (UserRoles.WORKER, UserRoles.CUSTOMER):
+            query = (query.filter(Team.id == -999999))
+            query.distinct()
+        # Owner has no restriction
+
+    return query
+
+def restricted_worker_filter(query: orm.Query, current_user: DispatchUser, role: UserRoles):
+    """Adds additional incident type filters to query (usually for permissions)."""
+
+    if current_user:
+        if role == UserRoles.PLANNER:
+            team_list = [i.id for i in current_user.managed_teams]
+            team_list.append(current_user.default_team_id)
+            query = query.filter(Worker.team_id.in_(set(team_list)))
+        elif role in (UserRoles.WORKER, UserRoles.CUSTOMER):
+            query = (query.filter(Worker.id == -999999))
+            query.distinct()
+
+    return query
+
+
+def apply_model_specific_filters(
+    model: Base, query: orm.Query, current_user: DispatchUser, role: UserRoles
+):
+    """Applies any model specific filter as it pertains to the given user."""
+    model_map = {
+        Job: [restricted_job_filter],
+        Location:[restricted_location_filter], 
+        Team:[restricted_team_filter],
+        Worker:[restricted_worker_filter],
+    }
+
+    filters = model_map.get(model, [])
+
+    for f in filters:
+        query = f(query, current_user, role)
+
+    return query
+
+
+def apply_filter_specific_joins(model: Base, filter_spec: dict, query: orm.query):
+    """Applies any model specific implicity joins."""
+    # this is required because by default sqlalchemy-filter's auto-join
+    # knows nothing about how to join many-many relationships.
+    model_map = {
+        # (Feedback, "Project"): (Incident, False),
+        # (Feedback, "Incident"): (Incident, False),
+        # (Task, "Project"): (Incident, False),
+        # (Task, "Incident"): (Incident, False),
+        # (Task, "IncidentPriority"): (Incident, False),
+        # (Task, "IncidentType"): (Incident, False),
+        # (PluginInstance, "Plugin"): (Plugin, False),
+        # (DispatchUser, "Organization"): (DispatchUser.organizations, True),
+        # (Incident, "Tag"): (Incident.tags, True),
+        # (Incident, "TagType"): (Incident.tags, True),
+        # (Incident, "Term"): (Incident.terms, True),
+    }
+    filters = build_filters(filter_spec)
+    filter_models = get_named_models(filters)
+
+    for filter_model in filter_models:
+        if model_map.get((model, filter_model)):
+            joined_model, is_outer = model_map[(model, filter_model)]
+            try:
+                query = query.join(joined_model, isouter=is_outer)
+            except Exception as e:
+                log.debug(str(e))
+
+    return query
+
+
+def composite_search(*, db_session, query_str: str, models: List[Base], current_user: DispatchUser):
+    """Perform a multi-table search based on the supplied query."""
+    s = CompositeSearch(db_session, models)
+    query = s.build_query(query_str, sort=True)
+
+    # TODO can we do this with composite filtering?
+    # for model in models:
+    #    query = apply_model_specific_filters(model, query, current_user)
+
+    return s.search(query=query)
+
+
+def search(*, query_str: str, query: Query, model: str, sort=False):
+    """Perform a search based on the query."""
+    search_model = get_class_by_tablename(model)
+
+    if not query_str.strip():
+        return query
+
+    vector = search_model.search_vector
+
+    query = query.filter(vector.op("@@")(func.tsq_parse(query_str)))
+    if sort:
+        query = query.order_by(desc(func.ts_rank_cd(vector, func.tsq_parse(query_str))))
+
+    return query.params(term=query_str)
+
+
+def create_sort_spec(model, sort_by, descending):
+    """Creates sort_spec."""
+    sort_spec = []
+    if sort_by and descending:
+        for field, direction in zip(sort_by, descending):
+            direction = "desc" if direction else "asc"
+
+            # we have a complex field, we may need to join
+            if "." in field:
+                complex_model, complex_field = field.split(".")[-2:]
+
+                sort_spec.append(
+                    {
+                        "model": get_model_name_by_tablename(complex_model),
+                        "field": complex_field,
+                        "direction": direction,
+                    }
+                )
+            else:
+                sort_spec.append({"model": model, "field": field, "direction": direction})
+    log.debug(f"Sort Spec: {json.dumps(sort_spec, indent=2)}")
+    return sort_spec
+
+
+def get_all(*, db_session, model):
+    """Fetches a query object based on the model class name."""
+    return db_session.query(get_class_by_tablename(model))
+
+
+def common_parameters(
+    db_session: orm.Session = Depends(get_db),
+    page: int = Query(1, gt=0, lt=2147483647),
+    items_per_page: int = Query(5, alias="itemsPerPage", gt=-2, lt=2147483647),
+    query_str: str = Query(None, alias="q"),
+    sort_by: List[str] = Query([], alias="sortBy[]"),
+    descending: List[bool] = Query([], alias="descending[]"),
+    fields: List[str] = Query([], alias="fields[]"),
+    ops: List[str] = Query([], alias="ops[]"),
+    values: List[str] = Query([], alias="values[]"),
+    current_user: DispatchUser = Depends(get_current_user),
+    role: UserRoles = Depends(get_current_role),
+):
+
+    return {
+        "db_session": db_session,
+        "page": page,
+        "items_per_page": items_per_page,
+        "query_str": query_str,
+        "sort_by": sort_by,
+        "descending": descending,
+        "current_user": current_user,
+        "role": role,
+        "fields": fields,
+        "values": values,
+        "ops": ops,
+    }
+
+
+def search_filter_sort_paginate(
+    db_session,
+    model,
+    query_str: str = None,
+    page: int = 1,
+    items_per_page: int = 5,
+    sort_by: List[str] = None,
+    descending: List[bool] = None,
+    fields: List[str] = None,
+    ops: List[str] = None,
+    values: List[str] = None,
+    current_user: DispatchUser = None,
+    role: UserRoles = UserRoles.CUSTOMER,
+):
+    """Common functionality for searching, filtering, sorting, and pagination."""
+    model_cls = get_class_by_tablename(model)
+    try:
+        query = db_session.query(model_cls)
+
+        if query_str:
+            sort = False if sort_by else True
+            query = search(query_str=query_str, query=query, model=model, sort=sort)
+
+        query = apply_model_specific_filters(model_cls, query, current_user, role)
+
+        filter_spec = create_filter_spec(model, fields, ops, values)
+        query = apply_filters(query, filter_spec)
+
+        if sort_by:
+            sort_spec = create_sort_spec(model, sort_by, descending)
+            query = apply_sort(query, sort_spec)
+
+    except FieldNotFound as e:
+        raise ValidationError(
+            [
+                ErrorWrapper(FieldNotFoundError(msg=str(e)), loc="filter"),
+            ],
+            model=BaseModel,
+        )
+    except BadFilterFormat as e:
+        raise ValidationError(
+            [ErrorWrapper(InvalidFilterError(msg=str(e)), loc="filter")], model=BaseModel
+        )
+
+    if items_per_page == -1:
+        items_per_page = None
+
+    # sometimes we get bad input for the search function
+    # TODO investigate moving to a different way to parsing queries that won't through errors
+    # e.g. websearch_to_tsquery
+    # https://www.postgresql.org/docs/current/textsearch-controls.html
+    try:
+        query, pagination = apply_pagination(query, page_number=page, page_size=items_per_page)
+    except sqlalchemy.exc.ProgrammingError as e:
+        log.debug(e)
+        return {
+            "items": [],
+            "itemsPerPage": items_per_page,
+            "page": page,
+            "total": 0,
+        }
+
+    return {
+        "items": query.all(),
+        "itemsPerPage": pagination.page_size,
+        "page": pagination.page_number,
+        "total": pagination.total_results,
+    }
+
+
+def create_filter_spec(model, fields, ops, values):
+    """Creates a filter spec."""
+    filters = []
+
+    if fields and ops and values:
+        for field, op, value in zip(fields, ops, values):
+            if "." in field:
+                complex_model, complex_field = field.split(".")
+                filters.append(
+                    {
+                        "model": get_model_name_by_tablename(complex_model),
+                        "field": complex_field,
+                        "op": op,
+                        "value": value,
+                    }
+                )
+            else:
+                filters.append({"model": model, "field": field, "op": op, "value": value})
+
+    filter_spec = []
+    # group by field (or for same fields and for different fields)
+    data = sorted(filters, key=lambda x: x["model"])
+    for k, g in groupby(data, key=lambda x: x["model"]):
+        # force 'and' for operations other than equality
+        filters = list(g)
+        force_and = False
+        for f in filters:
+            if ">" in f["op"] or "<" in f["op"]:
+                force_and = True
+
+        if force_and:
+            filter_spec.append({"and": filters})
+        else:
+            filter_spec.append({"or": filters})
+
+    if filter_spec:
+        filter_spec = {"and": filter_spec}
+
+    # log.debug(f"Filter Spec: {json.dumps(filter_spec, indent=2)}")
+    return filter_spec
+
+
+def get_schema_session(org_code):
+    schema_engine = engine.execution_options(
+        schema_translate_map={None: f"dispatch_organization_{org_code}"}
+    )
+    schema_session = sessionmaker(bind=schema_engine)()
+    return schema_session

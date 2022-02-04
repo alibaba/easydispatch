@@ -1,7 +1,11 @@
+import traceback
+
+from sqlalchemy.sql.elements import Null
 from dispatch.plugins.kandbox_planner.util.kandbox_json_util import generic_json_encoder
 from dataclasses import asdict as python_asdict
+from threading import Thread
 import socket
-from dispatch.config import KAFKA_BOOTSTRAP_SERVERS, PLANNER_SERVER_ROLE, TESTING_MODE  #
+from dispatch.config import KAFKA_BOOTSTRAP_SERVERS, PLANNER_SERVER_ROLE
 from dispatch.plugins.kandbox_planner.env.env_models import (
     KafkaEnvMessage,
     Appointment,
@@ -9,6 +13,7 @@ from dispatch.plugins.kandbox_planner.env.env_models import (
     Worker,
     JobLocationBase,
 )
+import asyncio
 from dispatch.plugins.kandbox_planner.env.env_enums import (
     KafkaMessageType,
     KafkaRoleType,
@@ -17,6 +22,8 @@ from dispatch.plugins.kandbox_planner.env.env_enums import (
     JobType,
     AppointmentStatus,
 )
+from dispatch.team import service as team_service
+from dispatch.job import service as job_service
 from kafka import KafkaProducer, KafkaConsumer, TopicPartition
 from datetime import datetime
 import json
@@ -28,7 +35,11 @@ import time
 
 import copy
 
+from dispatch.team.models import TeamUpdate
+from dispatch.worker import service as workerService
+
 log = logging.getLogger("kandbox_kafka_adapter")
+log_callback = logging.getLogger("ipms_apms_rps_callback")
 
 
 class KafkaAdapter:
@@ -40,7 +51,7 @@ class KafkaAdapter:
     ):
         self.env = env
         if self.env:
-            log.info("The kafka is ued for Env")
+            log.info(f"A kafka server is initiated for Env: {self.env.team_env_key}")
             self.team_env_key = self.env.team_env_key
         else:
             assert team_env_key is not None
@@ -93,17 +104,29 @@ class KafkaAdapter:
         msg_dict = python_asdict(m)
         msg = json.dumps(msg_dict, default=generic_json_encoder).encode("utf-8")
         future = self.producer.send(topic_name, value=msg)
+        offset = 0
+        try:
+            offset = future.get().offset
+        except Exception as e:
+            log.error(traceback.format_exc())
 
-        return future.get().offset
+        return offset
 
     def post_env_message(self, message_type, payload):
         """This is used by ENV to post a message
         returns offset.
         """
+        if self.env is not None:
+            source_type = KandboxMessageSourceType.ENV
+            source_code = self.env.env_inst_code
+        else:
+            source_type = KandboxMessageSourceType.SYSTEM
+            source_code = self.team_env_key
+
         kem = KafkaEnvMessage(
             message_type=message_type,
-            message_source_type=KandboxMessageSourceType.ENV,
-            message_source_code=self.env.env_inst_code,
+            message_source_type=source_type,
+            message_source_code=source_code,
             payload=payload,
         )
 
@@ -111,11 +134,17 @@ class KafkaAdapter:
 
     def post_env_out_message(self, message_type, payload):
         """This is used by ENV to post a message"""
+        if self.env is not None:
+            source_type = KandboxMessageSourceType.ENV
+            source_code = self.env.env_inst_code
+        else:
+            source_type = KandboxMessageSourceType.SYSTEM
+            source_code = self.team_env_key
 
         m = KafkaEnvMessage(
             message_type=message_type,
-            message_source_type=KandboxMessageSourceType.ENV,
-            message_source_code=self.env.env_inst_code,
+            message_source_type=source_type,
+            message_source_code=source_code,
             payload=payload,
         )
 
@@ -448,9 +477,12 @@ class KafkaAdapter:
 
     def process_env_message(self, msg, auto_replay_in_process=True):
         try:
-            env_message = KafkaEnvMessage(**json.loads(msg.value))
-        except:
-            log.error(f"process_env_message: Unknow message: {msg}")
+            if isinstance(msg, dict):
+                env_message = KafkaEnvMessage(**msg)
+            else:
+                env_message = KafkaEnvMessage(**json.loads(msg.value))
+        except Exception as e:
+            log.error(f"process_env_message: { e}")
             return
         begin_time = datetime.now()
 
@@ -473,11 +505,11 @@ class KafkaAdapter:
                 else:
                     self.env.horizon_start_minutes = obj_dict["horizon_start_minutes"]
 
-                    if TESTING_MODE != "yes":
-                        log.error(
-                            f"Received a testing-only message while TESTING_MODE!=yes: {obj_dict}"
-                        )
-                        return
+                    # if TESTING_MODE != "yes":
+                    #     log.error(
+                    #         f"Received a testing-only message while TESTING_MODE!=yes: {obj_dict}"
+                    #     )
+                    #     return
             except KeyError:
                 log.error(f"_update_planning_window: Wrong message format in {obj_dict}")
                 return
@@ -524,9 +556,9 @@ class KafkaAdapter:
                 # Lookup right location by location_code saved in the appointment.
                 # Save Locaiton object instead of original tuple
                 job.location = self.env.locations_dict[job.location.location_code]
-            except:
-                log.error("KeyError, can not find location, or worker for job: {}".format(
-                    obj_dict["code"]))
+            except Exception as e:
+                log.error("encode_single_job error, can not find location, or worker for job: {}, {}".format(
+                    obj_dict["code"], e))
                 return
             self.env.mutate_create_job(job, auto_replay=auto_replay_in_process)
             return
@@ -534,16 +566,33 @@ class KafkaAdapter:
         def _update_job_metadata(obj_dict):
             try:
                 if obj_dict["code"] not in self.env.jobs_dict.keys():
-                    log.error(
-                        f"JOB:{obj_dict['code']}: _update_job_metadata, job does not exist",
+                    log.warning(
+                        f"JOB:{obj_dict['code']}: _update_job_metadata, but job does not exist, trying _create_job ...",
                     )
+                    if (self.env.env_encode_from_datetime_to_minutes(obj_dict["requested_start_datetime"]) <
+                            self.env.get_env_planning_horizon_end_minutes()):
+                        _create_job(obj_dict)
+                    else:
+                        log.warning(
+                            f"JOB:{obj_dict['code']}: _update_job_metadata, but requested_start_datetime is beyond window, skippimng _create_job ...",
+                        )
                     return
             except KeyError:
-                log.error(f"_update_job_metadata: no code in {obj_dict}")
+                log.error(f"Internal error, _update_job_metadata: no code in {obj_dict}")
                 return
 
+            if "order_state" in obj_dict['flex_form_data'].keys():
+                if obj_dict['flex_form_data']['order_state'] in [-1, 10]:
+                    # 订单完成 删掉
+                    curr_job = [i for i in self.env.jobs if i.job_code == obj_dict['code']][0]
+                    if curr_job:
+                        self.env.jobs.pop(curr_job.job_index)
+                        self.env.jobs_dict.pop(obj_dict['code'])
+
             new_job = self.env.env_encode_single_job(obj_dict)
-            # Lookup right location by location_code saved in the appointment.
+            if new_job is None:
+                log.error(f"_update_job_metadata: failed to encode job_dict: {obj_dict}")
+                return            # Lookup right location by location_code saved in the appointment.
             # Save Locaiton object instead of original tuple
             try:
                 new_job.location = self.env.locations_dict[new_job.location.location_code]
@@ -736,7 +785,7 @@ class KafkaAdapter:
                 )
                 return
             # I assume that when the message arrives here, db already have it.
-            self.env.kp_data_adapter.reload_data_from_db()
+            self.env.kp_data_adapter.reload_data_from_db_by_code(worker_obj=obj_dict['worker_obj'])
             new_worker = self.env.env_encode_single_worker(obj_dict)
 
             self.env.mutate_create_worker(new_worker)
@@ -749,8 +798,10 @@ class KafkaAdapter:
                 log.error(
                     f"WORKER:{obj_dict['code']}: worker does not exist",
                 )
+                _create_worker(obj_dict)
                 return
             # I assume that when the message arrives here, db already have it.
+            self.env.kp_data_adapter.reload_data_from_db_by_code(worker_obj=obj_dict['worker_obj'])
             new_worker = self.env.env_encode_single_worker(obj_dict)
 
             self.env.mutate_update_worker(new_worker)
@@ -864,13 +915,13 @@ class KafkaAdapter:
                     if "scheduled_start_datetime" in obj_dict.keys():
                         if isinstance(obj_dict["scheduled_start_datetime"], str):
                             obj_dict["scheduled_start_datetime"] = datetime.strptime(
-                                obj_dict["scheduled_start_datetime"], "%Y-%m-%d %H:%M:%S"
+                                obj_dict["scheduled_start_datetime"][0:19], "%Y-%m-%d %H:%M:%S"
                             )
-
+                    # remove MS '2021-08-26 15:23:50.918848'
                     if "requested_start_datetime" in obj_dict.keys():
                         if isinstance(obj_dict["requested_start_datetime"], str):
                             obj_dict["requested_start_datetime"] = datetime.strptime(
-                                obj_dict["requested_start_datetime"], "%Y-%m-%d %H:%M:%S"
+                                obj_dict["requested_start_datetime"][0:19], "%Y-%m-%d %H:%M:%S"
                             )
                 except Exception as e:  # ValueError
                     log.error(
@@ -895,14 +946,19 @@ class KafkaAdapter:
 
         # Return only after loop.
         total_time = datetime.now() - begin_time
-        log.debug(
-            f"Date: {begin_time}, Elapsed: {total_time}: Received and processed env message: {env_message.message_type}, offset = {msg.offset}, msg.timestamp = {msg.timestamp}"
-        )
+        if isinstance(msg, dict):
+            log.debug(
+                f"Date: {begin_time}, Elapsed: {total_time}: Received and processed env message: {env_message.message_type}"
+            )
+        else:
+            log.debug(
+                f"Date: {begin_time}, Elapsed: {total_time}: Received and processed env message: {env_message.message_type}, offset = {msg.offset}, msg.timestamp = {msg.timestamp}"
+            )
 
     def consume_env_messages(self):
         """Main loop for kafka message"""
-        # log.info(  "Looking for new env messages in one refresh request:env={}, offset={} ".format(
-        #                     self.env.env_inst_code,self.env.kafka_input_window_offset  ) )
+        log.info("Looking for new env messages in one refresh request:env={}, offset={} ".format(
+            self.env.env_inst_code, self.env.kafka_input_window_offset))
         i = 0
         try:
             for msg in self.consumer:
@@ -924,12 +980,16 @@ class KafkaAdapter:
                         # auto_replay = True
                         try:
                             # Is this timeout seconds?
+                            flag = True
                             with self.env.redis_conn.lock(
-                                self.env.get_env_replay_lock_redis_key(), timeout=120
+                                self.env.get_env_replay_lock_redis_key(), timeout=120, blocking_timeout=5
                             ) as lock:
+                                flag = False
                                 self.process_env_message(msg, auto_replay_in_process=True)
                                 # Commit last offset. Save it into Redis ...
                                 self.env.set_env_window_replay_till_offset(msg.offset)
+                            if flag:
+                                raise LockError("Cannot get a lock ")
                         except LockNotOwnedError:
                             log.debug(
                                 "premature lock expire. This process took longer than 120 seconds"
@@ -1013,12 +1073,12 @@ class KafkaAdapter:
         else:
             latest_env_db_sink_offset = existing_team.latest_env_db_sink_offset + 1
 
-        self.output_consumerconsumer.assign([tp])
+        self.output_consumer.assign([tp])
 
         self.output_consumer.consumer.seek(tp, latest_env_db_sink_offset)
 
         while True:
-            for msg in consumer:
+            for msg in self.consumer:
                 m = json.loads(msg.value)
 
                 for j, data in enumerate(m["payload"]):
@@ -1039,3 +1099,69 @@ class KafkaAdapter:
                 )
 
             time.sleep(1)
+
+
+class KafkaConsumerAdapter:
+    def __init__(
+        self,
+        offset=None,
+        org_code=None,
+        team_id=None,
+        env=None,
+        redis_conn=None,
+    ):
+        self.org_code = org_code
+        self.team_id = team_id
+        self.offset = offset
+        self.consumer_timeout_ms = 20
+        self.env = env
+        self.redis_conn = redis_conn
+        self.consumer = KafkaConsumer(
+            bootstrap_servers=KAFKA_BOOTSTRAP_SERVERS.split(";"),
+            fetch_max_wait_ms=10,
+            consumer_timeout_ms=self.consumer_timeout_ms,
+        )  #
+        self.env_tp = TopicPartition(self.get_env_window_out_topic_name(), 0)
+        self.consumer.assign([self.env_tp])
+        self.consumer.seek(self.env_tp, self.offset)
+        self.redis_key = f"{team_id}_RPAPaidan"
+        self.apms_callback_url = config.APMS_CALLBACK_URL
+        self.ipms_callback_url = config.IPMS_CALLBACK_URL
+
+    def get_env_window_out_topic_name(self) -> str:
+        return f"{KandboxMessageTopicType.ENV_WINDOW_OUTPUT}.env_{self.org_code}_{self.team_id}"
+
+    def curr_offset_key(self) -> str:
+        return f"{self.get_env_window_out_topic_name()}_curr_offset"
+
+    async def callback(self, refresh_count: int, interval_seconds: int) -> None:
+        for r_i in range(refresh_count):
+            try:
+                await asyncio.sleep(interval_seconds)
+
+                for msg in self.consumer:
+                    try:
+
+                        curr_offset = self.redis_conn.get(self.curr_offset_key())
+                        curr_offset = int(curr_offset) if curr_offset else -1
+                        if msg.offset > curr_offset:
+                            m = json.loads(msg.value)
+                            if m['message_type'] != KafkaMessageType.POST_CHANGED_JOBS:
+                                continue
+                            # self.apms_ipms_do_callback(m)
+                            # Commit last offset. Save it into Redis ...
+                            self.env.redis_conn.set(self.curr_offset_key(), msg.offset)
+
+                    except Exception as re:
+                        log_callback.error(f"kafka callback Error:{re}")
+
+            except Exception as e:
+                log_callback.error("kafka callback Error in loop: ", e)
+
+    def start_callback(self):
+        asyncio.create_task(
+            self.callback(
+                refresh_count=999999999999,
+                interval_seconds=5,
+            )
+        )

@@ -7,46 +7,48 @@ const getDefaultSelectedState = () => {
   return {
     id: null,
     location_code: null,
-    geo_longitude: null,
-    geo_latitude: null,
+    geo_longitude: -1,
+    geo_latitude: -1,
     geo_address_text: null,
-    geo_json: null
+    geo_json: null,
+    team: null,
+    dispatch_user: null,
   };
 };
 
 const state = {
   selected: {
-    ...getDefaultSelectedState()
+    ...getDefaultSelectedState(),
   },
   dialogs: {
     showCreateEdit: false,
-    showRemove: false
+    showRemove: false,
   },
   table: {
     rows: {
       items: [],
-      total: null
+      total: null,
     },
     options: {
       q: "",
       page: 1,
       itemsPerPage: 10,
       sortBy: ["location_code"],
-      descending: [false]
+      descending: [false],
     },
-    loading: false
-  }
+    loading: false,
+  },
 };
 
 const getters = {
-  getField
+  getField,
 };
 
 const actions = {
   getAll: debounce(({ commit, state }) => {
     commit("SET_TABLE_LOADING", true);
     return LocationApi.getAll(state.table.options)
-      .then(response => {
+      .then((response) => {
         commit("SET_TABLE_LOADING", false);
         commit("SET_TABLE_ROWS", response.data);
       })
@@ -84,12 +86,12 @@ const actions = {
             { root: true }
           );
         })
-        .catch(err => {
+        .catch((err) => {
           commit(
             "app/SET_SNACKBAR",
             {
               text: "Location not created. Reason: " + err.response.data.detail,
-              color: "red"
+              color: "red",
             },
             { root: true }
           );
@@ -105,12 +107,12 @@ const actions = {
             { root: true }
           );
         })
-        .catch(err => {
+        .catch((err) => {
           commit(
             "app/SET_SNACKBAR",
             {
               text: "Location not updated. Reason: " + err.response.data.detail,
-              color: "red"
+              color: "red",
             },
             { root: true }
           );
@@ -128,17 +130,18 @@ const actions = {
           { root: true }
         );
       })
-      .catch(err => {
+      .catch((err) => {
         commit(
           "app/SET_SNACKBAR",
           {
-            text: "Location not deleted. Reason: " + err.response.data.detail,
-            color: "red"
+            text:
+              "Location not deleted. Reason: Related data cannot be deleted",
+            color: "red",
           },
           { root: true }
         );
       });
-  }
+  },
 };
 
 const mutations = {
@@ -160,7 +163,7 @@ const mutations = {
   },
   RESET_SELECTED(state) {
     state.selected = Object.assign(state.selected, getDefaultSelectedState());
-  }
+  },
 };
 
 export default {
@@ -168,5 +171,5 @@ export default {
   state,
   getters,
   actions,
-  mutations
+  mutations,
 };

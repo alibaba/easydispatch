@@ -79,7 +79,26 @@ def get_job_location(loc_i):
     y = ll[0]
     return "{}:{}".format(x, y)
 
-    return "{}:{}".format(x, y)
+
+product_items = (
+    "paper roll",
+    "paper tower",
+    "Commercial Mat",
+    "Ultraprotect Spray",
+    "Foam Soap",
+    "Body and Hair Gel",
+)
+
+
+def get_random_basket():
+    # distance = haversine(loc_1[0] , loc_1[1] , loc_2[0], loc_2[1])
+    item_count = random.randint(1, 5)
+    basket = {}
+    for _ in range(item_count):
+        item_seq = random.randint(1, 5)
+        basket[product_items[item_seq]] = random.randint(1, 5)
+
+    return basket
 
 
 def select_all_workers():
@@ -112,6 +131,12 @@ def get_skills(worker):
     return skills
 
 
+team = {
+    "code": "default_team",
+    "name": "default_team",
+}
+
+
 def generate_all_workers():
     # url = '{}/kpdata/workers/'.format(kplanner_service_url)
     worker_df = pd.read_csv(
@@ -125,36 +150,45 @@ def generate_all_workers():
         # if random.randint(0, 20) > 2:
         gps = worker_addr[loc_index]
         gps["location_code"] = "{}-{}".format(worker["name"].replace(" ", "_"), loc_index)
-
+        worker_index1 = random.randint(100, 1000)
         # print("adding worker: ", worker, gps)
         skills = get_skills(worker)
-
+        worker["name"] = f"{ worker['name']}|{worker_index1}"
         myobj = {
             "code": worker["name"],
             "name": worker["name"],
-            "auth_username": worker["name"].replace(" ", "_"),
-            # 'skills': '[1]',
+            # "auth_username": worker["name"].replace(" ", "_"),
             "is_active": True,
-            "team": {
-                "code": "london_t1",
-                "name": "london_t1",
-            },
+            "team": team,
             "location": {
                 "location_code": gps["location_code"],
                 "geo_latitude": gps["geo_latitude"],
                 "geo_longitude": gps["geo_longitude"],
+                "team": team
             },
             "flex_form_data": {
                 "level": worker["electric"],
                 "skills": skills,
                 # "weekly_working_minutes": "[ [0, 0], [480, 1140],[480, 1140],[480, 1140],[480, 1140],[480, 1140],  [0, 0]]",
-                # "max_overtime_minutes": 180,
+                "max_overtime_minutes": 180,
                 "assistant_to": None,
                 "is_assistant": False,
+                "vehicle_type": "van",
+                "capacity_max_weight": 50,
+                "capacity_max_volume": 0.25,
             },
-            # "weekly_working_minutes": "[ [0, 0], [480, 1140],[480, 1140],[480, 1140],[480, 1140],[480, 1140],  [0, 0]]",
+            "business_hour": {
+                "sunday": [{"open": "", "close": "", "id": "5ca5578b0c5c7", "isOpen": False}],
+                "monday": [{"open": "0800", "close": "1700", "id": "5ca5578b0c5d1", "isOpen": True}],
+                "tuesday": [{"open": "0800", "close": "1700", "id": "5ca5578b0c5d8", "isOpen": True}],
+                "wednesday": [{"open": "0800", "close": "1700", "id": "5ca5578b0c5df", "isOpen": True}],
+                "thursday": [{"open": "0800", "close": "1700", "id": "5ca5578b0c5e6", "isOpen": True}],
+                "friday": [{"open": "0800", "close": "1700", "id": "5ca5578b0c5ec", "isOpen": True}],
+                "saturday": [{"open": "", "close": "", "id": "5ca5578b0c5f8", "isOpen": False}],
+            },
             # 'level': 0,
             "tags": [],
+            "dispatch_user": None
         }
 
         list_to_insert.append(myobj)
@@ -184,15 +218,15 @@ def generate_one_day_orders(current_day, worker_list, nbr_jobs, job_start_index,
         for job_i in range(job_schedule_type["Quantity"]):
             loc_job_index += 1
             loc_index = random.randint(0, len(job_addr) - 1)
-
+            worker_index1 = random.randint(100, 1000)
             gps = job_addr[loc_index]
             gps["location_code"] = "job_loc_{}".format(loc_index)
-
+            gps["team"] = team
             job_code = "{}-{}-{}-{}".format(
                 datetime.strftime(current_day, "%m%d"),
                 loc_job_index,
                 job_schedule_type["name"].split(" ")[0],
-                loc_index,
+                worker_index1,
             )
             myobj = {
                 "code": job_code,
@@ -208,12 +242,12 @@ def generate_one_day_orders(current_day, worker_list, nbr_jobs, job_start_index,
                     "min_number_of_workers": 1,
                     "max_number_of_workers": 1,
                     "priority": job_schedule_type["priority"],
-                    "included_job_codes": []
+                    "requested_vehicle_type": "van" if job_i < 10 else "bike",
+                    "requested_items": get_random_basket(),
+                    "included_job_codes": [],
+                    "Unavailability": ['202110150810_202110150910', '202110151210_202110151310']
                 },
-                "team": {
-                    "code": "london_t1",
-                    "name": "london_t1",
-                },
+                "team": team,
                 "location": gps,
                 "planning_status": JobPlanningStatus.UNPLANNED,
                 "requested_duration_minutes": job_schedule_type["Duration"],
@@ -226,17 +260,11 @@ def generate_one_day_orders(current_day, worker_list, nbr_jobs, job_start_index,
                 ),
                 "requested_primary_worker": {
                     "code": "Alexia",  # worker_list[random.randint(0, 5)]["code"],
-                    "team": {
-                        "code": "london_t1",
-                        "name": "london_t1",
-                    },
+                    "team": team,
                 },
                 "scheduled_primary_worker": {
                     "code": worker_list[random.randint(0, 5)]["code"],
-                    "team": {
-                        "code": "london_t1",
-                        "name": "london_t1",
-                    },
+                    "team": team,
                 },
                 "auto_planning": auto_planning_flag,
             }

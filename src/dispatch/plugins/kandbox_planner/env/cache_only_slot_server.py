@@ -24,6 +24,7 @@ from dispatch.plugins.kandbox_planner.env.env_models import (
     TimeSlotJSONEncoder,
     WorkingTimeSlot,
     JobLocationBase,
+    Worker
 )
 
 from rtree import index
@@ -131,12 +132,12 @@ class CacheOnlySlotServer:
         return True
 
     def add_single_working_time_slot(
-        self, worker_code: str, start_minutes: int, end_minutes: int, start_location, end_location
+        self, w: Worker, start_minutes: int, end_minutes: int, start_location, end_location
     ) -> WorkingTimeSlot:
         # assert False
 
         if end_minutes - start_minutes < 1:
-            return None
+            return None 
         # It is such a luxury to have fake start / end for every day. So I used None to denote start/end of time slots in one original slot.
         # 2020-10-14 08:53:33
         start_location_base = JobLocationBase(*start_location[0:4])
@@ -149,7 +150,7 @@ class CacheOnlySlotServer:
             next_slot_code=None,
             start_location=start_location_base,
             end_location=end_location_base,
-            worker_id=worker_code,
+            worker_id=w.worker_code,
             available_free_minutes=end_minutes - start_minutes,
             assigned_job_codes=[],
         )
@@ -354,7 +355,7 @@ class CacheOnlySlotServer:
 
         action_worker_ids = job.scheduled_worker_codes
         if len(action_worker_ids) < 1:
-            return False, {}
+            return False, {"message": "It was not assigned to any worker. len(action_worker_ids) < 1"}
         pipe = None
 
         if True:

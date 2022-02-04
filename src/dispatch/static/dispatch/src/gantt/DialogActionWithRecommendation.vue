@@ -6,17 +6,10 @@
   >
     <v-card>
       <v-card-title>
-        <span class="headline">Job: {{ selected.job.job_code }}</span>
+        <span class="headline" style="max-width:470px">Job: {{ selected.job.job_code }}</span>
         <v-spacer></v-spacer>
-        <v-btn text color="warning" @click="createUnplanJobAction()"
-          >Unplan</v-btn
-        >
-        <v-btn
-          text
-          color="secondary"
-          @click="closeDialogActionWithRecommendation()"
-          >Cancel</v-btn
-        >
+        <v-btn text color="warning" @click="createUnplanJobAction()">Unplan</v-btn>
+        <v-btn text color="secondary" @click="closeDialogActionWithRecommendation()">Cancel</v-btn>
         <v-btn text color="primary" @click="checkCurrentJobAction()">OK</v-btn>
       </v-card-title>
 
@@ -61,7 +54,7 @@
 
           <v-flex xs6 lg6>
             <v-text-field
-              v-model="scheduled_duration_minutes"
+              v-model="scheduled_duration_minutes "
               type="number"
               prepend-icon="account"
               label="Scheduled Duration Minutes"
@@ -72,14 +65,10 @@
           <v-flex xs12>
             <v-row>
               <v-col cols="6">
-                <date-picker-menu
-                  v-model="scheduled_start_datetime"
-                ></date-picker-menu>
+                <date-picker-menu v-model="scheduled_start_datetime"></date-picker-menu>
               </v-col>
               <v-col cols="6">
-                <time-picker-menu
-                  v-model="scheduled_start_datetime"
-                ></time-picker-menu>
+                <time-picker-menu v-model="scheduled_start_datetime"></time-picker-menu>
               </v-col>
             </v-row>
           </v-flex>
@@ -94,15 +83,14 @@
                     :loading="loading"
                     loading-text="Loading... Please wait"
                   >
-                    <template v-slot:item.scheduled_start_datetime="{ item }">{{
+                    <template v-slot:item.scheduled_start_datetime="{ item }">
+                      {{
                       item.scheduled_start_datetime | formatHHMM
-                    }}</template>
+                      }}
+                    </template>
                     <template v-slot:item.data-table-actions="{ item }">
-                      <v-btn @click="selectAction(item)">
-                        <v-icon>
-                          mdi-check
-                        </v-icon>
-                        Choose
+                      <v-btn @click="selectAction(item,false)">
+                        <v-icon>mdi-check</v-icon>Choose
                       </v-btn>
                     </template>
                   </v-data-table>
@@ -141,7 +129,7 @@ export default {
   methods: {
     ...mapActions("gantt", [
       "setConfirmedJobActionAndCheck",
-      "commitSingleJob"
+      "commitSingleJob",
     ]),
     ...mapMutations("gantt", ["SET_DIALOG_Action_With_Recommendation_Visible"]),
 
@@ -151,10 +139,10 @@ export default {
         false
       );
     },
-    selectAction(item) {
+    selectAction(item, flag) {
       this.scheduled_workers = [];
       let _that = this;
-      forEach(item.scheduled_worker_codes, function(w) {
+      forEach(item.scheduled_worker_codes, function (w) {
         _that.scheduled_workers.push({ code: w });
       });
 
@@ -163,9 +151,14 @@ export default {
       //   1,
       //   item.scheduled_worker_codes.length
       // )
-
-      this.scheduled_start_datetime = item.scheduled_start_datetime;
-      this.scheduled_duration_minutes = item.scheduled_duration_minutes;
+      if (flag) {
+        let today = new Date();
+        this.scheduled_start_datetime = today.toISOString();
+        this.scheduled_duration_minutes = item.requested_duration_minutes;
+      } else {
+        this.scheduled_start_datetime = item.scheduled_start_datetime;
+        this.scheduled_duration_minutes = item.scheduled_duration_minutes;
+      }
     },
 
     checkCurrentJobAction() {
@@ -175,8 +168,10 @@ export default {
       jobActionOptions.job_code = this.selected.job.job_code;
 
       jobActionOptions.scheduled_start_datetime = this.scheduled_start_datetime;
-      jobActionOptions.scheduled_duration_minutes = this.scheduled_duration_minutes;
-      jobActionOptions.scheduled_primary_worker_id = this.scheduled_workers[0].code;
+      jobActionOptions.scheduled_duration_minutes =
+        this.scheduled_duration_minutes;
+      jobActionOptions.scheduled_primary_worker_id =
+        this.scheduled_workers[0].code;
       jobActionOptions.scheduled_secondary_worker_ids = [];
       for (let i = 1; i < this.scheduled_workers.length; i++) {
         jobActionOptions.scheduled_secondary_worker_ids.push(
@@ -197,7 +192,8 @@ export default {
       jobActionOptions.planning_status = "U";
 
       jobActionOptions.scheduled_duration_minutes = 10;
-      jobActionOptions.scheduled_start_datetime = this.selected.job.requested_start_datetime; //new Date().toISOString()
+      jobActionOptions.scheduled_start_datetime =
+        this.selected.job.requested_start_datetime; //new Date().toISOString()
 
       jobActionOptions.scheduled_worker_codes = [];
 
@@ -205,7 +201,7 @@ export default {
 
       this.commitSingleJob(jobActionOptions);
       this.closeDialogActionWithRecommendation();
-    }
+    },
   },
 
   components: {
@@ -214,7 +210,7 @@ export default {
     // JobTypeCombobox,
     // WorkerSelect
     DatePickerMenu,
-    TimePickerMenu
+    TimePickerMenu,
   },
   mounted() {
     // if (this.selected.recommendationedActions.length > 0) {
@@ -224,7 +220,7 @@ export default {
     // }
   },
   watch: {
-    dialogActionWithRecommendationVisible: function(newValue) {
+    dialogActionWithRecommendationVisible: function (newValue) {
       console.log(
         `dialogActionWithRecommendationVisible, selection action auto, this.selected.recommendationedActions.length = ${this.selected.recommendationedActions.length}, newValue = ${newValue}`
       );
@@ -234,12 +230,19 @@ export default {
           this.selected.recommendationedActions.length > 0 &&
           this.selected.job.planning_status == "U"
         ) {
-          this.selectAction(this.selected.recommendationedActions[0]);
+          this.selectAction(this.selected.recommendationedActions[0], false);
         } else {
-          this.selectAction(this.selected.job);
+          let flag = false;
+          if (
+            this.selected.recommendationedActions.length == 0 &&
+            this.selected.job.planning_status == "U"
+          ) {
+            flag = true;
+          }
+          this.selectAction(this.selected.job, flag);
         }
       }
-    }
+    },
   },
 
   data() {
@@ -253,14 +256,19 @@ export default {
         //{ text: "Secondary", value: "scheduled_secondary_worker_ids" },
         { text: "Scheduled Start", value: "scheduled_start_datetime" },
         { text: "Duration Minutes", value: "scheduled_duration_minutes" },
-        { text: "", value: "data-table-actions", sortable: false, align: "end" }
+        {
+          text: "",
+          value: "data-table-actions",
+          sortable: false,
+          align: "end",
+        },
       ],
       q: null,
-      loading: false
+      loading: false,
     };
   },
 
-  created: function() {
+  created: function () {
     // this.plannerFilters.windowDates = this.defaultDates
     // this.fetchData()
   },
@@ -270,12 +278,12 @@ export default {
     ...mapFields("gantt", [
       "selected",
       "plannerFilters",
-      "dialogs.dialogActionWithRecommendationVisible"
+      "dialogs.dialogActionWithRecommendationVisible",
     ]),
     ...mapGetters("gantt", [
-      "getPlannerFilters"
+      "getPlannerFilters",
       // ...
-    ])
-  }
+    ]),
+  },
 };
 </script>

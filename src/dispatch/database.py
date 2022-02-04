@@ -1,43 +1,60 @@
+from sqlalchemy.sql.expression import true
+from sqlalchemy_utils import get_mapper
+from pydantic.error_wrappers import ErrorWrapper, ValidationError
+from pydantic.main import BaseModel
+from sqlalchemy import or_, orm, func, desc
+from pydantic.types import Json, constr
+from fastapi import Depends, Query
+
+from sqlalchemy.orm import sessionmaker, object_session
+
+from dispatch.exceptions import InvalidFilterError, NotFoundError
+from dispatch.fulltext import make_searchable
+from dispatch.plugins.kandbox_planner.util.cache_dict import CacheDict
+from .config import SQLALCHEMY_DATABASE_URI
+from dispatch.common.utils.composite_search import CompositeSearch
+from starlette.requests import Request
+from sqlalchemy.orm import Query, sessionmaker
+from sqlalchemy.ext.declarative import declarative_base, declared_attr
+from sqlalchemy import create_engine
+from typing import Any, List
 import re
 import logging
+from sqlalchemy import Table, Column, Integer, String, MetaData, ForeignKey
 
 log = logging.getLogger(__file__)
-import json
-from typing import Any, List
-from itertools import groupby
-
-from sqlalchemy import create_engine
-from sqlalchemy.ext.declarative import declarative_base, declared_attr
-from sqlalchemy.orm import Query, sessionmaker
-from sqlalchemy_filters import apply_pagination, apply_sort, apply_filters
-from sqlalchemy_searchable import make_searchable
-from sqlalchemy_searchable import search as search_db
-from starlette.requests import Request
-
-from dispatch.common.utils.composite_search import CompositeSearch
 
 
-from .config import SQLALCHEMY_DATABASE_URI
-from .config import DATABASE_HOSTNAME, DATABASE_NAME, DATABASE_PORT
-
-# from dispatch.auth.service import get_by_code
-
+QueryStr = constr(regex=r"^[ -~]+$", min_length=1)
 
 engine = create_engine(
     str(SQLALCHEMY_DATABASE_URI),
     pool_size=40,
     max_overflow=20,
-)  # ,echo=True
+    # echo=True,
+)
+log.debug(f"database engine created:{engine}")
 SessionLocal = sessionmaker(bind=engine)
-
-from dispatch.plugins.kandbox_planner.util.cache_dict import CacheDict
-
 engine_dict = CacheDict(cache_len=5)
 session_dict = CacheDict(cache_len=5)
+# sqlalchemy core
+try:
+    conn_core = engine.connect()
+except:
+    pass
+metadata = MetaData(engine)
+try:
+    worker_table = Table('worker', metadata, autoload=True)
+    job_table = Table('job', metadata, autoload=True)
+    location_table = Table('location', metadata, autoload=True)
+    event_table = Table('event', metadata, autoload=True)
+except:
+    print("Failed to load tables ... Ignore this if you are creating database ...")
 
 
 def resolve_table_name(name):
     """Resolves table names to their mapped names."""
+    # print("resolve_table_name", name)
     names = re.split("(?=[A-Z])", name)  # noqa
     return "_".join([x.lower() for x in names if x])
 
@@ -51,12 +68,11 @@ class CustomBase:
 
 
 Base = declarative_base(cls=CustomBase)
-
 make_searchable(Base.metadata)
 
 
 def init_schema(org_code, db_session):
-    dump_file = "/Users/qiyangduan/git/kandbox/dispatch/duan/org_template.sql"
+    dump_file = "./org_template.sql"
 
     # import sh
     from sh import psql
@@ -104,7 +120,6 @@ def init_schema(org_code, db_session):
 
 def get_db(request: Request):
     # https://docs.sqlalchemy.org/en/13/changelog/migration_11.html
-
     """
     request.state.db.connection(
         execution_options={"schema_translate_map": {None: request.state.org_code}}
@@ -128,156 +143,56 @@ def get_model_name_by_tablename(table_fullname: str) -> str:
 
 def get_class_by_tablename(table_fullname: str) -> Any:
     """Return class reference mapped to table."""
+
+    def _find_class(name):
+        for c in Base._decl_class_registry.values():
+            if hasattr(c, "__table__"):
+                if c.__table__.fullname.lower() == name.lower():
+                    return c
+
     mapped_name = resolve_table_name(table_fullname)
-    for c in Base._decl_class_registry.values():
-        if hasattr(c, "__table__") and c.__table__.fullname == mapped_name:
-            return c
-    raise Exception(f"Incorrect tablename '{mapped_name}'. Check the name of your model.")
+    mapped_class = _find_class(mapped_name)
 
+    # try looking in the 'dispatch_core' schema
+    if not mapped_class:
+        mapped_class = _find_class(f"dispatch_core.{mapped_name}")
 
-def paginate(query: Query, page: int, items_per_page: int):
-    # Never pass a negative OFFSET value to SQL.
-    offset_adj = 0 if page <= 0 else page - 1
-    items = query.limit(items_per_page).offset(offset_adj * items_per_page).all()
-    total = query.order_by(None).count()
-    return items, total
-
-
-def composite_search(*, db_session, query_str: str, models: List[Base]):
-    """Perform a multi-table search based on the supplied query."""
-    s = CompositeSearch(db_session, models)
-    q = s.build_query(query_str, sort=True)
-    return s.search(query=q)
-
-
-def search(*, db_session, query_str: str, model: str):
-    """Perform a search based on the query."""
-    q = db_session.query(get_class_by_tablename(model))
-    return search_db(q, query_str, sort=True)
-
-
-def create_filter_spec(model, fields, ops, values):
-    """Creates a filter spec."""
-    filters = []
-
-    if fields and ops and values:
-        for field, op, value in zip(fields, ops, values):
-            if "." in field:
-                complex_model, complex_field = field.split(".")
-                filters.append(
-                    {
-                        "model": get_model_name_by_tablename(complex_model),
-                        "field": complex_field,
-                        "op": op,
-                        "value": value,
-                    }
+    if not mapped_class:
+        raise ValidationError(
+            [
+                ErrorWrapper(
+                    NotFoundError(msg="Model not found. Check the name of your model."),
+                    loc="filter",
                 )
-            else:
-                filters.append({"model": model, "field": field, "op": op, "value": value})
+            ],
+            model=BaseModel,
+        )
 
-    filter_spec = []
-    # group by field (or for same fields and for different fields)
-    data = sorted(filters, key=lambda x: x["model"])
-    for k, g in groupby(data, key=lambda x: x["model"]):
-        # force 'and' for operations other than equality
-        filters = list(g)
-        force_and = False
-        for f in filters:
-            if ">" in f["op"] or "<" in f["op"]:
-                force_and = True
-
-        if force_and:
-            filter_spec.append({"and": filters})
-        else:
-            filter_spec.append({"or": filters})
-
-    if filter_spec:
-        filter_spec = {"and": filter_spec}
-
-    # log.debug(f"Filter Spec: {json.dumps(filter_spec, indent=2)}")
-    return filter_spec
+    return mapped_class
 
 
-def create_sort_spec(model, sort_by, descending):
-    """Creates sort_spec."""
-    sort_spec = []
-    if sort_by and descending:
-        for field, direction in zip(sort_by, descending):
-            direction = "desc" if direction else "asc"
-
-            # we have a complex field, we may need to join
-            if "." in field:
-                complex_model, complex_field = field.split(".")
-
-                sort_spec.append(
-                    {
-                        "model": get_model_name_by_tablename(complex_model),
-                        "field": complex_field,
-                        "direction": direction,
-                    }
-                )
-            else:
-                sort_spec.append({"model": model, "field": field, "direction": direction})
-    # log.debug(f"Sort Spec: {json.dumps(sort_spec, indent=2)}")
-    return sort_spec
+def get_table_name_by_class_instance(class_instance: Base) -> str:
+    """Returns the name of the table for a given class instance."""
+    return class_instance._sa_instance_state.mapper.mapped_table.name
 
 
-def get_all(*, db_session, model):
-    """Fetches a query object based on the model class name."""
-    return db_session.query(get_class_by_tablename(model))
+def ensure_unique_default_per_project(target, value, oldvalue, initiator):
+    """Ensures that only one row in table is specified as the default."""
+    session = object_session(target)
+    if session is None:
+        return
 
+    mapped_cls = get_mapper(target)
 
-def join_required_attrs(query, model, join_attrs, fields):
-    """Determines which attrs (if any) require a join."""
-    if not fields:
-        return query
-
-    if not join_attrs:
-        return query
-
-    for field, attr in join_attrs:
-        for f in fields:
-            if field in f:
-                query = query.join(getattr(model, attr))
-
-    return query
-
-
-def search_filter_sort_paginate(
-    db_session,
-    model,
-    query_str: str = None,
-    page: int = 1,
-    items_per_page: int = 5,
-    sort_by: List[str] = None,
-    descending: List[bool] = None,
-    fields: List[str] = None,
-    ops: List[str] = None,
-    values: List[str] = None,
-    join_attrs: List[str] = None,
-):
-    """Common functionality for searching, filtering and sorting"""
-    model_cls = get_class_by_tablename(model)
-    if query_str:
-        query = search(db_session=db_session, query_str=query_str, model=model)
-    else:
-        query = db_session.query(model_cls)
-
-    query = join_required_attrs(query, model_cls, join_attrs, fields)
-
-    filter_spec = create_filter_spec(model, fields, ops, values)
-    query = apply_filters(query, filter_spec)
-
-    sort_spec = create_sort_spec(model, sort_by, descending)
-    query = apply_sort(query, sort_spec)
-
-    if items_per_page == -1:
-        items_per_page = None
-
-    query, pagination = apply_pagination(query, page_number=page, page_size=items_per_page)
-    return {
-        "items": query.all(),
-        "itemsPerPage": pagination.page_size,
-        "page": pagination.page_number,
-        "total": pagination.total_results,
-    }
+    if value:
+        previous_default = (
+            session.query(mapped_cls)
+            .filter(mapped_cls.columns.default == true())
+            .filter(mapped_cls.columns.project_id == target.project_id)
+            .one_or_none()
+        )
+        if previous_default:
+            # we want exclude updating the current default
+            if previous_default.id != target.id:
+                previous_default.default = False
+                session.commit()

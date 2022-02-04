@@ -25,4 +25,7 @@ export default {
   reset_planning_window(payload) {
     return API.post(`/planner_service/reset_planning_window/`, payload);
   },
+  reset_callback(payload) {
+    return API.post(`/planner_service/reset_callback/`, payload);
+  },
 };

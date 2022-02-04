@@ -16,9 +16,14 @@ from dispatch.team.views import router as team_router
 from dispatch.plugin.views import router as plugin_router
 from dispatch.auth.views import user_router, auth_router
 
+from dispatch.item.views import router as item_router
+from dispatch.depot.views import router as depot_router
+from dispatch.item_inventory.views import router as item_inventory_router
+
 
 from dispatch.location.views import router as location_router
 from dispatch.service_plugin.views import router as service_plugin_router
+from dispatch.org.views import router as orgs_router
 
 
 from .config import DISPATCH_AUTHENTICATION_PROVIDER_SLUG
@@ -41,8 +46,13 @@ authenticated_api_router.include_router(worker_router, prefix="/workers", tags=[
 authenticated_api_router.include_router(search_router, prefix="/search", tags=["search"])
 authenticated_api_router.include_router(job_router, prefix="/jobs", tags=["jobs"])
 authenticated_api_router.include_router(plugin_router, prefix="/plugins", tags=["plugins"])
-
 authenticated_api_router.include_router(location_router, prefix="/locations", tags=["locations"])
+authenticated_api_router.include_router(
+    item_inventory_router, prefix="/item_inventory", tags=["item_inventory"])
+authenticated_api_router.include_router(item_router, prefix="/items", tags=["items"])
+authenticated_api_router.include_router(depot_router, prefix="/depots", tags=["depots"])
+
+authenticated_api_router.include_router(orgs_router, prefix="/orgs", tags=["orgs"])
 
 authenticated_api_router.include_router(
     service_plugin_router, prefix="/service_plugins", tags=["service_plugins"]

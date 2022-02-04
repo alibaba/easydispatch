@@ -1,4 +1,4 @@
-from dispatch.plugins.kandbox_planner.env.env_models import ActionDict
+from dispatch.plugins.kandbox_planner.env.env_models import ActionDict, JobsInSlotsDispatchResult
 from dispatch.plugins.kandbox_planner.env.env_enums import OptimizerSolutionStatus, ActionType
 from datetime import datetime, timedelta
 import pandas as pd
@@ -14,6 +14,7 @@ from pprint import pprint
 import sys
 
 from dispatch import config
+from dispatch.plugins.kandbox_planner.planner_engine.jobs_in_slots_trait import JobsInSlotsPlannerTrait
 import dispatch.plugins.kandbox_planner.util.kandbox_date_util as date_util
 
 
@@ -26,7 +27,7 @@ import logging
 log = logging.getLogger(__file__)
 
 
-class NaivePlannerJobsInSlots:  # to fake OptimizerJobsInSlots
+class NaivePlannerJobsInSlots(JobsInSlotsPlannerTrait):  # to fake OptimizerJobsInSlots
 
     title = "Kandbox Plugin - Batch Optimizer - opti1day"
     slug = "kandbox_opti1day"
@@ -40,52 +41,7 @@ class NaivePlannerJobsInSlots:  # to fake OptimizerJobsInSlots
         "properties": {},
     }
 
-    def __init__(self, env, config=None):
-        self.env = env
-        self.travel_router = env.travel_router  # TravelTime(travel_speed=25)
-        self.config = config or self.default_config
-        # self.kandbox_env = kandbox_env
-        # self.kandbox_env.reset()
-        # if max_exec_seconds is not None:
-        #    self.max_exec_seconds = max_exec_seconds
-
-    def _get_travel_time_from_location_to_job(self, location, job_code_2):
-        # y_1,x_1= site1.split(':')
-        # y_2,x_2= site2.split(':')
-        site2 = self.env.jobs_dict[job_code_2]
-        new_time = self.travel_router.get_travel_minutes_2locations(
-            location,
-            [site2.location.geo_longitude, site2.location.geo_latitude],
-        )
-        if new_time > config.TRAVEL_MINUTES_WARNING_LEVEL:
-            log.debug(
-                f"JOB:{job_code_2}:{ location[0], location[1]}:{site2.location.geo_longitude, site2.location.geo_latitude}:very long travel time: {new_time} minutes. "
-            )
-            return config.TRAVEL_MINUTES_WARNING_RESULT
-        # print("travel: ", new_time)
-        return int(new_time / 1)
-
-    def _get_travel_time_2_sites(self, job_code_1, job_code_2):
-        # y_1,x_1= site1.split(':')
-        # y_2,x_2= site2.split(':')
-        site1 = self.env.jobs_dict[job_code_1]
-        site2 = self.env.jobs_dict[job_code_2]
-
-        new_time = self.travel_router.get_travel_minutes_2locations(
-            [site1.location.geo_longitude, site1.location.geo_latitude],
-            [site2.location.geo_longitude, site2.location.geo_latitude],
-        )
-        if new_time > 200:
-            log.warn(
-                [site1.location.geo_longitude, site1.location.geo_latitude],
-                [site2.location.geo_longitude, site2.location.geo_latitude],
-                (new_time),
-            )
-            return 10000
-        # print("travel: ", new_time)
-        return int(new_time / 1)
-
-    def dispatch_jobs_in_slots(self, working_time_slots: list):
+    def dispatch_jobs_in_slots(self, working_time_slots: list=[], last_job_count=1):
         """Assign jobs to workers."""
         num_slots = len(working_time_slots)  # - 2
         num_workers = len(working_time_slots) - 2
@@ -93,11 +49,12 @@ class NaivePlannerJobsInSlots:  # to fake OptimizerJobsInSlots
             num_workers = 1
 
         if num_slots < 1:
-            return {
-                "status": OptimizerSolutionStatus.INFEASIBLE,
-                "changed_action_dict_by_job_code": {},
-                "not_changed_job_codes": [],
-            }
+            return JobsInSlotsDispatchResult(
+                status = OptimizerSolutionStatus.INFEASIBLE,
+                changed_action_dict_by_job_code= {},
+                all_assigned_job_codes=[],
+                planned_job_sequence=[]
+            )
 
         is_ok_start = True
         is_ok_end = True
@@ -132,7 +89,9 @@ class NaivePlannerJobsInSlots:  # to fake OptimizerJobsInSlots
                 next_travel,
                 inside_travel,
             ) = self.env.get_travel_time_jobs_in_slot(slot, all_jobs_to_begin)
+            
             if len(slot.assigned_job_codes) <= 1:
+                # if The job itself is the only one in considerattion.
                 if (
                     current_min_start + prev_travel + job_duration_minutes + next_travel >
                     slot.end_minutes
@@ -198,18 +157,20 @@ class NaivePlannerJobsInSlots:  # to fake OptimizerJobsInSlots
                     inside_travel[-1]
                 )
 
-        final_result = {
-            "status": OptimizerSolutionStatus.INFEASIBLE,
-            "changed_action_dict_by_job_code": {},
-            "not_changed_job_codes": [],
-        }
+        final_result = JobsInSlotsDispatchResult(
+                status = OptimizerSolutionStatus.INFEASIBLE,
+                changed_action_dict_by_job_code= {},
+                all_assigned_job_codes=[],
+                planned_job_sequence=[]
+            ) 
         if is_ok_start:
-            job_start_minutes = max_start_from_begin
+            # job_start_minutes = max_start_from_begin
+            job_start_minutes = current_min_start
         elif is_ok_end:
             job_start_minutes = current_max_last_start
         else:
             return final_result
-        final_result["status"] = OptimizerSolutionStatus.SUCCESS
+        final_result.status = OptimizerSolutionStatus.SUCCESS
 
         all_worker_codes = [s.worker_id for s in working_time_slots]
         one_job_action_dict = ActionDict(
@@ -221,20 +182,27 @@ class NaivePlannerJobsInSlots:  # to fake OptimizerJobsInSlots
             scheduled_duration_minutes=job_duration_minutes,
             # slot_code_list =
         )
-        final_result["changed_action_dict_by_job_code"][job_code] = one_job_action_dict
+        final_result.changed_action_dict_by_job_code[job_code] = one_job_action_dict
 
         planned_job_sequence = []
+        seq = 0
         for s in working_time_slots:
             planned_job_sequence.append([])
             if is_ok_start:
-                planned_job_sequence[-1].append([job_start_minutes, job_code, 0, True])
+                planned_job_sequence[-1].append([job_start_minutes, job_code, seq, True])
+                seq = len(planned_job_sequence[-1])
             for jcode in s.assigned_job_codes[:-1]:
-                planned_job_sequence[-1].append([-1, jcode, -1, False])
+                planned_job_sequence[-1].append([
+                    self.env.jobs_dict[jcode].scheduled_start_minutes, 
+                    jcode, seq, False])
+                seq = len(planned_job_sequence[-1])
             if not is_ok_start:
-                planned_job_sequence[-1].append([job_start_minutes, job_code, 0, True])
+                planned_job_sequence[-1].append([job_start_minutes, job_code, seq, True])
+                seq = len(planned_job_sequence[-1])
 
-        final_result["slots"] = planned_job_sequence
+        final_result.planned_job_sequence = planned_job_sequence
         return final_result
+
 
 
 if __name__ == "__main__":
@@ -243,6 +211,6 @@ if __name__ == "__main__":
 
     slots = pickle.load(open("/tmp/working_time_slots.p", "rb"))
 
-    opti_slot = OptimizerJobsInSlots()
+    opti_slot = NaivePlannerJobsInSlots()
     res = opti_slot.dispatch_jobs_in_slots(slots)
     print(res)

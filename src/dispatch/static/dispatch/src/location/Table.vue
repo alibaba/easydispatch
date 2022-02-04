@@ -1,11 +1,10 @@
 <template>
   <v-layout wrap>
     <new-edit-sheet />
+    <edit-sheet /> 
     <div class="headline">Locations</div>
     <v-spacer />
-    <v-btn color="primary" dark class="mb-2" @click="createEditShow()"
-      >New</v-btn
-    >
+    <v-btn color="primary" dark class="mb-2" @click="createEditShow()">New</v-btn>
     <v-flex xs12>
       <v-layout column>
         <v-flex>
@@ -31,24 +30,21 @@
               :loading="loading"
               loading-text="Loading... Please wait"
             >
-              <template v-slot:item.actions="{ item }">
-                <v-icon small class="mr-2" @click="createEditShow(item)">
-                  mdi-pencil
-                </v-icon>
-              </template>
-              <template v-slot:item.data-table-actions="{ item }">
-                <v-menu bottom left>
-                  <template v-slot:activator="{ on }">
-                    <v-btn icon v-on="on">
-                      <v-icon>mdi-dots-vertical</v-icon>
-                    </v-btn>
+              <template v-slot:item.location_code="{ item }">
+                <v-tooltip bottom>
+                  <template v-slot:activator="{ on, attrs }">
+                    <span class="location_code" v-bind="attrs" v-on="on">{{item.location_code}}</span>
                   </template>
-                  <v-list>
-                    <v-list-item @click="createEditShow(item)">
-                      <v-list-item-title>Edit</v-list-item-title>
-                    </v-list-item>
-                  </v-list>
-                </v-menu>
+                  <span>{{item.location_code}}</span>
+                </v-tooltip>
+              </template>
+              <template v-slot:item.actions="{ item }">
+                <v-icon small v-show="getPermission()('location.button.customer_create_job')"
+                  class="mr-2" @click="clickNewJobOnLocation( item)">star</v-icon>
+                <v-icon small class="mr-2" @click="createEditShow(item)">mdi-pencil</v-icon>
+              </template>
+              <template v-slot:item.geo_address_text="{ item }">
+                <div class="text-truncate" style="max-width: 500px;">{{ item.geo_address_text }}</div>
               </template>
             </v-data-table>
           </v-card>
@@ -61,27 +57,39 @@
 <script>
 import { mapFields } from "vuex-map-fields";
 import { mapActions } from "vuex";
+import { mapGetters } from "vuex";
+import { mapState } from "vuex";
+
+import  EditSheet   from "@/job/JobEdit4Customer.vue"; 
+
 import NewEditSheet from "@/location/NewEditSheet.vue";
 export default {
   name: "LocationTable",
 
   components: {
-    NewEditSheet
+    NewEditSheet,
+    EditSheet,
   },
   data() {
     return {
       headers: [
         { text: "Code", value: "location_code", sortable: true },
-        { text: "Longitude", value: "geo_longitude", sortable: false },
+        { text: "Team", value: "team.code", sortable: true },
+        { text: "Longitude", value: "geo_longitude", sortable: true },
         { text: "Latitude", value: "geo_latitude", sortable: true },
-        { text: "Address Text", value: "geo_address_text", sortable: true },
-        { text: "", value: "actions", sortable: false, align: "end" }
+        {
+          text: "Address Text",
+          value: "geo_address_text",
+          sortable: true,
+        },
+        { text: "", value: "actions", sortable: false, align: "end" },
         //{ text: "", value: "data-table-actions", sortable: false, align: "end" }
-      ]
+      ],
     };
   },
 
   computed: {
+    ...mapState("auth", ["userInfo",]),
     ...mapFields("location", [
       "table.options.q",
       "table.options.page",
@@ -90,31 +98,55 @@ export default {
       "table.options.descending",
       "table.loading",
       "table.rows.items",
-      "table.rows.total"
-    ])
+      "table.rows.total",
+    ]),
   },
 
   mounted() {
     this.getAll({});
 
     this.$watch(
-      vm => [vm.page],
+      (vm) => [vm.page],
       () => {
         this.getAll();
       }
     );
 
     this.$watch(
-      vm => [vm.q, vm.itemsPerPage, vm.sortBy, vm.descending],
+      (vm) => [vm.q, vm.itemsPerPage, vm.sortBy, vm.descending],
       () => {
         this.page = 1;
         this.getAll();
       }
     );
   },
-
+  destroyed() {
+    this.closeCreateEdit();
+  },
   methods: {
-    ...mapActions("location", ["getAll", "createEditShow", "removeShow"])
-  }
+    ...mapGetters("auth", ["getPermission"]),
+    ...mapActions("location", [
+      "getAll",
+      "createEditShow",
+      "removeShow",
+      "closeCreateEdit",
+    ]),
+    ...mapActions("job", [
+      "showJobEdit4Customer",
+    ]),
+    clickNewJobOnLocation( item) {
+      this.showJobEdit4Customer({job: null,loc:item});
+
+    },
+  },
 };
 </script>
+<style>
+.location_code {
+  display: block;
+  max-width: 300px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+</style>
