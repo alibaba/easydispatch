@@ -2,7 +2,7 @@
 
 This is a real time field service dispatching planner. It automatically dispatch jobs to different workers under business restrictions like working hour, skills, etc.
 
-Some of the feature highlights:
+Some of the key feature highlights:
 - Real Time Dispatching based on three types of Dispatching Algorithms: Heuristic, Optimization, Reinforcement Learning
 - Vehicle Routing Problem capability embedded
 - Flexible Business Rule Plugins, specifies what solution is allowed but not how to reach a solution
