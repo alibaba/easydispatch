@@ -1,6 +1,14 @@
 
-from dispatch.contrib.baituo.baituo_dispatch import BaiTuoCore
-from dispatch.utils.RPAPaidan import create_task
+
+try:
+    from dispatch.contrib.baituo.baituo_dispatch import BaiTuoCore
+    from dispatch.utils.RPAPaidan import create_task
+    from dispatch.contrib.uupaotui.processor.core import UUPaoNanCore
+    from dispatch.contrib.uupaotui.processor.core_fun import start as start_fun
+
+except:
+    pass
+
 from pydantic.typing import NoneType
 from datetime import datetime, timedelta
 from typing import Optional
@@ -19,8 +27,6 @@ from dispatch.team.service import get_or_add_redis_team_flex_data, update_planni
 from dispatch.plugins.kandbox_planner.data_adapter.kafka_adapter import KafkaAdapter, KafkaConsumerAdapter
 from dispatch.org import service as org_service
 # from dispatch.contrib.uupaotui.processor.core_class import UUPaoNanCore
-from dispatch.contrib.uupaotui.processor.core import UUPaoNanCore
-from dispatch.contrib.uupaotui.processor.core_fun import start as start_fun
 from dispatch.service.planner_service import planners_dict, planners_dict_lock
 import time
 import logging

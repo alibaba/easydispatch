@@ -63,8 +63,10 @@ from dispatch.depot import service as depot_service
 from dispatch.item import service as item_service
 from dispatch.item_inventory_event import service as inventory_event_service
 
-from dispatch.contrib.pldt.test_data import _init_call_back_data, test_ipms_data, test_apms_data
-_init_call_back_data
+try:
+    from dispatch.contrib.pldt.test_data import _init_call_back_data, test_ipms_data, test_apms_data
+except:
+    pass
 
 from dispatch.plugins.kandbox_planner.util.kandbox_util import (
     parse_item_str
