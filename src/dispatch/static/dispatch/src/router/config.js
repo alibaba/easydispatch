@@ -31,38 +31,7 @@ export const publicRoute = [
           import(/* webpackChunkName: "auth-register" */ "@/auth/Register.vue"),
       },
     ],
-  },
-  {
-    path: "/register_eng",
-    component: AuthLayout,
-    // name: "register in org",
-    // meta: { title: "register in org" },
-    // props: (route) => ({ orgCode: route.query.orgCode}),
-    // component: () =>
-    //   import(/* webpackChunkName: "errors-500" */ "@/auth/RegisterInOrg.vue"),
-    meta: { title: "Register in org", icon: "view_compact", group: "auth" },
-    children: [
-      {
-        path: "/register_eng",
-        name: "RegisterIn",
-        component: () =>
-          import(/* webpackChunkName: "auth-register" */ "@/auth/RegisterOrgWorker.vue"),
-      },
-    ],
-  },   
-  {
-    path: "/register_customer",
-    component: AuthLayout,
-    meta: { title: "Register as a Customer", icon: "view_compact", group: "auth" },
-    children: [
-      {
-        path: "/register_customer",
-        name: "RegisterIn",
-        component: () =>
-          import(/* webpackChunkName: "auth-register" */ "@/auth/RegisterOrgCustomer.vue"),
-      },
-    ],
-  },   
+  }, 
   {
     path: "/404",
     name: "404",
@@ -201,113 +170,7 @@ export const protectedRoute = [
           import(/* webpackChunkName: "job-table_plan_jobs" */ "@/plan_jobs/Table.vue"),
       },
     ],
-  }, 
-  {
-    path: "/job_table_4_worker",
-    name: "Table Job for Worker",
-    meta: { title: "Job table for Worker" },
-    component: DefaultLayout,
-    children: [
-      {
-        path: "/job_table_4_worker",
-        name: "Job4WorkerTable",
-        props: () => ({ lifeCycleStatusFilter: null, }),
-        component: () =>
-          import( "@/job/JobTable4Worker.vue"),
-      },
-    ],  
-  },
-  {
-    path: "/job_table_4_worker_current",
-    name: "Table Job for Worker current",
-    meta: { title: "Job table for Worker" },
-    props: () => ({ lifeCycleStatusFilter: ["Created"], }),
-    component: DefaultLayout,
-    children: [
-      {
-        path: "/job_table_4_worker_current",
-        name: "Job4WorkerTableCurrentt",
-        props: () => ({ lifeCycleStatusFilter: ["Created"], }),
-        component: () =>
-          import( "@/job/JobTable4Worker.vue"),
-      },
-    ],  
-  },
-  {
-    path: "/job_table_4_worker_finished",
-    name: "Table Job for Worker finished",
-    meta: { title: "Job table for Worker" },
-    props: () => ({ lifeCycleStatusFilter: ["Onsite_Started"], }),
-    component: DefaultLayout,
-    children: [
-      {
-        path: "/job_table_4_worker_finished",
-        name: "Job4WorkerTableFinished",
-        props: () => ({ lifeCycleStatusFilter: ["Onsite_Started"], }),
-        component: () =>
-          import( "@/job/JobTable4Worker.vue"),
-      },
-    ],  
-  },
-  {
-    path: "/job_edit_4_worker",
-    name: "Edit Job for Worker",
-    meta: { title: "Edit Job for Worker" }, 
-    component: DefaultLayout,
-    children: [
-      {
-        path: "/job_edit_4_worker",
-        name: "JobEdit4Worker",
-        props: (route) => ({ jobId: route.query.jobId, token: route.query.token }),
-        component: () =>
-          import( "@/job/JobEdit4Worker.vue"),
-      },
-    ],
-  },
-  {
-    path: "/job_table_4_customer",
-    name: "Table Job for Customer",
-    meta: { title: "Job table for Customer" },
-    component: DefaultLayout,
-    children: [
-      {
-        path: "/job_table_4_customer",
-        name: "Job4CustomerTable",
-        component: () =>
-          import( "@/job/JobTable4Customer.vue"),
-      },
-    ],  
-  },
-  // {
-  //   path: "/job_edit_4_customer",
-  //   component: DefaultLayout,
-  //   children: [
-  //     {
-  //       path: "/job_edit_4_customer",
-  //       name: "JobEdit4Customer",
-  //       component: () =>
-  //         import( "@/job/JobEdit4Customer.vue"),
-  //     },
-  //   ],
-  //   name: "Edit Job for Customer",
-  //   meta: { title: "Edit Job for Customer" }, 
-  // },
-  // {
-  //   path: "/job_edit_4_worker",
-  //   name: "Edit Job for Worker",
-  //   meta: { title: "Edit Job for Worker" },
-  //   props: (route) => ({ jobId: route.query.jobId, token: route.query.token }),
-  //   component: () =>
-  //     import(/* webpackChunkName: "errors-500" */ "@/job/JobEdit4Worker.vue"),
-  // },
-  // {
-  //   path: "/job_table_4_worker",
-  //   name: "Table Job for Worker",
-  //   meta: { title: "Job table for Worker" },
-  //   props: (route) => ({token: route.query.token }),
-  //   component: () =>
-  //     import(/* webpackChunkName: "errors-500" */ "@/job/JobTable4Worker.vue"),
-  // },
+  },  
   {
     path: "/services",
     component: DefaultLayout,
