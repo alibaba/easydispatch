@@ -3,7 +3,8 @@ from typing import List
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
-from dispatch.database import get_db, search_filter_sort_paginate
+from dispatch.database import get_db
+from dispatch.database_util.service import common_parameters, search_filter_sort_paginate
 
 from .models import (
     TagCreate,
@@ -17,32 +18,10 @@ router = APIRouter()
 
 
 @router.get("/", response_model=TagPagination)
-def get_tags(
-    db_session: Session = Depends(get_db),
-    page: int = 1,
-    items_per_page: int = Query(5, alias="itemsPerPage"),
-    query_str: str = Query(None, alias="q"),
-    sort_by: List[str] = Query(None, alias="sortBy[]"),
-    descending: List[bool] = Query(None, alias="descending[]"),
-    fields: List[str] = Query(None, alias="field[]"),
-    ops: List[str] = Query(None, alias="op[]"),
-    values: List[str] = Query(None, alias="value[]"),
-):
+def get_tags(*, common: dict = Depends(common_parameters)):
     """
-    Get all tags, or only those matching a given search term.
     """
-    return search_filter_sort_paginate(
-        db_session=db_session,
-        model="Tag",
-        query_str=query_str,
-        page=page,
-        items_per_page=items_per_page,
-        sort_by=sort_by,
-        descending=descending,
-        fields=fields,
-        values=values,
-        ops=ops,
-    )
+    return search_filter_sort_paginate(model="Tag", **common)
 
 
 @router.get("/{tag_id}", response_model=TagRead)
