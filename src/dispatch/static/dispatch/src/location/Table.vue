@@ -1,10 +1,12 @@
 <template>
   <v-layout wrap>
     <new-edit-sheet />
-    <edit-sheet /> 
+    <!-- <edit-sheet />  -->
     <div class="headline">Locations</div>
     <v-spacer />
-    <v-btn color="primary" dark class="mb-2" @click="createEditShow()">New</v-btn>
+    <v-btn color="primary" dark class="mb-2" @click="createEditShow()"
+      >New</v-btn
+    >
     <v-flex xs12>
       <v-layout column>
         <v-flex>
@@ -33,18 +35,31 @@
               <template v-slot:item.location_code="{ item }">
                 <v-tooltip bottom>
                   <template v-slot:activator="{ on, attrs }">
-                    <span class="location_code" v-bind="attrs" v-on="on">{{item.location_code}}</span>
+                    <span class="location_code" v-bind="attrs" v-on="on">{{
+                      item.location_code
+                    }}</span>
                   </template>
-                  <span>{{item.location_code}}</span>
+                  <span>{{ item.location_code }}</span>
                 </v-tooltip>
               </template>
               <template v-slot:item.actions="{ item }">
-                <v-icon small v-show="getPermission()('location.button.customer_create_job')"
-                  class="mr-2" @click="clickNewJobOnLocation( item)">star</v-icon>
-                <v-icon small class="mr-2" @click="createEditShow(item)">mdi-pencil</v-icon>
+                <v-icon
+                  small
+                  v-show="
+                    getPermission()('location.button.customer_create_job')
+                  "
+                  class="mr-2"
+                  @click="clickNewJobOnLocation(item)"
+                  >star</v-icon
+                >
+                <v-icon small class="mr-2" @click="createEditShow(item)"
+                  >mdi-pencil</v-icon
+                >
               </template>
               <template v-slot:item.geo_address_text="{ item }">
-                <div class="text-truncate" style="max-width: 500px;">{{ item.geo_address_text }}</div>
+                <div class="text-truncate" style="max-width: 500px">
+                  {{ item.geo_address_text }}
+                </div>
               </template>
             </v-data-table>
           </v-card>
@@ -60,7 +75,7 @@ import { mapActions } from "vuex";
 import { mapGetters } from "vuex";
 import { mapState } from "vuex";
 
-import  EditSheet   from "@/job/JobEdit4Customer.vue"; 
+// import  EditSheet   from "@/job/JobEdit4Customer.vue";
 
 import NewEditSheet from "@/location/NewEditSheet.vue";
 export default {
@@ -68,7 +83,7 @@ export default {
 
   components: {
     NewEditSheet,
-    EditSheet,
+    // EditSheet,
   },
   data() {
     return {
@@ -89,7 +104,7 @@ export default {
   },
 
   computed: {
-    ...mapState("auth", ["userInfo",]),
+    ...mapState("auth", ["userInfo"]),
     ...mapFields("location", [
       "table.options.q",
       "table.options.page",
@@ -131,12 +146,9 @@ export default {
       "removeShow",
       "closeCreateEdit",
     ]),
-    ...mapActions("job", [
-      "showJobEdit4Customer",
-    ]),
-    clickNewJobOnLocation( item) {
-      this.showJobEdit4Customer({job: null,loc:item});
-
+    ...mapActions("job", ["showJobEdit4Customer"]),
+    clickNewJobOnLocation(item) {
+      this.showJobEdit4Customer({ job: null, loc: item });
     },
   },
 };
