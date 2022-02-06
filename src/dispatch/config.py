@@ -70,7 +70,7 @@ config = Config("dev.env")
 
 LOG_LEVEL = config("LOG_LEVEL", default=logging.WARNING)
 LOG_FILE = config("LOG_FILE", default='dispatch_log_file.csv')
-LOG_FILE_CALL_BACK = config("LOG_FILE_CALL_BACK", default='ipms_apms_rps_callback.csv')
+LOG_FILE_CALL_BACK = config("LOG_FILE_CALL_BACK", default='c.csv')
 
 module_levels = {
     "dispatch.main": logging.INFO,
