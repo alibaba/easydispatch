@@ -1,0 +1,180 @@
+absl-py==0.11.0
+aiofiles==0.6.0
+alembic==1.4.3
+aliyun-python-sdk-core==2.13.35
+aliyun-python-sdk-core-v3==2.13.11
+aliyun-python-sdk-kms==2.14.0
+arrow==0.17.0
+astunparse==1.6.3
+bcrypt==3.2.0
+blis==0.7.4
+cachetools==4.2.0
+catalogue==1.0.0
+certifi==2020.12.5
+cffi==1.14.4
+click==7.1.2
+cloudpickle==1.6.0
+crcmod==1.7
+# cryptography==36.0.0
+cryptography==3.3.2
+cymem==2.0.5
+decorator==4.4.2
+defusedxml==0.6.0
+ecdsa==0.14.1
+fastapi==0.63.0
+fastapi-permissions==0.2.7
+flatbuffers==1.12
+future==0.18.2
+gast==0.3.3
+# google-api-core==1.24.1
+# google-api-python-client==1.12.8
+google-auth==1.25.0
+google-auth-httplib2==0.0.4
+google-auth-oauthlib==0.4.2
+google-pasta==0.2.0
+googleapis-common-protos==1.52.0
+grpc-google-iam-v1==0.12.3
+grpcio==1.32.0
+
+h11==0.11.0
+# h5py==2.10.0
+httpcore==0.12.2
+httplib2==0.18.1
+httpx==0.16.1
+idna==2.10
+importlib-metadata==4.10.0
+intervaltree==3.1.0
+Jinja2==2.11.2
+jira==2.0.0
+jmespath==0.10.0
+joblib==0.15.1
+kafka-python==2.0.2
+Keras-Preprocessing==1.1.2
+korean-lunar-calendar==0.2.1
+libcst==0.3.16
+Mako==1.1.3
+Markdown==3.3.3
+MarkupSafe==1.1.1
+murmurhash==1.0.5
+mypy-extensions==0.4.3
+numpy==1.19.4
+oauth2client==4.1.3
+oauthlib==3.1.0
+opt-einsum==3.3.0
+ortools==9.0.9048
+oss2==2.13.1
+pandas==1.1.5
+patsy==0.5.1
+pbr==5.5.1
+
+# Pillow==7.2.0
+# upgrade for python 3.9
+# https://pillow.readthedocs.io/en/latest/installation.html
+Pillow==8.3.1
+
+gym==0.23.1
+
+
+plac==1.1.3
+preshed==3.0.5
+proto-plus==1.13.0
+protobuf==3.15.8
+psycopg2-binary==2.8.6
+pyasn1==0.4.8
+pyasn1-modules==0.2.8
+pycparser==2.20
+pycryptodome==3.9.9
+pydantic==1.8.1
+pyglet==1.5.0
+PyJWT==1.7.1
+PyMeeus==0.3.13
+pyparsing==2.4.7
+pypd==1.1.0
+python-dateutil==2.8.1
+python-editor==1.0.4
+python-jose==3.2.0
+python-multipart==0.0.5
+pytz==2020.4
+PyYAML==5.3.1
+redis==3.5.0
+requests==2.25.1
+requests-oauthlib==1.3.0
+requests-toolbelt==0.9.1
+rfc3986==1.4.0
+rsa==4.6
+schedule==0.6.0
+scipy==1.6.0
+sentry-asgi==0.2.0
+sentry-sdk==0.19.5
+sh==1.14.1
+six==1.16.0
+sniffio==1.2.0
+sortedcontainers==2.3.0
+spacy==2.3.5
+
+SQLAlchemy==1.3.24
+sqlalchemy-filters==0.12.0
+# SQLAlchemy-Searchable==1.2.0
+SQLAlchemy-Searchable==1.4.1
+# https://github.com/kvesteri/sqlalchemy-utils/issues/462
+# 0.36.8 does not work.
+# SQLAlchemy-Utils==0.36.7
+SQLAlchemy-Utils==0.37.9
+
+srsly==1.0.5
+starlette==0.13.6
+statsmodels==0.12.1
+tabulate==0.8.7
+tenacity==6.3.1
+termcolor==1.1.0
+thinc==7.4.5 
+typing-extensions==3.7.4.3
+typing-inspect==0.6.0
+uritemplate==3.0.1
+urllib3==1.26.2
+uvicorn==0.12.3
+validators==0.18.2
+wasabi==0.8.0
+scikit-learn==0.24.1
+
+chardet==3.0.4
+opencv-python==4.4.0.46
+holidays==0.10.2
+
+#  websockets==8.1 
+geopy==2.1.0
+geographiclib==1.50
+rtree==0.9.7
+atari_py==0.2.9
+# 2021-07-17 10:03:07 atari_py==0.3.0  在mac上无法安装。依赖gym[atari]
+openpyxl==3.0.7
+pika==1.2.0
+
+ray[rllib]==1.9.0
+# To fix it for rllib.
+
+matplotlib==3.4.2
+
+aioredis==1.3.1
+# torch==1.9.0
+shortuuid==1.0.1
+# Please install those two manually
+# pytorch, 1.8.1, from https://pytorch.org/get-started/locally/
+# sample: pip3 install torch==1.8.1+cpu torchvision==0.9.1+cpu torchaudio==0.8.1 -f https://download.pytorch.org/whl/lts/1.8/torch_lts.html
+
+# Be careful, CUDA and pytorch versin should match.
+# GPU : pip3 install torch==1.8.1+cu111 torchvision==0.9.1+cu111 torchaudio==0.8.1 -f https://download.pytorch.org/whl/lts/1.8/torch_lts.html
+# pip install torch===1.7.0+cu110 torchvision===0.8.1+cu110 torchaudio===0.7.0 -f https://download.pytorch.org/whl/torch_stable.html
+# using conda
+# 
+
+# Install etc/size_constrained_clustering  0.1.1   , from 
+# sample: pip install etc/size_constrained_clustering
+sha1==1.2
+rpa_openapi==1.0.1
+Faker==9.2.0
+factory-boy==3.2.0
+hypothesis==6.23.2
+schemathesis==3.10.1
+attrs==21.2.0
+zulip==0.8.1
