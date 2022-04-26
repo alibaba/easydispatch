@@ -223,8 +223,7 @@ def metadata_dump(sql, *multiparams, **params):
     # print or write to log or file etc
     print(sql.compile(dialect=engine.dialect))
 
-
-@dispatch_database.command("init database")
+@dispatch_database.command("init")
 def database_init():
     """Initializes a new database."""
     click.echo("Initializing new database...")
@@ -818,6 +817,8 @@ def start_repair(org_code, team_id):
 
 def entrypoint():
     """The entry that the CLI is executed from"""
+    dispatch_cli()
+    return
     try:
         dispatch_cli()
     except DispatchException as e:
