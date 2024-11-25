@@ -40,16 +40,16 @@ class RewardFunction:
 
         all_jobs = []
         # max_i = np.argmax(action[0:len(self.workers_dict)])
-        all_workers = [a_dict["scheduled_primary_worker_id"]] + a_dict[
-            "scheduled_secondary_worker_ids"
+        all_workers = [a_dict["scheduled_primary_worker_code"]] + a_dict[
+            "scheduled_secondary_worker_codes"
         ]
         for w_i, worker_code in enumerate(all_workers):
             job = env.jobs[job_i].copy()
 
             rest_workers = all_workers.copy()
-            job["scheduled_primary_worker_id"] = worker_code
+            job["scheduled_primary_worker_code"] = worker_code
             rest_workers.pop(w_i)
-            job["scheduled_secondary_worker_ids"] = rest_workers
+            job["scheduled_secondary_worker_codes"] = rest_workers
             if len(all_workers) < 2:  # Only ==1
                 job["scheduled_share_status"] = "N"
             else:

@@ -12,6 +12,7 @@ from sqlalchemy import (
     String,
     Table,
     BigInteger,
+    DateTime,
 )
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql.schema import UniqueConstraint
@@ -23,6 +24,7 @@ from dispatch.location.models import LocationCreate, LocationRead
 from dispatch.models import TimeStampMixin, DispatchBase, TermReadNested
 from dispatch.team.models import TeamCreate, TeamRead
 from dispatch.auth.models import DispatchUser, UserRead
+from pydantic import BaseModel, Field
 
 # Association tables for many to many relationships
 
@@ -37,21 +39,32 @@ DEFAULT_BUSINESS_HOUR = {
     "saturday": [{"open": "", "close": "", "id": "5ca5578b0c5f8", "isOpen": False}],
 }
 
-
 class Worker(TimeStampMixin, Base):
-    id = Column(BigInteger, primary_key=True)
-    code = Column(String, nullable=False,)
+    # id = Column(BigInteger)
+    code = Column(String, primary_key=True,)
     name = Column(String)
     description = Column(String)  # , nullable=False
     is_active = Column(Boolean, default=True)
-
+    
     team_id = Column(Integer, ForeignKey("team.id"))
     team = relationship("Team", backref="workers")
     org_id = Column(Integer, nullable=True, default=0)
 
-    # Kandbox
+    # Worker should not rely on locaiton. It should have it's own lat/long coordinates.
+    # If a worker has complicated lat/long coordinates specification, like start from home in morning, office in afternoon. 
+    # It should be implemented in flex_form data.
+
+    # 
+    location_code = Column(String, ForeignKey("location.code"), nullable=True, )
     location = relationship("Location", backref="location_worker")
-    location_id = Column(BigInteger, ForeignKey("location.id"))
+
+    geo_longitude = Column(Float, nullable=True)
+    geo_latitude = Column(Float, nullable=True)
+
+    auto_planning = Column(Boolean, default=True)
+    is_shift_started = Column(Boolean, default=False)    
+    shift_start_datetime = Column(DateTime)  # null=True, blank=True,
+    shift_duration_minutes = Column(Float)
 
     flex_form_data = Column(JSON, default={})
     business_hour = Column(JSON, default=DEFAULT_BUSINESS_HOUR)
@@ -68,9 +81,7 @@ class Worker(TimeStampMixin, Base):
     # served_location_gmm=models.CharField(max_length=2000, null=True, blank=True) # [1,2,'termite']
 
     # this is a self referential relationship lets punt on this for now.
-    # relationship_owner_id = Column(Integer, ForeignKey("worker.id"))
-    # relationship_owner = relationship("Worker", backref="workers")
-    events = relationship("Event", backref="worker")
+    # events = relationship("WorkerEvent", backref="worker")
 
     # skills should be independent, basic information, outside of flex_form.
     skills = Column(ARRAY(String))
@@ -106,22 +117,38 @@ class WorkerBase(DispatchBase):
     description: Optional[str]
     skills: Optional[List[str]] = []
     loaded_items: Optional[List[str]] = []
+    assigned_locations: Optional[List[LocationRead]] = []
+    location: Optional[LocationCreate] = None
+    geo_longitude: Optional[float] = None 
+    geo_latitude: Optional[float] = None 
+    is_shift_started: Optional[bool] = True
+    shift_start_datetime: Optional[datetime] = None
+    shift_duration_minutes: float = 480
+    auto_planning: Optional[bool] = Field(
+        default=False, title="Automatic Planning Flag", description='When a worker has auto_planning == True, the easydispatch engine will try to synchronize its changes to planning engine',)
+
+    
 
 
 class WorkerCreate(WorkerBase):
     team: TeamCreate
-    location: Optional[LocationCreate]
 
 
 class WorkerUpdate(WorkerBase):
     team: TeamCreate
-    location: Optional[LocationCreate]
+    update_new_information_only: bool = True
 
+
+
+class WorkerUpdateBusinessHour(DispatchBase):
+    code: str
+    org_id: Optional[str] = None
+    business_hour: dict = DEFAULT_BUSINESS_HOUR
+    
 
 class WorkerRead(WorkerBase):
-    id: int
+    # id: int
     team: Optional[TeamRead]
-    location: Optional[LocationRead]
 
 
 class WorkerPagination(DispatchBase):

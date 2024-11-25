@@ -3,19 +3,24 @@ from sqlalchemy_utils import get_mapper
 from pydantic.error_wrappers import ErrorWrapper, ValidationError
 from pydantic.main import BaseModel
 from sqlalchemy import or_, orm, func, desc
+
 from pydantic.types import Json, constr
 from fastapi import Depends, Query
 
 from sqlalchemy.orm import sessionmaker, object_session
 
 from dispatch.exceptions import InvalidFilterError, NotFoundError
-from dispatch.fulltext import make_searchable
+from dispatch.search.fulltext import make_searchable
+from sqlalchemy.dialects import postgresql
+
 from dispatch.plugins.kandbox_planner.util.cache_dict import CacheDict
 from .config import SQLALCHEMY_DATABASE_URI
-from dispatch.common.utils.composite_search import CompositeSearch
+
 from starlette.requests import Request
-from sqlalchemy.orm import Query, sessionmaker
+from sqlalchemy.orm import Query, sessionmaker, configure_mappers
+# from sqlalchemy.orm import declarative_base, declared_attr
 from sqlalchemy.ext.declarative import declarative_base, declared_attr
+
 from sqlalchemy import create_engine
 from typing import Any, List
 import re
@@ -29,10 +34,11 @@ QueryStr = constr(regex=r"^[ -~]+$", min_length=1)
 
 engine = create_engine(
     str(SQLALCHEMY_DATABASE_URI),
-    pool_size=40,
-    max_overflow=20,
+    pool_size=100,
+    max_overflow=100,
     # echo=True,
 )
+configure_mappers() 
 log.debug(f"database engine created:{engine}")
 SessionLocal = sessionmaker(bind=engine)
 engine_dict = CacheDict(cache_len=5)
@@ -42,14 +48,7 @@ try:
     conn_core = engine.connect()
 except:
     pass
-metadata = MetaData(engine)
-try:
-    worker_table = Table('worker', metadata, autoload=True)
-    job_table = Table('job', metadata, autoload=True)
-    location_table = Table('location', metadata, autoload=True)
-    event_table = Table('event', metadata, autoload=True)
-except:
-    print("Failed to load tables ... Ignore this if you are creating database ...")
+metadata = MetaData(SQLALCHEMY_DATABASE_URI) # engine
 
 
 def resolve_table_name(name):
@@ -68,54 +67,8 @@ class CustomBase:
 
 
 Base = declarative_base(cls=CustomBase)
+
 make_searchable(Base.metadata)
-
-
-def init_schema(org_code, db_session):
-    dump_file = "./org_template.sql"
-
-    # import sh
-    from sh import psql
-    from dispatch.config import (
-        DATABASE_HOSTNAME,
-        DATABASE_NAME,
-        DATABASE_PORT,  # DATABASE_CREDENTIALS,
-    )
-
-    #
-    db_session.execute("CREATE USER org_template WITH ENCRYPTED PASSWORD  'org_template'")
-    db_session.execute("CREATE SCHEMA org_template  AUTHORIZATION org_template ")
-    db_session.commit()
-    log.debug("USER org_template created ...")
-    # DATABASE_CREDENTIALS=
-
-    # username, password = str(DATABASE_CREDENTIALS).split(":")
-    username = "org_template"
-
-    password = None  # This should fail.
-    raise Exception("Not implemented!")
-
-    print(
-        psql(
-            "-h",
-            DATABASE_HOSTNAME,
-            "-p",
-            DATABASE_PORT,
-            "-U",
-            username,
-            "-d",
-            DATABASE_NAME,
-            "-f",
-            dump_file,
-            _env={"PGPASSWORD": password},
-        )
-    )
-
-    db_session.execute(f"ALTER USER org_template rename to {org_code} ")
-    db_session.execute(f"ALTER USER {org_code} PASSWORD '{org_code}' ")
-    db_session.execute(f"ALTER SCHEMA org_template rename to {org_code} ")
-    db_session.commit()
-    log.debug(f"USER org_template is renamed to {org_code}...")
 
 
 def get_db(request: Request):
@@ -131,21 +84,17 @@ def get_db(request: Request):
 
 
 def get_auth_db(request: Request):
-    # return request.state.auth_db
-
     return request.state.auth_db
-
 
 def get_model_name_by_tablename(table_fullname: str) -> str:
     """Returns the model name of a given table."""
     return get_class_by_tablename(table_fullname=table_fullname).__name__
 
-
 def get_class_by_tablename(table_fullname: str) -> Any:
     """Return class reference mapped to table."""
 
     def _find_class(name):
-        for c in Base._decl_class_registry.values():
+        for c in  Base._decl_class_registry.values(): #  Base.registry._class_registry.values(): #
             if hasattr(c, "__table__"):
                 if c.__table__.fullname.lower() == name.lower():
                     return c

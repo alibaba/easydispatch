@@ -15,6 +15,6 @@ DISPATCH_JWT_EMAIL_OVERRIDE = config("DISPATCH_JWT_EMAIL_OVERRIDE", default=None
 
 if config.get("DISPATCH_AUTHENTICATION_PROVIDER_SLUG", default="dispatch-auth-provider-basic") == "dispatch-auth-provider-pkce":
     if not DISPATCH_JWT_AUDIENCE:
-        log.warn("No JWT Audience specified. This is required for IdPs like Okta")
+        log.warning("No JWT Audience specified. This is required for IdPs like Okta")
     if not DISPATCH_JWT_EMAIL_OVERRIDE:
-        log.warn("No JWT Email Override specified. 'email' is expected in the idtoken.")
+        log.warning("No JWT Email Override specified. 'email' is expected in the idtoken.")

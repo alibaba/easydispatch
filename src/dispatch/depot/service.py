@@ -7,7 +7,7 @@ from sqlalchemy.sql.functions import func
 from tqdm import tqdm
 from fastapi.encoders import jsonable_encoder
 
-from dispatch.config import INCIDENT_PLUGIN_CONTACT_SLUG, SQLALCHEMY_DATABASE_URI
+from dispatch.config import SQLALCHEMY_DATABASE_URI
 from dispatch.database import SessionLocal
 
 from dispatch.location import service as location_service
@@ -72,14 +72,19 @@ def get_or_create(*, db_session, code: str, **kwargs) -> Depot:
 def create(*, db_session, depot_in: DepotCreate) -> Depot:
     """Creates an depot."""
     location_obj = None
+    location_code = None
     if depot_in.location:
-        location_obj = location_service.get_by_location_code(
-            db_session=db_session, location_code=depot_in.location.location_code)
+        location_obj = location_service.get(
+            db_session=db_session, code=depot_in.location.code)
+        location_code = location_obj.code 
     else:
         location_obj = None
 
+
     contact = Depot(**depot_in.dict(exclude={"flex_form_data", "location"}),
-                    location=location_obj, flex_form_data=depot_in.flex_form_data)
+                    # location=location_obj, 
+                    location_code=location_code,
+                    flex_form_data=depot_in.flex_form_data)
     db_session.add(contact)
     db_session.commit()
     return contact
@@ -96,7 +101,7 @@ def update(
         skip_defaults=True,
         exclude={"flex_form_data", "location"},
     )
-    if depot_in.location and (not depot.location or depot_in.location.location_code != depot.location.location_code):
+    if depot_in.location and (not depot.location or depot_in.location.code != depot.location.code):
         location_obj = location_service.get_or_create_by_code(
             db_session=db_session, location_in=depot_in.location)
         depot.location = location_obj

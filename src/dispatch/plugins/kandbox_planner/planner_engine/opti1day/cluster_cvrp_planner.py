@@ -13,6 +13,7 @@ import collections
 import sys
 
 from dispatch import config
+from dispatch.plugins.kandbox_planner.env.configurable_dispatch_env import ConfigurableDispatchEnv
 import dispatch.plugins.kandbox_planner.util.kandbox_date_util as date_util
 
 from dispatch.plugins.kandbox_planner.travel_time_plugin import HaversineTravelTime as TravelTime
@@ -26,18 +27,23 @@ from dispatch.plugins.kandbox_planner.env.env_enums import (
     JobType,
 )
 
-from dispatch.plugins.kandbox_planner.env.env_models import ActionDict
+# from dispatch.plugins.kandbox_planner.env.env_models import ActionDict, JobInSlot
 import copy
 from dispatch.job import service as job_service
-from dispatch.worker import service as worker_service
-from dispatch.job.models import JobPlanningInfoUpdate
+from dispatch.team.models import Team
+from dispatch.job.models import Job
+from dispatch.item import service as item_service
+# from dispatch.job.models import JobPlanningInfoUpdate
 
-from dispatch.plugins.kandbox_planner.env.env_enums import LocationType
-from dispatch.plugins.kandbox_planner.env.env_models import JobLocationBase
+# from dispatch.plugins.kandbox_planner.env.env_enums import LocationType
+# from dispatch.plugins.kandbox_planner.env.env_models import JobLocationBase
 
-from size_constrained_clustering import fcm, equal, minmax, shrinkage
+from k_means_constrained import KMeansConstrained
+# from size_constrained_clustering import  minmax 
 # by default it is euclidean distance, but can select others
 from sklearn.metrics.pairwise import haversine_distances
+import logging
+log = logging.getLogger("kandbox_cluster_cvrp_planner")
 
 
 class ClusterCVRPPlanner(KandboxBatchOptimizerPlugin):
@@ -51,7 +57,8 @@ class ClusterCVRPPlanner(KandboxBatchOptimizerPlugin):
     default_config = {
         "log_search_progress": True,
         "max_exec_seconds": 60,
-        "cluster_algorithm": "minmax"  # "gmm"
+        "cluster_algorithm": "kmeans-constrained", # "minmax"  # "gmm"
+        "tsp_algorithm": "osrm", # "ortools"  # "osrm"
     }
     config_form_spec = {
         "type": "object",
@@ -68,45 +75,117 @@ class ClusterCVRPPlanner(KandboxBatchOptimizerPlugin):
             [loc1[0], loc1[1]],
             [loc2[0], loc2[1]],
         )
-        if new_time > 200:
-            print([loc1[0], loc1[1]], [loc2[0], loc2[1]], (new_time),
-                  "Error, too long")
+        # if new_time > 200:
+        #     print([loc1[0], loc1[1]], [loc2[0], loc2[1]], (new_time), "Error_travel_time_too_long")
         # print("travel: ", new_time)
         return int(new_time / 1)
 
-    def dispatch_jobs(self, env, rl_agent=None):
+    def get_item_price_dict(self, db_session):
+        # blocked this function for execution of 25 seconds, on empty set. 2022-12-28 05:38:48
+        # 查询 job 关联worker的信息 
+        worker_list = item_service.get_all(db_session=db_session)
+        item_price_dict = {}
+        for item in worker_list:
+            if item.code:
+                item_price_dict[item.code] = item.weight
+        
+        all_jobs = job_service.get_all(db_session=db_session)
+        self.job_item_stats = {} 
+        for job in all_jobs:
+            if "accum_items" not in job.flex_form_data:
+                continue
+            requested_items = job.flex_form_data["accum_items"]
+            if len(requested_items) <1:
+                continue
+            
+            for ri in requested_items:
+                if len(ri.split(":")) != 2:
+                    continue
+                name, qty = ri.split(":")
+                if name not in item_price_dict:
+                    print(f"item ({name}) not found in item table, but in job {job.code}")
+                    continue
+                if name in self.job_item_stats:
+                    self.job_item_stats[name] += int(qty)
+                else:
+                    self.job_item_stats[name] = int(qty)
+
+        _values = [(k,item_price_dict[k] * qty) for k,qty in self.job_item_stats.items()]
+        self.job_item_value_stats = sorted(_values, key=lambda x: x[1], reverse=True)
+        self.item_price_dict = item_price_dict
+        return item_price_dict
+
+    def dispatch_jobs(self, env:ConfigurableDispatchEnv, db_session, rl_agent=None, batch_request=None):
         # Real batch, rl_agent is skilpped.
         #
-        assert env.config[
-            "nbr_of_days_planning_window"] == 1, "I can do all workers for one day only."
-        if len(env.jobs) < 1:
-            print("it is empty, nothing to dispatch!")
-            return
-        self.env = env
-
+        assert int(env.config[
+            "nbr_of_days_planning_window"]) == 1, "I can do all workers for one day only."
+        self.env = env 
+        item_price_dict =self.get_item_price_dict(db_session)
         # 20, 150 failed for 8 hours.
-        slot_keys = list(self.env.slot_server.time_slot_dict.keys())  # [0:12]
-        self.worker_slots_all = [
-            self.env.slot_server.time_slot_dict[key] for key in slot_keys
-        ]
 
-        # env.jobs = env.jobs [0:200]
+        worker_slots_all = self.env.get_working_slot_list( 
+            active_only = False
+            )
+        if len(worker_slots_all) < 1:
+            print(f"dispatch_jobs: No active worker slots are found, quitting at {datetime.now()}")
+            return False
+
         begin_time = datetime.now()
-        print(f"Started dispatching at time: {begin_time}")
+        log.info(f"Started dispatching at time: {begin_time}, config={self.config}")
 
-        jobs_locs = [[
-            w.job_code, w.location.geo_longitude, w.location.geo_latitude
-        ] for w in env.jobs]
+        GENERATOR_START_DATE = datetime.strptime(
+            self.env.config["env_start_datetime"], config.KANDBOX_DATETIME_FORMAT_ISO
+        )
+        GENERATOR_END_DATE = GENERATOR_START_DATE + timedelta(
+            days=int(self.env.config["nbr_of_days_planning_window"])
+        )
+        day_jobs = job_service.get_jobs_worker_days( 
+                    db_session=db_session,
+                    start_datetime = GENERATOR_START_DATE, 
+                    end_datetime = GENERATOR_END_DATE,
+                    worker_code = None,
+                    include_unplanned = True,
+                    include_inplanning = True,
+                )
+        
+        jobs_locs = []
+        all_job_list = []
+        all_job_index=0
+        for j in day_jobs:
+            if j.planning_status in (JobPlanningStatus.UNPLANNED, JobPlanningStatus.IN_PLANNING):
+                jobs_locs.append((j.code, j.geo_longitude, j.geo_latitude, all_job_index))
+                all_job_list.append(j)
+                all_job_index +=1
+        if len(jobs_locs) < 1:
+            print(f"No data found")
+            return
         jobs_df = pd.DataFrame.from_records(jobs_locs)
-        jobs_df.columns = ['job_code', 'longitude', "latitude"]
+        jobs_df.columns = ['job_code', 'longitude', "latitude", "all_job_index"]
 
         job_loc_matrix = jobs_df[['longitude', "latitude"]].values
 
-        if self.config["cluster_algorithm"] == "minmax":
+
+        if self.config["cluster_algorithm"] == "kmeans-constrained":
+            cluster_count = len(worker_slots_all)
+            minmax_cluster_model = KMeansConstrained(
+                n_clusters=cluster_count,
+                size_min=max(1,int(job_loc_matrix.shape[0] * 0.8 / len(worker_slots_all))),
+                size_max=max(3,int(job_loc_matrix.shape[0] * 1.6 / len(worker_slots_all))),
+                random_state=0)
+            # minmax_cluster_model.fit(job_loc_matrix)
+            # centers = model.cluster_centers_
+            # labels = model.labels_
+            belongs_to = minmax_cluster_model.fit_predict(job_loc_matrix)
+            jobs_df['cluster_id'] = belongs_to
+
+            # cluster_count = # jobs_df['cluster_id'].max() + 1
+        elif self.config["cluster_algorithm"] == "minmax":
+            from size_constrained_clustering import  minmax
             minmax_cluster_model = minmax.MinMaxKMeansMinCostFlow(
-                len(slot_keys),
-                size_min=int(job_loc_matrix.shape[0] * 0.4 / len(slot_keys)),
-                size_max=int(job_loc_matrix.shape[0] * 1.7 / len(slot_keys)))
+                len(worker_slots_all),
+                size_min=int(job_loc_matrix.shape[0] * 0.4 / len(worker_slots_all)),
+                size_max=int(job_loc_matrix.shape[0] * 1.7 / len(worker_slots_all)))
             minmax_cluster_model.fit(job_loc_matrix)
             # centers = model.cluster_centers_
             # labels = model.labels_
@@ -115,7 +194,7 @@ class ClusterCVRPPlanner(KandboxBatchOptimizerPlugin):
 
             cluster_count = jobs_df['cluster_id'].max() + 1
         elif self.config["cluster_algorithm"] == "gmm":
-            mclusterer = GaussianMixture(n_components=len(slot_keys),
+            mclusterer = GaussianMixture(n_components=len(worker_slots_all),
                                          tol=0.01,
                                          random_state=66,
                                          verbose=1)
@@ -128,15 +207,22 @@ class ClusterCVRPPlanner(KandboxBatchOptimizerPlugin):
 
         print("{} clusters done at {}".format(cluster_count, datetime.now()))
 
-        avg_long = sum([j.location.geo_longitude
-                        for j in self.env.jobs]) / len(self.env.jobs)
-        avg_lat = sum([j.location.geo_latitude
-                       for j in self.env.jobs]) / len(self.env.jobs)
+        team = db_session.query(Team).filter(Team.id == self.env.team_id).one_or_none()
+        if not team:
+            raise ValueError(f"team not found,id: {self.team_id} ")
+
+        avg_long = team.geo_longitude
+        avg_lat = team.geo_latitude
+
+        # avg_long = sum([j.location.geo_longitude
+        #                 for j in self.env.jobs]) / len(self.env.jobs)
+        # avg_lat = sum([j.location.geo_latitude
+        #                for j in self.env.jobs]) / len(self.env.jobs)
         # DEPOT_AVG_JOB_LOCATION = JobLocationBase(
         #     geo_longitude=avg_long,
         #     geo_latitude=avg_lat,
         #     location_type=LocationType.HOME,
-        #     location_code="depot",
+        #     code="depot",
         # )
 
         # depot_list = []
@@ -148,26 +234,91 @@ class ClusterCVRPPlanner(KandboxBatchOptimizerPlugin):
         # clustered_jobs_df = pd.concat([depot_df, jobs_df], ignore_index=True)
 
         for cluster_i in range(cluster_count):
-
+            db_job_list = []
             cluster_df = jobs_df[jobs_df["cluster_id"] == cluster_i].copy()
             cluster_df.set_index("job_code")
             self.cluster_list = [("depot", avg_long, avg_lat, cluster_i)] + \
                 [tuple(j) for j in cluster_df.to_records(index=False)]
+            db_job_list = [
+                Job(
+                    code = "virtual",
+                    geo_longitude = avg_long,
+                    geo_latitude =  avg_lat,
+                    scheduled_duration_minutes = 1,
+                    tolerance_start_minutes = -1440*100,
+                    tolerance_end_minutes = 1440*100,
+                ) 
+                ]
+            for row_i, row in cluster_df.iterrows():
+                db_job_list.append(all_job_list[row.all_job_index])
 
-            self.worker_slots = [self.worker_slots_all[cluster_i]]
+            self.worker_slots = [worker_slots_all[cluster_i]]
             print("Dispatching cluster {}, len={}, time = {}".format(
                 cluster_i, len(self.cluster_list), datetime.now()))
-            self.dispatch_jobs_1_cluster()
+            if self.config.get("tsp_algorithm","osrm") == "osrm":
+                self.dispatch_jobs_1_cluster_osrm_tsp(db_job_list = db_job_list, db_session = db_session, item_price_dict = item_price_dict)
+            else:
+                self.dispatch_jobs_1_cluster_ortools(db_job_list = db_job_list, db_session = db_session, item_price_dict = item_price_dict)
 
         total_time = datetime.now() - begin_time
         print(
-            f"Done. nbr workers: {len(self.worker_slots_all)}, nbr jobs: {len(self.cluster_list)}, Total Elapsed: {total_time}"
+            f"Done. nbr workers: {len(worker_slots_all)}, nbr jobs: {len(self.cluster_list)}, Total Elapsed: {total_time}"
         )
+
         # print(
         #     f"Travel Router: hit rate= {round(self.env.travel_router.redis_router_hit / self.env.travel_router.all_hit,4)}, routing api = {self.env.travel_router.routing_router_hit}, all count = {self.env.travel_router.all_hit}."
         # )
+    def dispatch_jobs_1_cluster_osrm_tsp(self, db_job_list, db_session, item_price_dict):
+        cluster_begin_time = datetime.now()
+        assigned_jobs = [ self.env.env_encode_single_job_db(j) for j in db_job_list]
 
-    def dispatch_jobs_1_cluster(self):
+        assigned_job_locs =  [
+            (j.geo_longitude, j.geo_latitude) for j in assigned_jobs 
+        ] 
+
+        new_seq, start_distance = self.env.get_travel_router().solve_tsp(loc_list = assigned_job_locs )
+
+        # Then generate jobs by this seq
+        _assigned_new = assigned_jobs[0:1]
+        # current_start = db_job_list[0].scheduled_start_minutes
+        _slot = self.worker_slots[0]
+        current_start = max(
+                _slot.start_minutes,
+                self.env.get_env_planning_horizon_start_minutes(),
+            )
+
+        for j_idx, ji in enumerate(new_seq):
+            if j_idx < 1:
+                continue
+            job = assigned_jobs[ji]
+            current_start += start_distance[j_idx] + job.scheduled_duration_minutes
+            job.prev_travel = start_distance[j_idx]
+            job.scheduled_start_minutes=current_start + start_distance[j_idx]
+            _assigned_new.append(job)
+
+        # worker_code = _slot.worker_code
+        _assigned_jobs = []
+        _required_items = {}
+
+        _slot.assigned_jobs = _assigned_new
+        init_load_items = copy.deepcopy(_required_items)
+        init_load_total_value = 0
+        _free_items = {k:0 for k in init_load_items.keys()}
+
+        _slot.accum_items = init_load_items
+        _slot.free_items = _free_items
+        _slot.job_change_count += 1 # len(_assigned_jobs)
+        self.env.add_single_working_time_slot(slot = _slot)
+
+        for _slot_job in _assigned_jobs:
+            self.env.commit_changed_job2db(
+                db_session=db_session,
+                job=_slot_job,
+                worker_code=_slot.worker_code)
+
+
+
+    def dispatch_jobs_1_cluster_ortools(self, db_job_list, db_session, item_price_dict):
         cluster_begin_time = datetime.now()
 
         # Create and register a transit callback.
@@ -226,7 +377,7 @@ class ClusterCVRPPlanner(KandboxBatchOptimizerPlugin):
         # Print solution on console.
         if solution:
             self.print_solution(manager, routing, solution)
-            self.save_solution(manager, routing, solution)
+            self.save_solution(manager, routing, solution, db_job_list = db_job_list, db_session=db_session, item_price_dict = item_price_dict)
 
         else:
             print(f"Failed on cluster")
@@ -251,79 +402,100 @@ class ClusterCVRPPlanner(KandboxBatchOptimizerPlugin):
             max_route_distance = max(route_distance, max_route_distance)
         print("Maximum of the route distances: {}m".format(max_route_distance))
 
-    def save_solution(self, manager, routing, solution):
+    def save_solution(self, manager, routing, solution, db_job_list, db_session, item_price_dict):
         """Prints solution on console."""
-        max_route_distance = 0
+
+        total_item_value = 0
         for vehicle_id in range(len(self.worker_slots)):
-            index = routing.Start(vehicle_id)
-            # First one should be depot
-            previous_index = index
-            index = solution.Value(routing.NextVar(index))
+            _slot = self.worker_slots[vehicle_id]
+            # worker_code = _slot.worker_code
+            _assigned_jobs = []
+            _required_items = {}
+
+            # First one (previous_index) should be depot 
+            previous_index = routing.Start(vehicle_id)
+            # Start from second
+            index = solution.Value(routing.NextVar(previous_index))
             plan_output = "Route for vehicle {}:\n".format(vehicle_id)
             route_distance = 0
-            # worker/vehicle starts at 0
-            scheduled_worker_codes = [self.worker_slots[vehicle_id].worker_id]
 
-            next_start_minutes = self.worker_slots[vehicle_id].start_minutes
-            prev_location = self.worker_slots[vehicle_id].end_location
+            next_start_minutes = max(
+                self.worker_slots[vehicle_id].start_minutes,
+                self.env.get_env_planning_horizon_start_minutes(),
+            )
+            # prev_location = self.worker_slots[vehicle_id].end_location 
 
             while not routing.IsEnd(index):
                 plan_output += " {} -> ".format(manager.IndexToNode(index))
                 # job starts at 0
-                job_code = self.cluster_list[index][0]  # - 1
-                job = self.env.jobs_dict[job_code]
-                one_job_action_dict = ActionDict(
-                    job_code=job.job_code,
-                    scheduled_worker_codes=scheduled_worker_codes,
-                    scheduled_start_minutes=next_start_minutes,
-                    scheduled_duration_minutes=job.requested_duration_minutes,
-                    action_type=ActionType.FLOATING,
-                    is_forced_action=False,
-                )
-                internal_result_info = self.env.mutate_update_job_by_action_dict(
-                    a_dict=one_job_action_dict, post_changes_flag=True)
-                if internal_result_info.status_code != ActionScoringResultType.OK:
-                    print(
-                        f"{one_job_action_dict.job_code}: Failed to commit change, error: {str(internal_result_info)} "
-                    )
-                else:
-                    print(
-                        f"job({one_job_action_dict.job_code}) is planned successfully ..."
-                    )
+                if index < 1:
+                    continue
+                db_job = db_job_list[index]
+                requested_items = db_job.flex_form_data.get("accum_items", "")
+                if len(requested_items) < 3:
+                    continue
 
-                db_job = job_service.get_by_code(
-                    db_session=self.env.kp_data_adapter.db_session,
-                    code=job.job_code)
-                db_worker = worker_service.get_by_code(
-                    db_session=self.env.kp_data_adapter.db_session,
-                    code=scheduled_worker_codes[0])
+                for item_str in requested_items.split(config.SEPERATOR_FLEX_0):
+                    try:
+                        ic, iqty = item_str.split(":")[-2:]
+                        if ic not in item_price_dict:
+                            log.warning(f"item ({ic}) not found in item table, requested by job ({db_job.code})")
+                        if ic in _required_items:
+                            _required_items[ic] += float(iqty)
+                        else:
+                            _required_items[ic] = float(iqty)
+                        total_item_value += item_price_dict[ic] * float(iqty)
+                    except Exception as e:
+                        print(f"error {str(e)}")
 
-                db_job.requested_primary_worker = db_worker
-
-                self.env.kp_data_adapter.db_session.add(db_job)
-                self.env.kp_data_adapter.db_session.commit()
-
-                print(
-                    f"job({job.job_code}) is updated to new requested_primary_worker = {scheduled_worker_codes[0]} "
-                )
-
-                prev_location = job.location
+                travel_time = routing.GetArcCostForVehicle(
+                    previous_index, index, vehicle_id)
                 previous_index = index
                 index = solution.Value(routing.NextVar(index))
 
-                # not used.
-                travel_time = self._get_travel_time_2locations(
-                    prev_location, job.location)
+                if total_item_value > 3000:
+                    log.warning(f"Worker slot {_slot.slot_code} reached limit of 3000, skipping an assigned job: {db_job.code}")
+                    # break # if break, it skips next jobs even if next job does not require any item
+                    continue
+                job_in_slot = self.env.env_encode_single_job_db(db_job)
+                job_in_slot.scheduled_start_minutes = next_start_minutes + travel_time
+                job_in_slot.prev_travel = travel_time
+                _assigned_jobs.append(job_in_slot)
+                next_start_minutes = job_in_slot.scheduled_start_minutes + job_in_slot.scheduled_duration_minutes
 
-                route_distance = routing.GetArcCostForVehicle(
-                    previous_index, index, vehicle_id)
-                next_start_minutes += job.requested_duration_minutes + route_distance
 
-            # plan_output += "{}\n".format(manager.IndexToNode(index))
-            # plan_output += "Distance of the route: {}m\n".format(route_distance)
-            # print(plan_output)
-            # max_route_distance = max(route_distance, max_route_distance)
-        # print("Maximum of the route distances: {}m".format(max_route_distance))
+            _slot.assigned_jobs = _assigned_jobs
+            init_load_items = copy.deepcopy(_required_items)
+            init_load_total_value = total_item_value
+            _free_items = {k:0 for k in init_load_items.keys()}
+            for len_ratio in (0.1, 0.3, 0.5, 1):
+                for len_i in range(int(len_ratio*len(self.job_item_value_stats))):
+                    item = self.job_item_value_stats[len_i][0]
+                    if item in init_load_items:
+                        init_load_items[item] += 1
+                        _free_items[item] += 1
+                    else:
+                        init_load_items[item] = 1
+                        _free_items[item] = 1
+
+                    init_load_total_value += item_price_dict[item]
+                    if init_load_total_value > 3000:
+                        break
+                if init_load_total_value > 3000:
+                    break
+
+
+            _slot.accum_items = init_load_items
+            _slot.free_items = _free_items
+            _slot.job_change_count += 1 # len(_assigned_jobs)
+            self.env.add_single_working_time_slot(slot = _slot)
+
+            for _slot_job in _assigned_jobs:
+                self.env.commit_changed_job2db(
+                    db_session=db_session,
+                    job=_slot_job,
+                    worker_code=_slot.worker_code)
+
 
 
 if __name__ == "__main__":

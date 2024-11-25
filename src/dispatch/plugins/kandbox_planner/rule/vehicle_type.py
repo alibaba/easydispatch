@@ -6,9 +6,9 @@ from dispatch.plugins.kandbox_planner.env.env_models import (
     LocationTuple,
     JobLocation,
     Worker,
-    Job,
-    Appointment,
-    Absence,
+    # Job,
+    # Appointment,
+    # Absence,
     ActionEvaluationScore,
 )
 
@@ -45,7 +45,7 @@ class KandboxRulePluginVehicleType(KandboxRulePlugin):
         for worker_code in job.scheduled_worker_codes:
             worker = env.workers_dict[worker_code]
             overlapped_slots = env.slot_server.get_overlapped_slots(
-                worker_id=worker_code, 
+                worker_code=worker_code, 
                 start_minutes=job.scheduled_start_minutes, 
                 end_minutes=job.scheduled_start_minutes + job.scheduled_duration_minutes
             )

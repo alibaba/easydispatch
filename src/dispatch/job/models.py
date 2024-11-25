@@ -1,10 +1,10 @@
-
 from collections import Counter
 from datetime import datetime
-from typing import Any, List, Optional
+from typing import Any, List, Optional,Dict
 
 from fastapi_permissions import Allow
-from pydantic import BaseModel, validator, Field
+from pydantic import BaseModel, Field
+
 from sqlalchemy import (
     JSON,
     Column,
@@ -14,8 +14,7 @@ from sqlalchemy import (
     Integer,
     PrimaryKeyConstraint,
     String,
-    Table,
-    select,
+    Table, 
     Boolean,
     BigInteger,
 )
@@ -25,13 +24,7 @@ from sqlalchemy.sql.schema import UniqueConstraint
 from sqlalchemy.sql.sqltypes import ARRAY
 from sqlalchemy_utils import TSVectorType
 
-from dispatch.auth.models import UserRoles
-# from dispatch.config import (
-#     INCIDENT_RESOURCE_CONVERSATION_COMMANDS_REFERENCE_DOCUMENT,
-#     INCIDENT_RESOURCE_FAQ_DOCUMENT,
-#     INCIDENT_RESOURCE_INCIDENT_REVIEW_DOCUMENT,
-#     INCIDENT_RESOURCE_INVESTIGATION_DOCUMENT,
-# )
+# from dispatch.auth.models import UserRoles
 from dispatch.database import Base, SessionLocal
 from dispatch.event.models import EventRead
 from dispatch.worker.models import WorkerCreate, WorkerRead
@@ -42,29 +35,11 @@ from dispatch.team.models import Team, TeamCreate, TeamRead
 # from .enums import JobPlanningStatus, JobType
 
 
-from dispatch.plugins.kandbox_planner.env.env_enums import JobLifeCycleStatus, JobType, JobPlanningStatus
-
-
-assoc_job_tags = Table(
-    "assoc_job_tags",
-    Base.metadata,
-    Column("job_id", BigInteger, ForeignKey("job.id")),
-    Column("tag_id", Integer, ForeignKey("tag.id")),
-    PrimaryKeyConstraint("job_id", "tag_id"),
-)
-
-job_scheduled_secondary_workers = Table(
-    "job_scheduled_secondary_workers",
-    Base.metadata,
-    Column("job_id", BigInteger, ForeignKey("job.id")),
-    Column("worker_id", Integer, ForeignKey("worker.id")),
-    PrimaryKeyConstraint("job_id", "worker_id"),
-)
+from dispatch.plugins.kandbox_planner.env.env_enums import JobLifeCycleStatus, JobScheduleType, JobType, JobPlanningStatus
 
 
 class Job(Base, TimeStampMixin):
-    id = Column(BigInteger, primary_key=True)
-    code = Column(String, nullable=False)  # code
+    code = Column(String, primary_key=True)  # code
     job_type = Column(String, nullable=False, default=JobType.JOB)  # JobType
     name = Column(String)
     description = Column(String)  # , nullable=False
@@ -77,7 +52,10 @@ class Job(Base, TimeStampMixin):
     )
     auto_planning = Column(Boolean, default=True)
 
-    is_active = Column(Boolean, default=True)  # job vs absence
+    # Whether or not the job is effective. If not, it is not occupying time slots even if inplanning.
+    # It is false for jobs in appointments
+    # All finished, cancelled jobs should also have is_active == False
+    is_active = Column(Boolean, default=True)  
 
     team_id = Column(Integer, ForeignKey("team.id"), nullable=False)
     team = relationship("Team", backref="job_to_team_id")
@@ -87,20 +65,25 @@ class Job(Base, TimeStampMixin):
     flex_form_data = Column(
         JSON, default={"job_schedule_type": "N"}
     )  # Column(String, default='{"key_1":["skill_1"]}')
+    schedule_type = Column(
+        String, nullable=True, default=JobScheduleType.NORMAL
+    )
+    tolerance_start_minutes = Column(Float, default=-1440)
+    tolerance_end_minutes = Column(Float, default=1440)
 
+
+    # job_status = Column(String, default="toDo")
+    # job_track_status = Column(String, default="notStarted")
     # Reserved for customer usage. Not visible to planner and workers.
     # cust_flex_form = Column( JSON, default={ } )  
 
-    # requested_worker_code = models.ForeignKey(Worker, null=True, on_delete=models.DO_NOTHING)
     requested_start_datetime = Column(DateTime)  # null=True, blank=True,
     requested_duration_minutes = Column(Float)
-    requested_primary_worker_id = Column(BigInteger, ForeignKey("worker.id"))
-    # https://docs.sqlalchemy.org/en/13/orm/join_conditions.html
-    # foreign_keys is needed
+    requested_primary_worker_code = Column(String, ForeignKey("worker.code"))
     requested_primary_worker = relationship(
         "Worker",
-        backref="incident_requested",
-        foreign_keys=[requested_primary_worker_id],
+        backref="job_requested",
+        foreign_keys=[requested_primary_worker_code],
     )
     # requested_secondary_worker are in participant, with   "requested_secondary"
 
@@ -109,17 +92,30 @@ class Job(Base, TimeStampMixin):
 
     scheduled_start_datetime = Column(DateTime)
     scheduled_duration_minutes = Column(Float)
-    scheduled_primary_worker_id = Column(BigInteger, ForeignKey("worker.id"))
+    scheduled_primary_worker_code = Column(String, ForeignKey("worker.code"))
     scheduled_primary_worker = relationship(
         "Worker",
-        backref="incident_scheduled",
-        foreign_keys=[scheduled_primary_worker_id],
+        backref="job_scheduled",
+        foreign_keys=[scheduled_primary_worker_code],
     )
     # appointment = relationship("Appointment", backref="included_jobs")
     # appointment_id = Column(Integer, ForeignKey("appointment.id"))
+    actual_start_datetime = Column(DateTime)
+    actual_duration_minutes = Column(Float)
+    actual_worker_code = Column(String, ForeignKey("worker.code"))
+    actual_worker = relationship(
+        "Worker",
+        backref="job_actual",
+        foreign_keys=[actual_worker_code],
+    )
 
     location = relationship("Location", backref="job_loc")
-    location_id = Column(BigInteger, ForeignKey("location.id"))
+    location_code = Column(String, ForeignKey("location.code"), nullable=True)
+    geo_longitude = Column(Float, nullable=True)
+    geo_latitude = Column(Float, nullable=True)
+
+    order = relationship("Order", backref="job_order_rel")
+    order_code = Column(String, ForeignKey("order.code"))
 
     search_vector = Column(
         TSVectorType(
@@ -130,18 +126,11 @@ class Job(Base, TimeStampMixin):
         )
     )
 
-    events = relationship("Event", backref="job")
-    tags = relationship("Tag", secondary=assoc_job_tags, backref="job_tag")
-    scheduled_secondary_workers = relationship(
-        "Worker",
-        secondary=job_scheduled_secondary_workers,
-        backref="job_scheduled_secondary_workers_rel",
-    )
+    events = relationship("JobEvent", backref="job")
 
     requested_skills = Column(ARRAY(String))
     requested_items = Column(ARRAY(String))
 
-    __table_args__ = (UniqueConstraint('code', 'org_id', name='uix_org_code'),)
 # Pydantic models...
 
 
@@ -154,7 +143,13 @@ class JobBase(DispatchBase):
     code: str = Field(
         title="Job Code", description='Job code is the unique identify for this job. It must be unique across all teams',)
     job_type: str = Field(
-        title="Job Type", description='Type of Job code as in job(visit), composite, appt, leave',)
+        title="Job Type", 
+        description='Type of Job code as in JOB(visit), appt, leave, dropoff, pickup, replenish, ...',
+        default=JobType.JOB)
+    # business_type: str = Field(
+    #     title="Business Type", 
+    #     description='Type of Job as dropoff, pickup, replenish, ',
+    #     default=JobType.JOB)
     name: Optional[str] = None
     description: Optional[str] = None
     org_id: Optional[str] = None
@@ -163,29 +158,38 @@ class JobBase(DispatchBase):
     auto_planning: Optional[bool] = Field(
         default=False, title="Automatic Planning Flag", description='When a job code have auto_planning == True, the easydispatch engine will try dispatch it when its status is U and make its status to I',)
     flex_form_data: Any = Field(
-        default={}, title="Flexible Form Data", description='You can save all customized job attributes into a flex_form_data. Those data will be used by dispatching rule plugins to validate the worker-job assignment. \n Examples of field candidates are: requested_skills, job_schedule_type, ...',)
+        default={}, title="Flexible Form Data", 
+        description='You can save all customized job attributes into a flex_form_data. Those data will be used by dispatching rule plugins to validate the worker-job assignment. \n Examples of field candidates are: requested_skills, job_schedule_type, ...',)
 
     requested_start_datetime: Optional[datetime] = None
-    requested_duration_minutes: float = None
-    requested_primary_worker: Optional[WorkerRead]
+    requested_duration_minutes: float = 1
+    requested_primary_worker_code: Optional[str] = None 
 
     scheduled_start_datetime: Optional[datetime] = None
     scheduled_duration_minutes: float = None
-    scheduled_primary_worker: Optional[WorkerRead]  # : WorkerRead
-    scheduled_secondary_workers: Optional[List[WorkerRead]] = []
+    scheduled_primary_worker_code: Optional[str] = None 
+    # scheduled_secondary_workers: Optional[List[WorkerRead]] = []
+    actual_start_datetime: Optional[datetime] = None
+    actual_duration_minutes: float = None
+    actual_worker_code: Optional[str] = None 
 
     requested_skills: Optional[List[str]] = []
     requested_items: Optional[List[str]] = []
-    tags: Optional[List[Any]] = []  # any until we figure out circular imports
+    # tags: Optional[List[Any]] = []  # any until we figure out circular imports
+    geo_longitude: float = None 
+    geo_latitude: float = None
+    tolerance_start_minutes: float = -1440
+    tolerance_end_minutes: float = 1440
 
 
 class JobCreate(JobBase):
     team: TeamCreate
-    location: LocationCreate
+    location: Optional[LocationCreate] = None
 
     # refer https://github.com/tiangolo/fastapi/issues/211
     flex_form_data: dict = Field(
-        default={}, title="Flexible Form Data", description='You can save all customized job attributes into a flex_form_data. Those data will be used by dispatching rule plugins to validate the worker-job assignment. \n Examples of field candidates are: requested_skills, job_schedule_type, ...',)
+        default={}, title="Flexible Form Data", 
+        description='You can save all customized job attributes into a flex_form_data. Those data will be used by dispatching rule plugins to validate the worker-job assignment. \n Examples of field candidates are: requested_skills, job_schedule_type, ...',)
     requested_start_datetime: Optional[datetime] = None
     requested_duration_minutes: float = None
 
@@ -194,16 +198,19 @@ class JobCreate(JobBase):
     scheduled_start_datetime: Optional[datetime] = None
     scheduled_duration_minutes: float = None
     scheduled_primary_worker: Optional[WorkerCreate]  # : WorkerRead
-    scheduled_secondary_workers: Optional[List[WorkerCreate]] = []
+    # scheduled_secondary_workers: Optional[List[WorkerCreate]] = []
     requested_skills: Optional[List[str]] = []
     requested_items: Optional[List[str]] = []
+    # target_worker: str = None
+    overwrite_max_orders_limit: bool = False
+    is_appointment: bool = False
 
 
 class JobUpdate(JobBase):
-    # job_priority: JobPriorityBase
+    # job_priority: JobPriorityBase+
     # job_type: JobTypeBase
     team: TeamCreate
-    location: LocationCreate
+    location: Optional[LocationCreate] = None
 
     # refer https://github.com/tiangolo/fastapi/issues/211
     flex_form_data: dict = Field(
@@ -215,11 +222,25 @@ class JobUpdate(JobBase):
 
     requested_primary_worker: Optional[WorkerCreate]
     scheduled_primary_worker: Optional[WorkerCreate]  # : WorkerRead
-    scheduled_secondary_workers: Optional[List[WorkerCreate]] = []
+    # scheduled_secondary_workers: Optional[List[WorkerCreate]] = []
     update_source: str = "Unknown"
     requested_skills: Optional[List[str]] = []
     requested_items: Optional[List[str]] = []
     token = ""
+
+
+class JobLifeCycleUpdate(DispatchBase):
+    # This is a subset of JobUpdate
+    code: str
+    life_cycle_status: JobLifeCycleStatus = JobLifeCycleStatus.CREATED
+    update_source: str = "life_cycle"
+    job_type: bool = False
+    comment: Optional[str] = None
+    
+    job_source: Optional[str] = None
+    order_code: Optional[str] = None
+    flex_form_data: Dict[str, Any] ={} 
+    
 
 
 class JobPlanningInfoUpdate(JobBase):
@@ -230,37 +251,58 @@ class JobPlanningInfoUpdate(JobBase):
     scheduled_start_datetime: Optional[datetime] = None
     scheduled_duration_minutes: float = None
 
-    scheduled_primary_worker_code: Optional[str]  # : WorkerRead
-    scheduled_secondary_worker_codes: Optional[List[str]] = []
-    update_source: str = "Unknown"
+    scheduled_worker_code: Optional[str]  # : WorkerRead
+    # scheduled_secondary_worker_codes: Optional[List[str]] = []
+    update_source: str = "NA"
 
-
-class JobLifeCycleUpdate(DispatchBase):
-    # This is a subset of JobUpdate
-    code: str
-    life_cycle_status: JobLifeCycleStatus = JobLifeCycleStatus.CREATED
-    update_source: str = "Unknown"
-    comment: Optional[str] = None
 
 
 class JobRead(JobBase):
-    id: int
     team: TeamRead
-    location: LocationRead
+    location: Optional[LocationRead]
+    # job_track_status:str = ""
+    job_track_status:str = None
+
 
     requested_primary_worker: Optional[WorkerRead]
     scheduled_primary_worker: Optional[WorkerRead]  # : WorkerRead
-    scheduled_secondary_workers: Optional[List[WorkerRead]] = []
+    # scheduled_secondary_workers: Optional[List[WorkerRead]] = []
 
     events: Optional[List[EventRead]] = []
 
     created_at: Optional[datetime]
     updated_at: Optional[datetime]
+    
+    customer_address :str = None
+    customer_zipcode :str = None
+    external_order_code :str = None
+
+class UnplannedJobRead(DispatchBase):
+    code: str = Field(
+        title="Job Code", description='Job code is the unique identify for this job. It must be unique across all teams',)
+    geo_longitude: float = None 
+    geo_latitude: float = None
+    geo_longitude_loc: float = None 
+    geo_latitude_loc: float = None
+    requested_start_datetime: Optional[datetime] = None
+    requested_duration_minutes: float = None
+    requested_primary_worker_code: Optional[str] = None
+
+    scheduled_start_datetime: Optional[datetime] = None
+    scheduled_duration_minutes: float = None
+    scheduled_primary_worker_code: Optional[str] = None  # : WorkerRead
+    tolerance_end_minutes: float = 0
+
+class UnplannedJobPagination(DispatchBase):
+    total: int
+    items: List[UnplannedJobRead] = []
+    not_find_code:List[str] = []
 
 
 class JobPagination(DispatchBase):
     total: int
     items: List[JobRead] = []
+    not_find_code:List[str] = []
 
 
 # Is this duplicated with Jobs/ ?
@@ -274,3 +316,51 @@ class JobReadResponese(DispatchBase):
     state: Optional[int]
     msg: Optional[str]
     data: Optional[JobRead]
+
+
+class JobWorkerChange(DispatchBase):
+    jobs: List[Optional[JobRead]] =[]
+    worker: Optional[WorkerRead] = None
+
+
+
+class JobRelated(DispatchBase):
+    id: int
+    order_code: str
+    job_biz_job_type: Optional[str] =None
+    job_biz_job_status: Optional[str] =None
+    problem_reason_code:Optional[str] =None
+    customer_address:Optional[str] =None
+    allow_change_time_window_list: List[Any] = []
+    job_track_status: Optional[str] = ''
+
+
+class JobRelatedUpdate(DispatchBase):
+    job_biz_job_status: Optional[str] =None
+    problem_reason_code:Optional[str] =None
+    requested_start_datetime:Optional[datetime] = None
+    
+
+class JobUpdateWorkerUpdate(DispatchBase):
+    worker_code:Optional[str] =None
+    job_code_list:Optional[List[int]] = []
+
+class JobBatchSearch(DispatchBase):
+    query_param: Optional[str] = None
+    worker_code: Optional[str] = None
+    planning_status: Optional[List[str]] = []
+    page: int=1
+    itemsPerPage:int=10
+    sortBy: Optional[List[str]] = []
+    descending: Optional[List[bool]] = []
+
+class JobPlanningStatusUpdate(DispatchBase):
+    team_id: str
+    planning_status: str
+    update_planning_status: str
+    worker_code_list: Optional[list[str]] = []
+    start_datetime: Optional[str] = None
+    end_datetime: Optional[str] = None
+
+
+    

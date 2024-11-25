@@ -66,6 +66,9 @@ class NaivePlannerJobsInSlots(JobsInSlotsPlannerTrait):  # to fake OptimizerJobs
 
         # Common earlist start of all slots
         current_min_start = max([s.start_minutes for s in working_time_slots])
+        # begin  requested_start_minutes 
+        requested_start_minutes = self.env.jobs_dict[job_code].requested_start_minutes
+        current_min_start = current_min_start if requested_start_minutes <=  current_min_start else requested_start_minutes
         # Common latest start of all slots
         current_max_last_start = min(
             [s.end_minutes - job_duration_minutes for s in working_time_slots]
@@ -76,7 +79,7 @@ class NaivePlannerJobsInSlots(JobsInSlotsPlannerTrait):  # to fake OptimizerJobs
 
         # NO need to track last start.
         # min_start_from_end = current_min_start
-
+        start_pre_travel = 0 
         for slot_i in range(num_slots):
             slot = working_time_slots[slot_i]
 
@@ -89,7 +92,9 @@ class NaivePlannerJobsInSlots(JobsInSlotsPlannerTrait):  # to fake OptimizerJobs
                 next_travel,
                 inside_travel,
             ) = self.env.get_travel_time_jobs_in_slot(slot, all_jobs_to_begin)
-            
+            if not start_pre_travel:
+                start_pre_travel = prev_travel
+
             if len(slot.assigned_job_codes) <= 1:
                 # if The job itself is the only one in considerattion.
                 if (
@@ -165,14 +170,14 @@ class NaivePlannerJobsInSlots(JobsInSlotsPlannerTrait):  # to fake OptimizerJobs
             ) 
         if is_ok_start:
             # job_start_minutes = max_start_from_begin
-            job_start_minutes = current_min_start
+            job_start_minutes = current_min_start +start_pre_travel
         elif is_ok_end:
             job_start_minutes = current_max_last_start
         else:
             return final_result
         final_result.status = OptimizerSolutionStatus.SUCCESS
 
-        all_worker_codes = [s.worker_id for s in working_time_slots]
+        all_worker_codes = [s.worker_code for s in working_time_slots]
         one_job_action_dict = ActionDict(
             is_forced_action=False,
             job_code=job_code,

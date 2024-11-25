@@ -1,11 +1,11 @@
 from dispatch.config import DATA_START_DAY
 from dispatch.plugins.kandbox_planner.env.env_enums import JobPlanningStatus, JobType
-from dispatch.service.scheduled import update_planning_window
+from dispatch.planner_service.scheduled import update_planning_window
 from dispatch import config
 from dispatch.plugins.kandbox_planner.agent.kprl_agent_rllib_ppo import KandboxAgentRLLibPPO
-from dispatch.service_plugin.models import ServicePlugin
-from dispatch.service_plugin import service as service_plugin_service
-from dispatch.service.planner_service import get_active_planner, update_env_config
+from dispatch.planner_plugin.models import ServicePlugin
+from dispatch.planner_plugin import service as service_plugin_service
+from dispatch.planner_env.planner_service import get_active_planner, update_service_plugin_config
 from dispatch.plugins.kandbox_planner.planner_engine.opti1day.opti1day_planner import (
     Opti1DayPlanner,
 )
@@ -149,22 +149,23 @@ def generate_all_workers():
     for loc_index, worker in worker_df.iterrows():
         # if random.randint(0, 20) > 2:
         gps = worker_addr[loc_index]
-        gps["location_code"] = "{}-{}".format(worker["name"].replace(" ", "_"), loc_index)
+        gps["code"] = "{}-{}".format(worker["name"].replace(" ", "_"), loc_index)
         worker_index1 = random.randint(100, 1000)
         # print("adding worker: ", worker, gps)
         skills = get_skills(worker)
-        worker["name"] = f"{ worker['name']}|{worker_index1}"
+        # worker["name"] = f"{ worker['name']}|{worker_index1}"
         myobj = {
+            "id": loc_index,
             "code": worker["name"],
-            "name": worker["name"],
-            # "auth_username": worker["name"].replace(" ", "_"),
+            "name": f"{ worker['name']}|{worker_index1}",
+            "auth_username": worker["name"].replace(" ", "_"),
             "is_active": True,
             "team": team,
             "location": {
-                "location_code": gps["location_code"],
+                "code": gps["code"],
                 "geo_latitude": gps["geo_latitude"],
                 "geo_longitude": gps["geo_longitude"],
-                "team": team
+                "team": team,
             },
             "flex_form_data": {
                 "level": worker["electric"],
@@ -179,23 +180,35 @@ def generate_all_workers():
             },
             "business_hour": {
                 "sunday": [{"open": "", "close": "", "id": "5ca5578b0c5c7", "isOpen": False}],
-                "monday": [{"open": "0800", "close": "1700", "id": "5ca5578b0c5d1", "isOpen": True}],
-                "tuesday": [{"open": "0800", "close": "1700", "id": "5ca5578b0c5d8", "isOpen": True}],
-                "wednesday": [{"open": "0800", "close": "1700", "id": "5ca5578b0c5df", "isOpen": True}],
-                "thursday": [{"open": "0800", "close": "1700", "id": "5ca5578b0c5e6", "isOpen": True}],
-                "friday": [{"open": "0800", "close": "1700", "id": "5ca5578b0c5ec", "isOpen": True}],
+                "monday": [
+                    {"open": "0800", "close": "1700", "id": "5ca5578b0c5d1", "isOpen": True}
+                ],
+                "tuesday": [
+                    {"open": "0800", "close": "1700", "id": "5ca5578b0c5d8", "isOpen": True}
+                ],
+                "wednesday": [
+                    {"open": "0800", "close": "1700", "id": "5ca5578b0c5df", "isOpen": True}
+                ],
+                "thursday": [
+                    {"open": "0800", "close": "1700", "id": "5ca5578b0c5e6", "isOpen": True}
+                ],
+                "friday": [
+                    {"open": "0800", "close": "1700", "id": "5ca5578b0c5ec", "isOpen": True}
+                ],
                 "saturday": [{"open": "", "close": "", "id": "5ca5578b0c5f8", "isOpen": False}],
             },
-            # 'level': 0,
+            "is_active": True,
             "tags": [],
-            "dispatch_user": None
+            "dispatch_user": None,
         }
 
         list_to_insert.append(myobj)
     return list_to_insert
 
 
-def generate_one_day_orders(current_day, worker_list, nbr_jobs, job_start_index, auto_planning_flag):
+def generate_one_day_orders(
+    current_day, worker_list, nbr_jobs, job_start_index, auto_planning_flag=False
+):
 
     job_df = pd.read_csv(
         "{}/plugins/kandbox_planner/util/job_spec_veo.csv".format(config.basedir),
@@ -220,7 +233,7 @@ def generate_one_day_orders(current_day, worker_list, nbr_jobs, job_start_index,
             loc_index = random.randint(0, len(job_addr) - 1)
             worker_index1 = random.randint(100, 1000)
             gps = job_addr[loc_index]
-            gps["location_code"] = "job_loc_{}".format(loc_index)
+            gps["code"] = "job_loc_{}".format(loc_index)
             gps["team"] = team
             job_code = "{}-{}-{}-{}".format(
                 datetime.strftime(current_day, "%m%d"),
@@ -229,6 +242,7 @@ def generate_one_day_orders(current_day, worker_list, nbr_jobs, job_start_index,
                 worker_index1,
             )
             myobj = {
+                "id": len(list_to_insert) + 1,
                 "code": job_code,
                 "job_type": JobType.JOB,  # "visit"
                 "name": job_code,
@@ -245,7 +259,7 @@ def generate_one_day_orders(current_day, worker_list, nbr_jobs, job_start_index,
                     "requested_vehicle_type": "van" if job_i < 10 else "bike",
                     "requested_items": get_random_basket(),
                     "included_job_codes": [],
-                    "Unavailability": ['202110150810_202110150910', '202110151210_202110151310']
+                    "Unavailability": ["202110150810_202110150910", "202110151210_202110151310"],
                 },
                 "team": team,
                 "location": gps,
@@ -266,6 +280,7 @@ def generate_one_day_orders(current_day, worker_list, nbr_jobs, job_start_index,
                     "code": worker_list[random.randint(0, 5)]["code"],
                     "team": team,
                 },
+                "is_active": True,
                 "auto_planning": auto_planning_flag,
             }
             list_to_insert.append(myobj)
@@ -285,7 +300,7 @@ def dispatch_jobs_batch_optimizer(opts):
     day_seq = (GENERATOR_START_DATE - datetime.strptime(DATA_START_DAY, "%Y%m%d")).days
     window_start_minutes = day_seq * 1440 + 510  # -1  #
     update_planning_window(start_minutes=window_start_minutes, team_id=1)
-    #TODO, remove
+    # TODO, remove
     opts["org_code"] = "0"
     planner = get_active_planner(
         org_code=opts["org_code"],
@@ -332,24 +347,32 @@ def generate_all(opts):
         username=opts["username"],
         password=opts["password"],
         team_code=opts["team_code"],
+        access_token=opts.get("token", None),
     )
-    worker_list = generate_all_workers()
-    if opts["generate_worker"] == 1:
+    if opts["generate_target"] in ["worker", "all"]:
+        worker_list = generate_all_workers()
         kplanner_api.insert_all_workers(worker_list)
     else:
         print("worker data not saved.")
 
-    for day_i in range(999):
-        current_day = GENERATOR_START_DATE + timedelta(days=day_i)
-        if current_day >= GENERATOR_END_DATE:
-            break
-        job_list = generate_one_day_orders(
-            current_day=current_day, worker_list=worker_list, nbr_jobs=opts[
-                "nbr_jobs"], job_start_index=opts["job_start_index"],
-            auto_planning_flag=opts["auto_planning_flag"]
-        )
-        kplanner_api.insert_all_orders(job_list)
+    if opts["generate_target"] in ["job", "all"]:
+        worker_list = generate_all_workers()
+        for day_i in range(999):
+            current_day = GENERATOR_START_DATE + timedelta(days=day_i)
+            if current_day >= GENERATOR_END_DATE:
+                break
+            job_list = generate_one_day_orders(
+                current_day=current_day,
+                worker_list=worker_list,
+                nbr_jobs=opts["generate_job_count"],
+                job_start_index=opts["job_start_index"],
+                auto_planning_flag=opts["auto_planning_flag"],
+            )
+            kplanner_api.insert_all_jobs(job_list)
         #
+    else:
+        print("job data not saved.")
+
     # opts["dispatch_days"] = opts["dispatch_days"]
     # dispatch_jobs_batch_optimizer(opts)
     return
@@ -432,7 +455,7 @@ def generate_all(opts):
 
         rl_agent.load_model(env_config=planner["planner_env"].config)
         checkpoint_path = rl_agent.train_model(env_config=planner["planner_env"].config)
-        update_env_config(
+        update_service_plugin_config(
             db_session=db_session,
             service_plugin_id=planner["planner_env"].config["service_plugin_id"],
             new_config_dict={"ppo_checkpoint_path": checkpoint_path},

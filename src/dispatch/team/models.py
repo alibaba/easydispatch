@@ -1,33 +1,33 @@
 from datetime import datetime
 from typing import List, Optional
 
-from sqlalchemy import Column, ForeignKey, Integer, UniqueConstraint, String, Table, JSON
+from sqlalchemy import Column, ForeignKey, Integer, UniqueConstraint, String, Table, JSON, Float,ForeignKeyConstraint
 from sqlalchemy.orm import relationship
 from sqlalchemy_utils import TSVectorType
 from dispatch.database import Base
 from dispatch.models import TimeStampMixin, DispatchBase
-from dispatch.service.models import ServiceCreate
+from dispatch.planner_service.models import ServiceCreate
 from pydantic import validator, Field
-
+from dispatch.planner_service.models import Service
 
 class Team(Base, TimeStampMixin):
+    __tablename__ = 'team' 
     id = Column(Integer, primary_key=True)
     code = Column(String, nullable=False)
     org_id = Column(Integer, nullable=False, default=0)
+    geo_longitude = Column(Float, nullable=False)
+    geo_latitude = Column(Float, nullable=False)
     name = Column(String)
     description = Column(String)
-    # Two teams may share same service, leveraging same trained model and parameters
-    service_id = Column(Integer, ForeignKey("service.id"))
-    planner_service = relationship("Service")
+    # Two teams may share one same service, leveraging same trained model and parameters
+    
+    service_id = Column(Integer, ForeignKey("dispatch_core.service.id"))
+    planner_service = relationship("Service", foreign_keys=[service_id], back_populates="teams") 
+
     flex_form_data = Column(
         JSON,
         default={"travel_speed_km_hour": 40, "travel_min_minutes": 10, "planning_working_days": 2},
     )
-
-    latest_env_kafka_offset = Column(Integer, default=0)
-    latest_env_db_sink_offset = Column(Integer, default=0)
-    # I'm not sure this needs to be set explictly rather than via a query
-    jobs = relationship("Job", backref="teams")
 
     search_vector = Column(
         TSVectorType(
@@ -63,9 +63,13 @@ class TeamBase(DispatchBase):
         default=None, title="Code", description="The unique team code.",)
     name: Optional[str]
     org_id: Optional[str] = None
+    geo_longitude: Optional[float] = -0.143876 # london
+    geo_latitude: Optional[float] = 51.4952074 
     description: Optional[str]
     planner_service: Optional[ServiceCreate]
     flex_form_data: Optional[dict] = {}
+    # env_flex: Optional[dict] = {}
+    
 
 
 class TeamCreate(TeamBase):
@@ -88,3 +92,7 @@ class TeamRead(TeamBase):
 class TeamPagination(DispatchBase):
     total: int
     items: List[TeamRead] = []
+
+
+class TeamClear(DispatchBase):
+    secret_key: str 

@@ -86,9 +86,11 @@ def update(
     if item_inventory.depot.code != item_inventory_in.depot.code:
         depot = depot_service.get_by_code(db_session=db_session, code=item_inventory_in.depot.code)
         item_inventory.depot = depot
+        item_inventory.depot_id = depot.id
     if item_inventory.item.code != item_inventory_in.item.code:
-        depot = item_service.get_by_code(db_session=db_session, code=item_inventory_in.depot.code)
-        item_inventory.depot = depot
+        item = item_service.get_by_code(db_session=db_session, code=item_inventory_in.item.code)
+        item_inventory.item = item
+        item_inventory.item_id = item.id
     for field, field_value in update_data.items():
         setattr(item_inventory, field, field_value)
 

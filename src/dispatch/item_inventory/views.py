@@ -1,4 +1,4 @@
-from dispatch.auth.views import auth_router
+# from dispatch.auth.views import auth_router
 from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -19,7 +19,7 @@ from .models import (
     ItemInventorySelect,
     ItemInventoryUpdate,
 )
-from .service import create, delete, get, get_by_code, get_by_code_org_id, get_by_item_depot, update
+from .service import create, delete, get, get_by_code, get_by_code_org_id, get_by_item_depot, update,get_all
 
 router = APIRouter()
 
@@ -145,20 +145,18 @@ def delete_item(*, db_session: Session = Depends(get_db), item_id: int):
     delete(db_session=db_session, item_id=item_id)
 
 
-@auth_router.get("/item_inventory/get_all/", response_model=List[ItemInventorySelect])
-def select_all_items(
-    db_session: Session = Depends(get_db),
-):
-    """
-    Retrieve item contacts.
-    """
-    data = db_session.query(ItemInventory).filter(
-        Item.is_active == True, Depot.is_active == True).all()
-    # TODO allocated_qty - job used qty
-    return_data = [] if not data else [
-        {
-            "text": f"{i.item.code}",
-            "all": i.curr_qty,
-            "input_value": 0,
-        } for i in data]
-    return return_data
+# @auth_router.get("/item_inventory/get_all/", response_model=List[ItemInventorySelect])
+# def select_all_items(
+#     db_session: Session = Depends(get_db),
+# ):
+#     """
+#     Retrieve item contacts.
+#     """
+#     data = get_all(db_session=db_session)
+#     return_data = [] if not data else [
+#         {
+#             "text": f"{i.depot.code}/{i.item.code}",
+#             "all": i.curr_qty,
+#             "input_value": 0,
+#         } for i in data if i.depot.is_active and  i.item.is_active]
+#     return return_data

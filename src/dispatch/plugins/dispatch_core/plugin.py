@@ -8,6 +8,8 @@ from datetime import datetime
 import base64
 import json
 import logging
+from time import time
+import redis
 
 import requests
 from fastapi import HTTPException
@@ -17,8 +19,9 @@ from fastapi.security.utils import get_authorization_scheme_param
 from jose import JWTError, jwt
 from starlette.status import HTTP_401_UNAUTHORIZED
 from starlette.requests import Request
+from dispatch import config
 
-from dispatch.config import DISPATCH_UI_URL
+from dispatch.config import DISPATCH_UI_URL, REDIS_KEY_TEMPLATE_LOGIN_EXPIRE
 from dispatch.worker import service as worker_service
 from dispatch.plugins import dispatch_core as dispatch_plugin
 from dispatch.plugins.base import plugins
@@ -34,10 +37,14 @@ from dispatch.config import (
     DISPATCH_AUTHENTICATION_PROVIDER_PKCE_JWKS,
     DISPATCH_JWT_SECRET,
     DISPATCH_JWT_ALG,
+    redis_pool,
+    DISPATCH_JWT_EXP,
 )
 
 
 from .config import DISPATCH_JWT_AUDIENCE, DISPATCH_JWT_EMAIL_OVERRIDE
+
+redis_conn = redis.Redis(connection_pool=redis_pool)
 
 log = logging.getLogger(__name__)
 
@@ -58,8 +65,9 @@ class BasicAuthProviderPlugin(AuthenticationProviderPlugin):
         authorization: str = request.headers.get("Authorization")
         scheme, param = get_authorization_scheme_param(authorization)
         if not authorization or scheme.lower() != "bearer":
-            raise HTTPException(status_code=HTTP_401_UNAUTHORIZED,
-                                detail="no Authorization bearer found.")
+            raise HTTPException(
+                status_code=HTTP_401_UNAUTHORIZED, detail="no Authorization bearer found."
+            )
 
         token = authorization.split()[1]
 
@@ -82,6 +90,28 @@ class BasicAuthProviderPlugin(AuthenticationProviderPlugin):
             data = jwt.decode(token, DISPATCH_JWT_SECRET, algorithms=[DISPATCH_JWT_ALG])
         except JWTError as e:
             raise HTTPException(status_code=HTTP_401_UNAUTHORIZED, detail=str(e))
+
+        # 3小时无操作则登出
+        # 先通过email+org_code 做为key，从redis获取存入的时间戳
+        # 如果没有值，则存入当前时间戳
+        # 如果有值，则拿redis时间戳和当前时间戳做比较，
+        # 如果小于3小时，则更新redis的值，大于等于3小时，则抛出401，同时删除redis的key
+        # 
+        # TODO 2024-01-11 01:54:03 为什么有这个功能，DISPATCH_JWT_EXP 本身控制就可以了。。。
+        # if "/organization_status" not in request.url.path:
+        #     exp_rds_key = REDIS_KEY_TEMPLATE_LOGIN_EXPIRE.format(data["org_code"], data["email"], )
+        #     now = time()
+        #     # exp_time_sceonds = 3 * 60 * 60
+        #     exp_time_sceonds = int(DISPATCH_JWT_EXP)
+        #     if redis_conn.exists(exp_rds_key):
+        #         rds_time = redis_conn.get(exp_rds_key)
+        #         if (now - float(rds_time)) < exp_time_sceonds:
+        #             redis_conn.set(exp_rds_key, now, None)
+        #         else:
+        #             redis_conn.delete(exp_rds_key)
+        #             raise HTTPException(status_code=HTTP_401_UNAUTHORIZED, detail=f"We could not find user's sessions")
+        #     else:
+        #         redis_conn.set(exp_rds_key, now, ex=exp_time_sceonds)
         return data
 
 
@@ -133,128 +163,3 @@ class PKCEAuthProviderPlugin(AuthenticationProviderPlugin):
             return data["email"]
 
 
-class DispatchTicketPlugin(TicketPlugin):
-    title = "Dispatch Plugin - Ticket Management"
-    slug = "dispatch-ticket"
-    description = "Uses dispatch itself to create a ticket."
-    version = dispatch_plugin.__version__
-
-    author = "Netflix"
-    author_url = "https://github.com/alibaba/easydispatch.git"
-
-    def create(
-        self,
-        job_id: int,
-        title: str,
-        job_type: str,
-        job_priority: str,
-        commander: str,
-        reporter: str,
-        job_type_plugin_metadata: dict = {},
-    ):
-        """Creates a Dispatch ticket."""
-        resource_id = f"dispatch-{job_id}"
-        return {
-            "resource_id": resource_id,
-            "weblink": f"{DISPATCH_UI_URL}/jobs/{resource_id}",
-            "resource_type": "dispatch-internal-ticket",
-        }
-
-    def update(
-        self,
-        ticket_id: str,
-        title: str,
-        description: str,
-        job_type: str,
-        priority: str,
-        status: str,
-        commander_email: str,
-        reporter_email: str,
-        conversation_weblink: str,
-        conference_weblink: str,
-        document_weblink: str,
-        storage_weblink: str,
-        cost: float,
-        job_type_plugin_metadata: dict = {},
-    ):
-        """Updates the job."""
-        return
-
-
-class DispatchDocumentResolverPlugin(DocumentResolverPlugin):
-    title = "Dispatch Plugin - Document Resolver"
-    slug = "dispatch-document-resolver"
-    description = "Uses dispatch itself to resolve job documents."
-    version = dispatch_plugin.__version__
-
-    author = "Netflix"
-    author_url = "https://github.com/alibaba/easydispatch.git"
-
-    def get(self, job_type: str, job_priority: str, job_description: str, db_session=None):
-        """Fetches documents from Dispatch."""
-        route_in = {
-            "text": job_description,
-            "context": {
-                "job_priorities": [job_priority],
-                "job_types": [job_type],
-                "terms": [],
-            },
-        }
-
-        route_in = RouteRequest(**route_in)
-        recommendation = route_service.get(db_session=db_session, route_in=route_in)
-        return recommendation.documents
-
-
-class DispatchContactPlugin(ContactPlugin):
-    title = "Dispatch Plugin - Contact plugin"
-    slug = "dispatch-contact"
-    description = "Uses dispatch itself to resolve job participants."
-    version = dispatch_plugin.__version__
-
-    author = "Netflix"
-    author_url = "https://github.com/alibaba/easydispatch.git"
-
-    def get(self, email, db_session=None):
-        return getattr(
-            worker_service.get_by_code(db_session=db_session, code=email),
-            "__dict__",
-            {"email": email, "fullname": email},
-        )
-
-
-class DispatchParticipantResolverPlugin(ParticipantPlugin):
-    title = "Dispatch Plugin - Participant Resolver"
-    slug = "dispatch-participant-resolver"
-    description = "Uses dispatch itself to resolve job participants."
-    version = dispatch_plugin.__version__
-
-    author = "Netflix"
-    author_url = "https://github.com/alibaba/easydispatch.git"
-
-    def get(self, job_type: str, job_priority: str, job_description: str, db_session=None):
-        """Fetches participants from Dispatch."""
-        route_in = {
-            "text": job_description,
-            "context": {
-                "job_priorities": [job_priority.__dict__],
-                "job_types": [job_type.__dict__],
-                "terms": [],
-            },
-        }
-
-        route_in = RouteRequest(**route_in)
-        recommendation = route_service.get(db_session=db_session, route_in=route_in)
-
-        log.debug(f"Recommendation: {recommendation}")
-        # we need to resolve our service contacts to workers
-        for s in recommendation.service_contacts:
-            p = plugins.get(s.type)
-            log.debug(f"Resolving service contact. ServiceContact: {s}")
-            worker_email = p.get(s.external_id)
-
-            worker = worker_service.get_or_create(db_session=db_session, code=worker_email)
-            recommendation.workers.append(worker)
-
-        db_session.commit()
-        return list(recommendation.workers), list(recommendation.team_contacts)

@@ -1,18 +1,16 @@
+from dispatch.plugins.kandbox_planner.env.configurable_dispatch_env import ConfigurableDispatchEnv
 import dispatch.plugins.kandbox_planner.util.kandbox_date_util as date_util
 from dispatch.plugins.bases.kandbox_planner import KandboxRulePlugin
 from dispatch.plugins.kandbox_planner.env.env_enums import *
 from dispatch.plugins.kandbox_planner.env.env_models import (
     ActionDict,
     LocationTuple,
-    JobLocation,
-    Worker,
-    Job,
-    Appointment,
-    Absence,
+    JobLocation,  
     ActionEvaluationScore,
 )
 
 from dispatch.plugins.kandbox_planner.env.env_enums import TimeSlotType
+import copy
 
 class KandboxRulePluginRequestedItem(KandboxRulePlugin):
 
@@ -28,136 +26,63 @@ class KandboxRulePluginRequestedItem(KandboxRulePlugin):
     description = "Rule. Material"
     version = "0.1.0"
 
-    default_config = { 
-    }
+    default_config = copy.copy(KandboxRulePlugin.default_config)
+    # { 
+    # }
     config_form_spec = {
         "type": "object",
         "properties": {  },
     }
 
-    def evalute_normal_single_worker_n_job(self, env, job=None):  # worker = None,
+    def evalute_action_normal(self, env:ConfigurableDispatchEnv, action:ActionDict):
         # return score, violated_rules (negative values)
         # return self.weight * 1
         # Now check if this new job can fit into existing
-
+        job = action.jobs[0]
         score = 1
+        assert False, ("Wrong, deprecated by jobinslot.flex_form_data")
         overall_message = "Job ({}) requires items ({}) on workers {}. \n".format(
-            job.job_code, job.requested_items, job.scheduled_worker_codes
+            job.code, job.requested_items, action.scheduled_worker_codes
         )
         metrics_detail = {"status_code": "OK"}
-        total_loaded_items = {
-            k:0
-            for k in job.requested_items.keys()
-        } 
-
-        total_requested_items = dict(job.requested_items)
-        inspected_jobs  = set()
+        total_requested_items = dict()
+        for k_v in job.requested_items:
+            k,v = k_v.split(":")
+            total_requested_items[k] = float(v)
         
         all_slots = []
         # First I aggregate all items from all workers
-        for worker_code in job.scheduled_worker_codes:
-            worker = env.workers_dict[worker_code]
-            overlapped_slots = env.slot_server.get_overlapped_slots(
-                worker_id=worker_code, 
-                start_minutes=job.scheduled_start_minutes, 
-                end_minutes=job.scheduled_start_minutes + job.scheduled_duration_minutes
-            )
+        for worker_code in action.scheduled_worker_codes:
+            overlapped_slots = env.get_working_slot_list(
+                worker_code=worker_code,active_only=True,
+                start_minutes=action.scheduled_start_minutes - 1,
+                end_minutes=action.scheduled_start_minutes + 1,
+                ) 
             if len(overlapped_slots) < 1:
                 overall_message += " but no slot was found!" 
                 score = -1
-                metrics_detail = {}
+                # metrics_detail = {}
                 break
             slot = overlapped_slots[0] 
-
+            _free_items = slot.accum_items
             # It should match only one, but if more, I take only first one.
-            for jc in slot.assigned_job_codes:
-                if jc in inspected_jobs:
-                    # This should be summerized only once for more workers.
-                    # Skip from this loop
-                    continue
-                else:
-                    inspected_jobs.add(jc)
-                    # move on to check
-                r_items = env.jobs_dict[jc].requested_items
-                for ik in r_items.keys():
-                    if ik not in total_requested_items.keys():
-                        total_requested_items[ik] =r_items[ik]
-                    else:
-                        total_requested_items[ik] +=r_items[ik]
-
-                    if ik not in total_loaded_items.keys():
-                        total_requested_items[ik] = 0
-
-
-            # all_slots[0] is the first worker slot, i.e. primary
-            all_slots.append(slot)
-            # TODO check item_keys match as set, which should be faster.
-            for k in slot.loaded_items.keys():
-                if k in total_loaded_items.keys():
-                    total_loaded_items[k] +=slot.loaded_items[k]
-
-        # Second I verify that aggregated items list can fulfil job requirement
-        # TODO, duan, 2021-10-23 22:13:35. I should loop through all depots in future.
-        depot_key = list(env.depots_dict.keys())[0]
-        inventory_dict = env.kp_data_adapter.get_depot_item_inventory_dict(
-            depot_id = env.depots_dict[depot_key]["id"],
-            requested_items = list(total_requested_items.keys())
-            )
-        # loaded_items_key_set = set(total_loaded_items.keys())
-        for item_key in job.requested_items:
-            item_qty = total_loaded_items[item_key]
-            # if item_key in loaded_items_key_set:
-            #     item_qty = total_loaded_items[item_key]
-
-            if job.requested_items[item_key]  > item_qty:
-                if job.requested_items[item_key] > inventory_dict[item_key]:
-                    # This items is also NOT available in depot/warehouse
-                    overall_message += ", requested {} > {}; but only {} found on workers {}, and {} found in depot!".format(
-                        item_key,   
-                        job.requested_items[item_key],
-                        item_qty,
-                        job.scheduled_worker_codes,
-                        inventory_dict[item_key]
-                    )
+            for ik_str in total_requested_items.keys():
+                ik = ik_str.encode('utf-8')
+                if ik not in _free_items.keys():
+                    overall_message += f" But product {ik} was not found in slot {slot.slot_code}!" 
                     score = -1
-                    metrics_detail = {"item":  item_key, "status_code":"ERROR" }
+                    # metrics_detail = {}
                     break
                 else:
-                    # This items IS available in depot/warehouse. 
-                    # Then I will add a virtual replenish job and move on.
-                    # The replenish job is only added to primary worker as all_slots[0]
-                    # replenish_job = env.mutate_create_replenish_job(slot = all_slots[0], total_loaded_items = total_loaded_items)
-                    # if replenish_job is None:
-                    #     overall_message += ", requested {} > {}; only {} found on workers {}, and failed insert replenish job!".format(
-                    #         item_key,   
-                    #         job.requested_items[item_key],
-                    #         item_qty,
-                    #         job.scheduled_worker_codes, 
-                    #     )
-                    #     score = -1
-                    #     metrics_detail = {"item":  item_key, "status_code":"ERROR" }
-                    #     break
-
-
-                    overall_message += ", requested {} > {}; only {} found on workers {}, and a replenishment job is needed!".format(
-                        item_key,   
-                        job.requested_items[item_key],
-                        item_qty,
-                        job.scheduled_worker_codes, 
-                    )
-                    score = 0
-                    metrics_detail = {
-                        "item":  item_key, 
-                        "status_code":"WARNING",
-                        # "slot_code":env.slot_server.get_time_slot_key(slot),
-                        "slot":slot,
-                        "total_requested_items":total_requested_items,
-                        "total_loaded_items":total_loaded_items,
-                         }
-                    # allows to move on
-
-                # Move on to check next item.
-                # break
+                    item_qty = float(_free_items[ik])
+                    if item_qty < total_requested_items[ik_str]:
+                        overall_message += f" But product {ik}={_free_items[ik]} is less than requested={total_requested_items[ik_str]} on slot {slot.slot_code}!" 
+                        score = -1
+                        break
+                    else:
+                        overall_message += f"{ik}={_free_items[ik]} >= requested={total_requested_items[ik_str]}, !" 
+            else:
+                overall_message += f" slot {slot.slot_code} can fulfill job {job.code}!" 
 
         score_res = ActionEvaluationScore(
             score=score,

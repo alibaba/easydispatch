@@ -7,7 +7,7 @@ from sqlalchemy.sql.functions import func
 from tqdm import tqdm
 from fastapi.encoders import jsonable_encoder
 
-from dispatch.config import INCIDENT_PLUGIN_CONTACT_SLUG, SQLALCHEMY_DATABASE_URI
+from dispatch.config import SQLALCHEMY_DATABASE_URI
 from dispatch.database import SessionLocal
 
 from dispatch.location import service as location_service

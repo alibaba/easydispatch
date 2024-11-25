@@ -5,10 +5,7 @@ from dispatch.plugins.kandbox_planner.env.env_models import (
     ActionDict,
     LocationTuple,
     JobLocation,
-    Worker,
-    Job,
-    Appointment,
-    Absence,
+    Worker, 
     ActionEvaluationScore,
 )
 
@@ -92,12 +89,12 @@ class KandboxRulePluginLunchBreak(KandboxRulePlugin):
         job_end_minutes = job.scheduled_start_minutes + job.scheduled_duration_minutes
 
         # for job_i in range(len(env.workers_dict[worker_code]["assigned_jobs"])):
-        # for worker_id in [job.scheduled_worker_codes[0]] + job["scheduled_secondary_worker_ids"]:
-        for worker_id in job.scheduled_worker_codes:
+        # for worker_code in [job.scheduled_worker_codes[0]] + job["scheduled_secondary_worker_codes"]:
+        for worker_code in job.scheduled_worker_codes:
 
             total_avail_lunch_break = job_lunch_end - job_lunch_start
             overlapped_slots = env.slot_server.get_overlapped_slots(
-                worker_id=worker_id, start_minutes=job_start_minutes, end_minutes=job_end_minutes
+                worker_code=worker_code, start_minutes=job_start_minutes, end_minutes=job_end_minutes
             )
             # all_jobs = reduce(lambda x, y: x.assigned_job_codes + y.assigned_job_codes, overlapped_slots)
 
@@ -136,7 +133,7 @@ class KandboxRulePluginLunchBreak(KandboxRulePlugin):
             if total_avail_lunch_break < self.config["lunch_break_minutes"]:
                 # For now, lunch break does not enforce to -1, lowest is 0, as warning
                 score = 0
-                overall_message = f"total_avail_lunch_break = {total_avail_lunch_break}, which is less than MINIMUM({self.config['lunch_break_minutes']}) for worker {worker_id}"
+                overall_message = f"total_avail_lunch_break = {total_avail_lunch_break}, which is less than MINIMUM({self.config['lunch_break_minutes']}) for worker {worker_code}"
 
         score_res = ActionEvaluationScore(
             score=score,

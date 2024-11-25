@@ -11,7 +11,7 @@ from dispatch.plugins.base import plugins, register
 from .dynamic_click import params_factory
 
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("easydispatch_cli")
 
 
 # Plugin endpoints should determine authentication # TODO allow them to specify (kglisson)
@@ -34,17 +34,15 @@ def install_plugins():
             logger.debug(f"Attempting to load plugin: {ep.name}")
             plugin = ep.load()
             register(plugin)
-            logger.debug(f"Successfully loaded plugin: {ep.name}")
-
+            logger.info(f"Loaded plugin: {ep.name}, slug: {plugin.slug}")
+        except ModuleNotFoundError as e:
+            logger.warning(f"ModuleNotFoundError: Failed to load plugin: {ep.name} Reason: {str(e)}")
         except KeyError as e:
-            logger.warning(f"Failed to load plugin: {ep.name} Reason: {e}")
+            logger.warning(f"KeyError: Failed to load plugin: {ep.name} Reason: {str(e)}")
         except SQLAlchemyError as e:
-            logger.error(
-                "Something went wrong with creating plugin rows, is the database setup correctly?",
-                e,
-            )
+            logger.error(f"SQLAlchemyError: {str(e)} \n Something went wrong with creating plugin rows, is the database setup correctly?")
         except Exception as ex:
-            logger.error(f"Failed to load plugin {ep.name}:{traceback.format_exc()}", ex)
+            logger.error(f"Failed to load plugin {ep.name}, {str(ex)}:{traceback.format_exc()}")
         else:
             if not plugin.enabled:
                 continue
@@ -158,3 +156,45 @@ def add_plugins_args(f):
         f.__click_params__.extend(params_factory(schemas))
 
     return f
+
+
+
+def import_database_models():
+    import dispatch.route.models
+    import dispatch.job.models
+    import dispatch.order.models as order_model
+    import dispatch.order_event.models as order_event_model
+    import dispatch.worker.models
+    import dispatch.location.models
+    import dispatch.location_group.models
+    import dispatch.depot.models
+    import dispatch.item.models
+    import dispatch.item_inventory.models
+    import dispatch.plugin.models
+    import dispatch.logs.models
+    import dispatch.planner_service.models
+    import dispatch.planner_plugin.models
+    import dispatch.team.models
+    import dispatch.cloudmarket.instance_order.models
+    import dispatch.cloudmarket.instance.models
+    import dispatch.cloudmarket.instance_user_remind.models
+    import dispatch.cloudmarket.job_event.models
+    import dispatch.cloudmarket.mearsurement.models
+    import dispatch.cloudmarket.mearsurement_summary.models
+    import dispatch.cloudmarket.sku.models
+    import dispatch.cloudmarket.worker_event.models
+    import dispatch.cloudmarket.api_usage_record.models
+    import dispatch.cloudmarket.instance_api_info.models
+    import dispatch.order.models
+    import dispatch.problem.models
+    import dispatch.job_biz.models
+    import dispatch.delivery_info.models
+    import dispatch.delivery_package.models
+    import dispatch.delivery_package_dimweight.models
+    import dispatch.msg_template.models
+    import dispatch.delivery_bag.models
+    import dispatch.delivery_product.models
+    import dispatch.file_info.models
+    import dispatch.file_usage_scenario.models
+    import dispatch.job_group.models
+    # import dispatch.log_remote_api.models

@@ -64,7 +64,7 @@ class Opti1DayPlanner(KandboxBatchOptimizerPlugin):
         # Real batch, rl_agent is skilpped.
         self.kandbox_env = env
         GENERATOR_START_DATE = datetime.strptime(
-            self.kandbox_env.config["env_start_day"], config.KANDBOX_DATE_FORMAT
+            self.kandbox_env.config["env_start_datetime"], config.KANDBOX_DATETIME_FORMAT_ISO
         )
         GENERATOR_END_DATE = GENERATOR_START_DATE + timedelta(
             days=self.kandbox_env.config["nbr_of_days_planning_window"]
@@ -135,7 +135,7 @@ class Opti1DayPlanner(KandboxBatchOptimizerPlugin):
                             "job_code": current_shifts[task_id].job_code,
                             "job_schedule_type": current_shifts[task_id].job_schedule_type,
                             "planning_status": JobPlanningStatus.IN_PLANNING,
-                            "scheduled_primary_worker_id": worker_code,
+                            "scheduled_primary_worker_code": worker_code,
                             "scheduled_start_day": datetime.strftime(
                                 current_date, config.KANDBOX_DATE_FORMAT
                             ),
@@ -148,11 +148,11 @@ class Opti1DayPlanner(KandboxBatchOptimizerPlugin):
                             ].requested_duration_minutes,
                             "scheduled_travel_minutes_before": task[2],
                             "scheduled_travel_prev_code": pre_job_code,
-                            # "location_code": current_shifts[task_id]["location_code"],
+                            # "code": current_shifts[task_id]["code"],
                             "geo_longitude": current_shifts[task_id].location[0],
                             "geo_latitude": current_shifts[task_id].location[1],
                             "conflict_level": 0,
-                            "scheduled_secondary_worker_ids": "[]",
+                            "scheduled_secondary_worker_codes": "[]",
                             "scheduled_share_status": "N",
                             "error_message": "",
                         }
@@ -169,7 +169,7 @@ class Opti1DayPlanner(KandboxBatchOptimizerPlugin):
             self.kandbox_env.kp_data_adapter.reload_data_from_db()
             for job in job_list:
                 # self.kandbox_env.jobs_dict[job["job_code"]] .planning_status = job["planning_status"]
-                # self.kandbox_env.jobs_dict[job["job_code"]] .scheduled_worker_codes = job ["scheduled_primary_worker_id"] + job ["scheduled_secondary_worker_ids"]
+                # self.kandbox_env.jobs_dict[job["job_code"]] .scheduled_worker_codes = job ["scheduled_primary_worker_code"] + job ["scheduled_secondary_worker_codes"]
                 # self.kandbox_env.jobs_dict[job["job_code"]] .scheduled_start_minutes = job["scheduled_start_minutes"]
                 # self.kandbox_env.jobs_dict[job["job_code"]].is_changed = True
 
@@ -182,7 +182,7 @@ class Opti1DayPlanner(KandboxBatchOptimizerPlugin):
                     job_code=job["job_code"],
                     # I assume that only in-planning jobs can appear here...
                     action_type=ActionType.FLOATING,
-                    scheduled_worker_codes=[job["scheduled_primary_worker_id"]],
+                    scheduled_worker_codes=[job["scheduled_primary_worker_code"]],
                     scheduled_start_minutes=job["scheduled_start_minutes"],
                     scheduled_duration_minutes=job["scheduled_duration_minutes"],
                 )
@@ -193,14 +193,13 @@ class Opti1DayPlanner(KandboxBatchOptimizerPlugin):
                     print(
                         f"{one_job_action_dict.job_code}: Failed to commit change, error: {str(internal_result_info)} ")
 
-                # job_to_create = copy.deepcopy(self.kandbox_env.kp_data_adapter.jobs_db_dict[job["job_code"]])
                 job_to_update = JobPlanningInfoUpdate(
                     code=job["job_code"],
                     planning_status=job["planning_status"],
                     scheduled_start_datetime=self.kandbox_env.env_decode_from_minutes_to_datetime(
                         job["scheduled_start_minutes"]),
                     scheduled_duration_minutes=job["scheduled_duration_minutes"],
-                    scheduled_primary_worker_code=job["scheduled_primary_worker_id"],
+                    scheduled_primary_worker_code=job["scheduled_primary_worker_code"],
                 )
                 job_service.update_planning_info(
                     db_session=self.kandbox_env.kp_data_adapter.db_session, job_in=job_to_update)
@@ -222,7 +221,7 @@ class Opti1DayPlanner(KandboxBatchOptimizerPlugin):
         visit_cust_I = (
             df[df.planning_status != JobPlanningStatus.UNPLANNED]
             .sort_values(
-                ["scheduled_primary_worker_id", "scheduled_start_day", "scheduled_start_minutes"],
+                ["scheduled_primary_worker_code", "scheduled_start_day", "scheduled_start_minutes"],
                 ascending=True,
             )
             .copy()
@@ -248,8 +247,8 @@ class Opti1DayPlanner(KandboxBatchOptimizerPlugin):
                     "scheduled_start_day",
                     "scheduled_start_minutes",
                     "scheduled_duration_minutes",
-                    "scheduled_primary_worker_id",
-                    "location_code",
+                    "scheduled_primary_worker_code",
+                    "code",
                 ]
             ]
             .shift(periods=1, fill_value=999999)
@@ -257,7 +256,7 @@ class Opti1DayPlanner(KandboxBatchOptimizerPlugin):
         )
 
         visit_cust_I[["next_start_day", "next_worker_code"]] = (
-            visit_cust_I[["scheduled_start_day", "scheduled_primary_worker_id"]]
+            visit_cust_I[["scheduled_start_day", "scheduled_primary_worker_code"]]
             .shift(periods=-1, fill_value=999999)
             .apply(lambda x: x, axis=1, result_type="expand")
         )
@@ -265,7 +264,7 @@ class Opti1DayPlanner(KandboxBatchOptimizerPlugin):
         visit_cust_U = (
             df[df.planning_status == JobPlanningStatus.UNPLANNED]
             .sort_values(
-                ["scheduled_primary_worker_id", "scheduled_start_day", "scheduled_start_minutes"],
+                ["scheduled_primary_worker_code", "scheduled_start_day", "scheduled_start_minutes"],
                 ascending=True,
             )
             .copy()
@@ -319,17 +318,17 @@ class Opti1DayPlanner(KandboxBatchOptimizerPlugin):
         from_home = False
         to_home = False
 
-        if x.scheduled_primary_worker_id != x["prev_worker_code"]:
+        if x.scheduled_primary_worker_code != x["prev_worker_code"]:
             from_home = True
         if x["scheduled_start_day"] != x["prev_start_day"]:
             from_home = True
 
-        if x.scheduled_primary_worker_id != x["next_worker_code"]:
+        if x.scheduled_primary_worker_code != x["next_worker_code"]:
             to_home = True
         if x["scheduled_start_day"] != x["next_start_day"]:
             to_home = True
 
-        # if x['location_code'] != x['prev_location_code']:
+        # if x['code'] != x['prev_location_code']:
         #    return fromjob, 0
         try:
             home_travel_time = self.kandbox_env.travel_router.get_travel_minutes_2locations(

@@ -6,9 +6,6 @@ from dispatch.plugins.kandbox_planner.env.env_models import (
     ActionDict,
     LocationTuple,
     Worker,
-    Job,
-    Appointment,
-    Absence,
     ActionEvaluationScore,
 )
 

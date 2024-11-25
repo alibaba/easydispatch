@@ -7,16 +7,18 @@ import click
 import uvicorn
 from alembic import command as alembic_command
 from alembic.config import Config as AlembicConfig
-from sqlalchemy.engine import create_engine
 from tabulate import tabulate
 from uvicorn import main as uvicorn_main
 
 from dispatch import __version__, config
-from dispatch.service.models import ServiceRead
+from dispatch.common.utils.kandbox_clear_data import clear_team_data_for_redispatching
+from dispatch.org.enums import OrganizationType
+from dispatch.plugins.kandbox_planner.env.env_enums import KandboxPlannerPluginType
+# from dispatch.service.models import ServiceRead
 from pprint import pprint
+from dispatch.common.utils.cli import install_plugins, import_database_models
 
 from dispatch.plugins.kandbox_planner.env.env_enums import (
-    EnvRunModeType,
     ActionScoringResultType,
     JobType,
     ActionType,
@@ -24,16 +26,18 @@ from dispatch.plugins.kandbox_planner.env.env_enums import (
 )
 
 from dispatch.plugins.kandbox_planner.env.env_models import ActionDict
-from dispatch.service.planner_service import get_default_active_planner, get_active_planner
+
+from dispatch.planner_env.planner_service import get_active_planner
 import time
+from dispatch.team import service as team_service
 
-
-from .database import Base, SessionLocal, engine
+from .database import engine
 from .exceptions import DispatchException
 from .logging import configure_logging
+
 # from .main import *  # noqa
 from .plugins.base import plugins
-from .scheduler import scheduler
+# from .scheduler import scheduler
 
 log = logging.getLogger(__name__)
 log.setLevel(logging.INFO)
@@ -56,6 +60,101 @@ def plugins_group():
     """Data Generator for Testing and Simulation."""
     pass
 
+import json
+
+@plugins_group.command("gen_doc")
+@click.option("--filename", default="dispatch_doc.html", help="file name")
+def dispatch_job(filename):
+    """Shows all available plugins"""
+
+    from fastapi import FastAPI
+    doc_api = FastAPI(docs_url=None, redoc_url=None, openapi_url=None, title="Kandbox Dispatch")
+    from dispatch.api import doc_exposed_api_router
+    doc_api.include_router(doc_exposed_api_router, prefix="/v1")
+
+
+
+
+    HTML_TEMPLATE = """<!DOCTYPE html>
+    <html>
+    <head>
+        <meta http-equiv="content-type" content="text/html; charset=UTF-8">
+        <title>Dispatch API</title>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <link rel="shortcut icon" href="/icon/kandbox_logo.png">
+        <style>
+            body {
+                margin: 0;
+                padding: 0;
+            }
+        </style>
+        <style data-styled="" data-styled-version="4.4.1"></style>
+    </head>
+    <body>
+        <div id="redoc-container"></div>
+        <script src="https://cdn.jsdelivr.net/npm/redoc/bundles/redoc.standalone.js"> </script>
+        <script>
+            var spec = %s;
+            Redoc.init(spec, {}, document.getElementById("redoc-container"));
+        </script>
+    </body>
+    </html>
+    """
+
+    with open(filename, "w") as fd:
+        print(HTML_TEMPLATE % json.dumps(doc_api.openapi()), file=fd)
+
+    print(f"Done to file: {filename}")
+
+
+from dispatch.database_util.service import get_schema_session
+
+@plugins_group.command("clear_team_data")
+@click.option("--org_id", default=107, help="Organization id, only POC org can be cleared.")
+@click.option("--team_id", default=1, help="int team_id")
+@click.option("--org_code", default="dubai", help="int team_id")
+@click.option("--delete_dispatch_user", default=None, help="是否删除 dispatch_core 里面创建的用户 ")
+def clear_team_data(org_id, team_id, org_code,delete_dispatch_user=None):
+    """Shows all available plugins"""
+    # print(f"PURGE DB and RESET, DO NOT USE clear_team_data for org {org_id}, team {team_id}...")
+    # return
+    clear_team_data_operate(org_id, team_id, org_code,delete_dispatch_user)
+    
+def clear_team_data_operate(org_id, team_id, org_code,delete_dispatch_user=None):
+
+    install_plugins()
+
+    from dispatch.common.utils.kandbox_clear_data import clear_all_worker_jobs_in_team
+    from dispatch.planner_env.planner_service import reset_planning_window_for_team
+
+    from dispatch.org import service as org_service
+    env = get_active_planner(org_id= org_id, team_id=team_id)
+
+    db_session = get_schema_session(org_code=org_code)
+
+    org = org_service.get(db_session=db_session, org_id= org_id)
+    if org is None:
+        print("Organization does not exist")
+    if org.org_type != OrganizationType.POC:
+        print("Only POC Organization can reset data in teams. Please consider removing reset_dataset setting ...")
+    
+    print(f"clear_team_data started for org {org_id}, team {team_id}...")
+    clear_all_worker_jobs_in_team(
+        db_session= db_session, 
+        org_code = org.code, 
+        team_id = team_id,
+        delete_dispatch_user=delete_dispatch_user
+
+    )
+    reset_planning_window_for_team(org_id=org_id, team_id=team_id)
+
+    print(f"Data is cleared for org {org_id}, team {team_id} ...")
+
+
+
+
+
 
 @plugins_group.command("generate")
 # @click.option("--bearer", default=None, help="token recieved after login call")
@@ -65,27 +164,86 @@ def plugins_group():
 )
 @click.option("--start_day", default="2020112", help="start_day in format yyyymmdd")
 @click.option("--end_day", default="20201014", help="end_day in format yyyymmdd")
-@click.option("--team_code", default="t", help="team code")
+@click.option("--team_code", default="default_team", help="team code")
 @click.option("--dispatch_days", default=10, help="number of days in integer")
 @click.option("--dataset", default="veo", help="dataset, for example veo")
-@click.option("--generate_worker", default=0, help="whether to create worker or not")
-@click.option("--nbr_jobs", default=1, help="how many jobs to generate")
+@click.option("--filename", default="csv", help="dataset, for example veo")
+@click.option("--generate_target", default='worker', help="worker, job, location, or all")
+@click.option("--generate_worker_count", default=8, help="How many workers to generate, 0 means None")
+@click.option("--generate_job_count", default=21, help="How many jobs to generate, 0 means None") 
 @click.option("--job_start_index", default=20, help="how many jobs to generate")
 @click.option("--auto_planning_flag", default=1, help="auto or not, 1 is yes/true")
-@click.option("--service_url", default="https://dispatch.easydispatch.uk/api/v1", help="Redirect generation to a different server")
-def populate_data(username, password, start_day, end_day, team_code, dispatch_days, dataset, generate_worker, nbr_jobs, job_start_index, auto_planning_flag, service_url):
+@click.option(
+    "--service_url",
+    default="https://dispatch.easydispatch.uk/api/v1",
+    help="Redirect generation to a different server",
+)
+def populate_data(
+    username,
+    password,
+    start_day,
+    end_day,
+    team_code,
+    dispatch_days,
+    dataset,
+    filename,
+    generate_target,
+    generate_worker_count,
+    generate_job_count, 
+    job_start_index,
+    auto_planning_flag,
+    service_url,
+):
+    # nbr_jobs = generate_job_count
     """Shows all available plugins"""
     log.debug(f"Populating sample data wtih username={username}, dataset = {dataset}...")
 
     # from dispatch.plugins.kandbox_planner.data_generator.london_data_generator import generate_all
     if dataset == "veo":
         from dispatch.plugins.kandbox_planner.data_generator.veo_data_generator import generate_all
-    else:
-        raise ValueError("No such dataset.")
+    elif dataset == "london_realtime":
+        from dispatch.contrib.plugins.data_generator.london_pick_drop_data_generator import (
+            generate_all,
+        )
+    elif dataset == "singapore_pickdrop":
+        from dispatch.plugins.kandbox_planner.data_generator.singapore_pickdrop_data_generator import generate_all
+
+    elif dataset == "philippine_pldt_realtime":
+        from dispatch.contrib.plugins.data_generator.philippine_pldt_realtime_data_generator import (
+            generate_all,
+        )
+    # elif dataset == "singapore_realtime":
+    #     from dispatch.contrib.plugins.data_generator.singapore_realtime_data_generator import (
+    #         generate_all,
+    #     )
+    elif dataset == "dubai_baituo_pick_drop":
+        from dispatch.contrib.plugins.data_generator.dubai_baituo_pick_drop_data_generator import (
+            generate_all,
+        )
+    elif dataset == "oman":
+        from dispatch.contrib.plugins.data_generator.oman_data_generator import generate_all
+    elif dataset == "tsv_thailand":
+        from dispatch.contrib.plugins.data_generator.vst_thailand_data_generator import generate_all
+    elif dataset == "asiapac":
+        from dispatch.contrib.plugins.data_generator.asiapac_data_generator import generate_all
+    elif dataset == "asiapac_new":
+        from dispatch.contrib.plugins.data_generator.asiapac_data_generator_new import generate_all
+    elif dataset == "global_track":
+        from dispatch.contrib.plugins.data_generator.global_track_v2_data_generator import generate_all
+    elif dataset == "senheng":
+        from dispatch.contrib.plugins.data_generator.senheng_data_generator import generate_all
+    elif dataset == "jt":
+        from dispatch.contrib.plugins.data_generator.jt_data_generator import generate_all
+    elif dataset == "5gmax":
+        # from dispatch.contrib.plugins.data_generator.data_generator_5gmax import generate_all
+        from dispatch.contrib.plugins.data_generator.five_g_max_data_generator import generate_all
+    elif dataset == "johnson":
+        from dispatch.contrib.plugins.data_generator.data_generator_johnson import generate_all
+
     ORG_SQLALCHEMY_DATABASE_URI = config.SQLALCHEMY_DATABASE_URI
 
     # print("org_engine .SQLALCHEMY_DATABASE_URI=", config.SQLALCHEMY_DATABASE_URI)
-    from sqlalchemy_utils import database_exists, create_database
+    from sqlalchemy_utils import database_exists
 
     if not database_exists(str(ORG_SQLALCHEMY_DATABASE_URI)):  #
         print("Error, no db")
@@ -100,10 +258,14 @@ def populate_data(username, password, start_day, end_day, team_code, dispatch_da
             "end_day": end_day,
             "dispatch_days": dispatch_days,
             "team_code": team_code,
-            "generate_worker": generate_worker,
-            "nbr_jobs": nbr_jobs,
+            "generate_target":generate_target,
+            "generate_worker_count": generate_worker_count,
+            "generate_job_count": generate_job_count,
+            "nbr_jobs": generate_job_count, # for compatability
+            "filename":filename,
             "job_start_index": job_start_index,
-            "auto_planning_flag": True if auto_planning_flag == 1 else False
+            "auto_planning_flag": True if auto_planning_flag == 1 else False,
+            "generate_target":generate_target,
         }
     )
 
@@ -123,7 +285,7 @@ def dispatch_job(start_day, end_day, team_code, dispatch_days):
     """Shows all available plugins"""
 
     print("Dispatch started...")
-    from dispatch.team import service as team_service
+
     from sqlalchemy.orm import sessionmaker
 
     sl = sessionmaker(bind=engine)
@@ -146,6 +308,40 @@ def dispatch_job(start_day, end_day, team_code, dispatch_days):
             "team_id": team_obj.id,
         }
     )
+
+
+@plugins_group.command("run_test_ortools_batch")
+@click.option("--start_day", default="2020112", help="start_day in format yyyymmdd")
+@click.option("--end_day", default="20201014", help="end_day in format yyyymmdd")
+@click.option("--org_code", default="demo", help="org_code")
+@click.option("--team_code", default="london_t1", help="team_code")
+@click.option("--plugin_slug", default="kandbox_ortools_n_days_optimizer", help="plugin slug")
+def run_test_ortools_batch(start_day, end_day, org_code, team_code, plugin_slug):
+    """Shows all available plugins"""
+    db_session = SessionLocal()
+    team_obj = team_service.get_by_code(db_session=db_session, code=team_code)
+    if not team_obj:
+        print(f"Failed to find team by team_code = {team_code }, aborted.")
+        return
+    team_id = team_obj.id
+
+    from dispatch.planner_plugin import service as service_plugin_service
+
+    service_plugin_service.switch_agent_plugin_for_service(
+        db_session=db_session,
+        service_name="default_planner",
+        agent_slug=plugin_slug,
+        service_plugin_type=KandboxPlannerPluginType.kandbox_batch_optimizer,
+        org_id=team_obj.org_id,
+    )
+
+    clear_team_data_for_redispatching(org_code, team_id)
+    result_info, planner = reset_planning_window_for_team(org_code, team_id)
+    rl_env = planner["planner_env"]
+
+    planner["batch_optimizer"].dispatch_jobs(env=rl_env)
+    log.info(f"Finished dispatching {len(rl_env.jobs_dict)} jobs. ")
+    pprint(rl_env.get_planner_score_stats())
 
 
 @dispatch_cli.group("plugins")
@@ -182,25 +378,12 @@ def sync_triggers():
         ],
     )
     sync_trigger(
-        engine,
-        "location",
-        "search_vector",
-        [
-            "location_code",
-            "geo_address_text",
-        ],
+        engine, "location", "search_vector", ["code", "geo_address_text",],
     )
     sync_trigger(engine, "plugin", "search_vector", ["title", "slug", "type"])
     sync_trigger(engine, "service", "search_vector", ["code", "name", "description"])
     sync_trigger(
-        engine,
-        "team",
-        "search_vector",
-        [
-            "code",
-            "name",
-            "description",
-        ],
+        engine, "team", "search_vector", ["code", "name", "description",],
     )
     # sync_trigger(engine, "tag", "search_vector", ["name"])
 
@@ -223,15 +406,57 @@ def metadata_dump(sql, *multiparams, **params):
     # print or write to log or file etc
     print(sql.compile(dialect=engine.dialect))
 
+
+
 @dispatch_database.command("init")
 def database_init():
     """Initializes a new database."""
     click.echo("Initializing new database...")
-    from .database_util.manage import (
-        init_database,
-    )
+    from .database_util.manage import init_database
+
+    # import_database_models()
 
     init_database(engine)
+    click.secho("Success.", fg="green")
+
+
+
+@dispatch_database.command("setup_fulltext")
+@click.option("--table-name", default=None, help="table to upgrade.")
+def setup_fulltext(table_name):
+    """Initializes a new database."""
+    click.echo("Setup_fulltext for the database...")
+    from .database import engine
+    from .database_util.manage import (
+        get_tenant_tables,
+        setup_fulltext_search,
+    )
+    import sqlalchemy 
+
+    import_database_models()
+
+    conn = engine.connect()
+    if table_name is None:
+        return
+
+    if table_name == "_ALL_":
+        tenant_tables = get_tenant_tables(table_name = None)
+    else:
+        tenant_tables = get_tenant_tables(table_name = table_name)
+
+
+    schema_names = sqlalchemy.inspect(engine).get_schema_names()
+    for schema_name in schema_names:
+        if not schema_name.startswith('dispatch_organization_'):
+            continue
+        click.secho(f"Detected a tenant schema {schema_name}, setup_fulltext for it...")
+
+        for t in tenant_tables:
+            t.schema = schema_name
+
+        setup_fulltext_search(conn, tenant_tables)
+
+
     click.secho("Success.", fg="green")
 
 
@@ -359,6 +584,7 @@ def upgrade_database(tag, sql, revision, revision_type):
         setup_fulltext_search,
     )
 
+    import_database_models()
     alembic_cfg = AlembicConfig(config.ALEMBIC_INI_PATH)
 
     if not database_exists(str(config.SQLALCHEMY_DATABASE_URI)):
@@ -503,6 +729,8 @@ def revision_database(
 ):
     """Create new database revision."""
     import types
+
+    import_database_models()
     alembic_cfg = AlembicConfig(config.ALEMBIC_INI_PATH)
 
     if revision_type:
@@ -546,11 +774,59 @@ def revision_database(
     click.secho("Success. The database scripts are revised.", fg="green")
 
 
+
 @dispatch_cli.group("scheduler")
 def dispatch_scheduler():
     """Container for all dispatch scheduler commands."""
     # we need scheduled tasks to be imported
-    from .scheduler import daily_reload_data
+
+
+@dispatch_scheduler.command("fix")
+def fix_slots():
+    """Prints and runs all currently configured periodic tasks, in seperate event loop."""
+    install_plugins()
+    from dispatch.planner_env.planner_service import get_active_planner
+    env = get_active_planner( org_id=102, team_id=1,)
+    # env.fix_missing_kmedoid_start_pos()
+    # env.clear_stale_kmedoid_keys()
+    click.secho(f"finished fixing...", fg="green")
+
+
+@dispatch_scheduler.command("parse_logs")
+@click.option(
+    "--logfile", default="/Users/duan/Downloads/wemart_20230508_2.csv", help=("Specify a hardcoded revision id instead of generating " "one")
+)
+def parse_logs(logfile):
+    install_plugins()
+    import re
+    from datetime import datetime
+    from dispatch.planner_env.planner_service import get_active_planner
+    env = get_active_planner( org_id=102, team_id=1,)
+    with open(logfile, "r") as fs, open(f"{logfile}.single.csv","w") as single_fs, open(f"{logfile}.merged.csv","w") as merged_fs:
+        for data in fs.readlines():
+            try:
+                order_date = str(datetime.fromtimestamp(int(re.findall(",(\d+),,",data)[0])))
+                order_num = re.findall("order \(\'(\d+)",data)[0]
+                jobs = data.split("available_free_minutes")[0].split("assigned_jobs")[1].split('JobInSlot')
+                is_merge = False
+                if len(jobs) > 3:
+                    is_merge = True
+                newline = f"{order_num},{order_date}," 
+                for jobline in jobs[1:]:
+                    job_code = re.findall("code='(.*)',",jobline)[0]
+                    scheduled_start = env.env_decode_from_minutes_to_datetime(float(re.findall("scheduled_start_minutes=([\d\.]*),",jobline)[0]))
+                    tolerance = env.env_decode_from_minutes_to_datetime(float(re.findall("tolerance_end_minutes=([\d\.]*)",jobline)[0]))
+                    jl = jobline.replace(",","__")
+                    newline += f"{job_code},{str(scheduled_start)},{str(tolerance)},{jl},"
+                if is_merge:
+                    merged_fs.write(f"{newline}\n")
+                else:
+                    single_fs.write(f"{newline}\n")
+            except:
+                print(f"failed on line: {data}")
+
+    click.secho(f"finished parse_logs...", fg="green")
+
 
 
 @dispatch_scheduler.command("list")
@@ -563,28 +839,26 @@ def list_tasks():
     click.secho(tabulate(table, headers=["Task Name", "Period", "At Time"]), fg="blue")
 
 
+# from dispatch.cloudmarket.instance.schduler import init_scheduler, front_scheduler
+# from dispatch.bg_functions import init_ed_tasks
+from dispatch.crontab import init_scheduler, back_scheduler
+
 @dispatch_scheduler.command("start")
 @click.argument("tasks", nargs=-1)
 @click.option("--eager", is_flag=True, default=False, help="Run the tasks immediately.")
 def start_tasks(tasks, eager):
     """Starts the scheduler."""
-    if tasks:
-        for task in scheduler.registered_tasks:
-            if task["name"] not in tasks:
-                scheduler.remove(task)
+    install_plugins()
+    init_scheduler()
+    click.secho("Started background scheduler...", fg="blue")
+    back_scheduler.start()
 
-    if eager:
-        for task in tasks:
-            for r_task in scheduler.registered_tasks:
-                if task == r_task["name"]:
-                    click.secho(f"Eagerly running: {task}", fg="blue")
-                    r_task["func"]()
-                    break
-            else:
-                click.secho(f"Task not found. TaskName: {task}", fg="red")
+    # front_scheduler.start()
+    # init_ed_tasks()
 
-    click.secho("Starting scheduler...", fg="blue")
-    scheduler.start()
+    # while True:
+    #     time.sleep(30)
+
 
 
 @dispatch_cli.group("server")
@@ -626,28 +900,28 @@ def show_config():
     click.secho(tabulate(table, headers=["Key", "Value"]), fg="blue")
 
 
-@dispatch_server.command("develop")
-@click.option(
-    "--log-level",
-    type=click.Choice(["debug", "info", "error", "warning", "critical"]),
-    default="debug",
-    help="Log level to use.",
-)
-def run_server(log_level):
-    """Runs a simple server for development."""
-    # Uvicorn expects lowercase logging levels; the logging package expects upper.
-    os.environ["KANDBOX_LOG_LEVEL"] = log_level.upper()
-    if not config.STATIC_DIR:
-        import atexit
-        from subprocess import Popen
+# @dispatch_server.command("develop")
+# @click.option(
+#     "--log-level",
+#     type=click.Choice(["debug", "info", "error", "warning", "critical"]),
+#     default="debug",
+#     help="Log level to use.",
+# )
+# def run_server(log_level):
+#     """Runs a simple server for development."""
+#     # Uvicorn expects lowercase logging levels; the logging package expects upper.
+#     os.environ["KANDBOX_LOG_LEVEL"] = log_level.upper()
+#     if not config.STATIC_DIR:
+#         import atexit
+#         from subprocess import Popen
 
-        # take our frontend vars and export them for the frontend to consume
-        envvars = os.environ.copy()
-        envvars.update({x: getattr(config, x) for x in dir(config) if x.startswith("VUE_APP_")})
+#         # take our frontend vars and export them for the frontend to consume
+#         envvars = os.environ.copy()
+#         envvars.update({x: getattr(config, x) for x in dir(config) if x.startswith("VUE_APP_")})
 
-        p = Popen(["npm", "run", "serve"], cwd="src/dispatch/static/dispatch", env=envvars)
-        atexit.register(p.terminate)
-    uvicorn.run("dispatch.main:app", debug=True, log_level=log_level)
+#         p = Popen(["npm", "run", "serve"], cwd="src/dispatch/static/dispatch", env=envvars)
+#         atexit.register(p.terminate)
+#     uvicorn.run("dispatch.main:app", debug=True, log_level=log_level)
 
 
 dispatch_server.add_command(uvicorn_main, name="start")
@@ -669,70 +943,49 @@ IPython: {IPython.__version__}"""
 
 
 @dispatch_server.command("start_rec")
-@click.option(
-    "--org_code", default="0", help="Organization Code, for multi tenancy, internal usage only."
-)
-@click.option("--team_id", default=1, help="int team_id")
-@click.option("--reset_window", default="no", help="Whether or not reset the planning window.")
-@click.option("--start_day", default="2020112", help="start_day in format yyyymmdd")
-@click.option("--end_day", default="20201014", help="end_day in format yyyymmdd")
-def start_rec(org_code, team_id, reset_window, start_day, end_day):
+def start_rec():
     """Star the Recommendation Server. This server :
-    1. consumes the kafka env_window messages
-    2. run replay
-    3. create recommendations
+    1. consumes the redis queue message
+    2. run optimizer and push result to redis
     """
-    log.info(f"Acquiring Env for team_id={team_id} ...")
+    from datetime import datetime
+    import traceback
 
-    if reset_window == "yes":
-        planner = get_active_planner(
-            org_code=org_code,
-            team_id=team_id,
-            start_day=start_day,
-            end_day=end_day,
-            force_reload=True,
-        )
-        rl_env = planner["planner_env"]
-        rl_env.replay_env_to_redis()
 
-        planner = get_active_planner(
-            org_code=org_code,
-            team_id=team_id,
-            start_day=start_day,
-            end_day=end_day,
-            force_reload=True,
-        )
-    else:
-        planner = get_default_active_planner(org_code=org_code, team_id=team_id)
-        rl_env = planner["planner_env"]
-
-    log.info(
-        f"Started Recommender for(org_code={org_code}, team_id={team_id}), kafka topic = {rl_env.kafka_server.get_env_window_topic_name()}  use Ctrl-C to exit ..."
-    )
+    log.info(f"{datetime.now()}, Installing plugins ...")
+    install_plugins()
+    start_datetime = datetime.now()
+    log.info(f"{start_datetime}, Started Recommender. Please monitor redis messages. Use Ctrl-C to exit   ...")
+    
+    from dispatch.planner_env.planner_func import MultiplexPlannerHub
+    planner_hub = MultiplexPlannerHub()
     i = 0
+    sleep_intervals=(0.02, 0.06, 0.1, 0.2, 0.5, 1, 2,) 
+    sleep_idx = 0
     while True:
-        check_env_n_act(planner=planner)
-        if i % 30 == 1:
-            log.info(
-                f"Continuing after {i} loops, {int(i/60/60/24)} days, {int((i/60) % (60*60*24))} minutes, env_inst_code = {rl_env.env_inst_code}, kafka_input_window_offset = {rl_env.kafka_input_window_offset}, kafka_slot_changes_offset = {rl_env.kafka_slot_changes_offset}"
-            )
-        # THERE IS a need to sleep here, intead I modified consumer_timeout_ms = 10_0000 # float("inf")
-        time.sleep(1)
+        _, message_str = planner_hub.redis_conn.brpop(config.REDIS_JOB_QUEUE_REALTIME)
+        try:
+            planner_hub.process_message(message_str)
+            # THERE IS a need to sleep here, intead I modified consumer_timeout_ms = 10_0000 # float("inf")
+        except Exception as e:
+            traceback.print_exc()
+            log.info(f"{message_str}, error: {str(e)}")
+
+        # time.sleep(1)
 
         i = i + 1
-
-    # print("Recommendation Done.")
-    # rl_env.run_mode = EnvRunModeType.REPLAY
-    # rl_env.mutate_check_env_window_n_replay()
-
+        if i % 30 == 1:
+            log.info(
+                f"Continuing after {i} loops, interval {datetime.now()-start_datetime}"
+            )
 
 @dispatch_server.command("train")
 @click.option(
-    "--org_code", default="0", help="Organization Code, for multi tenancy, internal usage only."
+    "--org_id", default="0", help="Organization Code, for multi tenancy, internal usage only."
 )
 @click.option("--team_id", default=1, help="team_id")
 # @click.option("--agent_slug", default="2", help="slug")
-def start_train(org_code, team_id):
+def start_train(org_id, team_id):
     """Train the PPO rl agent:
     1. consumes the kafka env_window messages
     2. run replay
@@ -740,7 +993,7 @@ def start_train(org_code, team_id):
     """
     log.info(f"Acquiring Env for team_id={team_id} ...")
 
-    planner = get_default_active_planner(org_code=org_code, team_id=team_id)
+    planner = get_active_planner(org_id=org_id, team_id=team_id)
     rl_env = planner["planner_env"]
 
     pprint(rl_env.get_planner_score_stats())
@@ -776,7 +1029,7 @@ def start_repair(org_code, team_id):
 
     log.info(f"Acquiring Env for team_id={team_id} ...")
 
-    planner = get_default_active_planner(org_code=org_code, team_id=team_id)
+    planner = get_active_planner(org_code=org_code, team_id=team_id)
     rl_env = planner["planner_env"]
     rl_agent = planner["planner_agent"]
     rl_agent.config["nbr_of_actions"] = 2
@@ -790,7 +1043,7 @@ def start_repair(org_code, team_id):
         ):
             res = rl_agent.predict_action_dict_list(job_code=job_code)
             if len(res) < 1:
-                log.warn(f"Failed to predict for job_code = {job_code}")
+                log.warning(f"Failed to predict for job_code = {job_code}")
                 continue
             one_job_action_dict = ActionDict(
                 is_forced_action=True,
@@ -806,7 +1059,7 @@ def start_repair(org_code, team_id):
             )
 
             if internal_result_info.status_code != ActionScoringResultType.OK:
-                log.warn(
+                log.warning(
                     f"JOB:{ job_code}: Failed to act on job={job_code}. "  # {internal_result_info}
                 )
             else:
@@ -816,13 +1069,16 @@ def start_repair(org_code, team_id):
 
 
 def entrypoint():
-    """The entry that the CLI is executed from"""
-    dispatch_cli()
-    return
+    """The entry that the CLI is executed from""" 
     try:
         dispatch_cli()
     except DispatchException as e:
         click.secho(f"ERROR: {e}", bold=True, fg="red")
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        log.error(e)
+        print(e)
 
 
 if __name__ == "__main__":

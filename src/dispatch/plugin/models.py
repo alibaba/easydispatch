@@ -4,11 +4,13 @@ from sqlalchemy import Column, Integer, String, Boolean, JSON
 from sqlalchemy_utils import TSVectorType
 
 from dispatch.database import Base
-from dispatch.models import DispatchBase
+from dispatch.models import DispatchBase,TimeStampMixin
 from dispatch.plugins.base import plugins
+from sqlalchemy.orm import relationship
 
+class Plugin(Base,TimeStampMixin):
+    __tablename__ = 'plugin' 
 
-class Plugin(Base):
     __table_args__ = {"schema": "dispatch_core"}
     id = Column(Integer, primary_key=True)
     title = Column(String)
@@ -24,6 +26,10 @@ class Plugin(Base):
     config = Column(JSON)
 
     config_form_spec = Column(JSON)  # Column(String, default='{"key_1":["skill_1"]}')
+    # service_pluagin = relationship("ServicePlugin", back_populates="plugin", foreign_keys="[ServicePlugin.service_id]")
+    # service_pluagin = relationship("ServicePlugin", back_populates="plugin", foreign_keys="[ServicePlugin.plugin_id]")
+
+    plugins = relationship("ServicePlugin", back_populates="plugin", foreign_keys="[ServicePlugin.plugin_id]")
 
     @property
     def instance(self):
@@ -99,3 +105,9 @@ class PluginMetadata(DispatchBase):
 class PluginPagination(DispatchBase):
     total: int
     items: List[PluginRead] = []
+    page: int 
+    itemsPerPage: int 
+
+
+class PluginType(DispatchBase):
+    plugin_type:  List[str] = []

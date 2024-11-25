@@ -14,8 +14,7 @@ from dispatch.models import DispatchBase, TimeStampMixin
 # SQLAlchemy Model
 class ItemInventoryEvent(Base, TimeStampMixin):
     # columns
-    id = Column(Integer, primary_key=True)
-    uuid = Column(SQLAlchemyUUID(as_uuid=True), unique=True, nullable=False)
+    uuid = Column(SQLAlchemyUUID(as_uuid=True), unique=True, nullable=False, primary_key=True)
     event_type = Column(String, nullable=False, default="Job")
     source = Column(String, nullable=False)
     description = Column(String, nullable=False)
@@ -29,7 +28,6 @@ class ItemInventoryEvent(Base, TimeStampMixin):
     depot_id = Column(Integer, nullable=False)
     depot_code = Column(String, nullable=True)
 
-    job_id = Column(Integer, nullable=True)
     job_code = Column(String, nullable=True)
     account_id = Column(Integer, nullable=True)
     account_code = Column(String, nullable=True)
@@ -56,7 +54,7 @@ class ItemInventoryEventBase(DispatchBase):
     item_code: Optional[str]
     depot_code: Optional[str]
 
-    job_id: Optional[int]
+    job_code: Optional[int]
     job_code: Optional[str]
     account_id: Optional[int]
     account_code: Optional[str]
@@ -70,10 +68,6 @@ class ItemInventoryEventUpdate(ItemInventoryEventBase):
     pass
 
 
-class ItemInventoryEventRead(ItemInventoryEventBase):
-    id: int
+class ItemInventoryEventRead(ItemInventoryEventBase): 
     pass
 
-
-class ItemInventoryEventNested(ItemInventoryEventBase):
-    id: int

@@ -1,9 +1,8 @@
-# https://stackoverflow.com/questions/4913349/haversine-formula-in-python-bearing-and-distance-between-two-gps-points
 import traceback
 import logging
 import requests
 import json
-from dispatch.plugins.bases.kandbox_planner import KandboxLocationServicePlugin
+from dispatch.plugins.bases.location_plugin import KandboxLocationServicePlugin
 from dispatch.plugins import dispatch_core as dispatch_plugin
 
 log = logging.getLogger(__name__)
@@ -134,19 +133,19 @@ class LocationAdapterService(KandboxLocationServicePlugin):
             _location_ret = _location_data['result']
             geo_latitude = _location_ret['phpocgeocode']['geocode']['latitude']
             geo_longitude = _location_ret['phpocgeocode']['geocode']['longitude']
-            location_code = f"{_location_ret['phpocgeocode']['address_id']}_{_location_ret['phpocgeocode']['input_address'].replace(' ', '_')}"
-            location_id = _location_ret['phpocgeocode']['address_id']
+            code = f"{_location_ret['phpocgeocode']['address_id']}_{_location_ret['phpocgeocode']['input_address'].replace(' ', '_')}"
+            id = _location_ret['phpocgeocode']['address_id']
         else:
             geo_latitude = ''
             geo_longitude = ''
-            location_code = ''
-            location_id = ''
+            code = ''
+            id = ''
 
         return data['flag'] if data else False, {
-            'location_code': location_code,
+            'id': id,
+            'code': code,
             'latitude': geo_latitude,
             'longitude': geo_longitude,
-            'location_id': location_id,
         }, data if data else {}
 
 # Testing moved to etc.pldt...

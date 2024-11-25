@@ -10,13 +10,13 @@ def get(*, db_session, group_id: int) -> Optional[Group]:
     return db_session.query(Group).filter(Group.id == group_id).one_or_none()
 
 
-def get_by_job_id_and_resource_type(
-    *, db_session, job_id: str, resource_type: str
+def get_by_job_code_and_resource_type(
+    *, db_session, job_code: str, resource_type: str
 ) -> Optional[Group]:
     """Returns a group given an job id and group resource type."""
     return (
         db_session.query(Group)
-        .filter(Group.job_id == job_id)
+        .filter(Group.job_code == job_code)
         .filter(Group.resource_type == resource_type)
         .one_or_none()
     )

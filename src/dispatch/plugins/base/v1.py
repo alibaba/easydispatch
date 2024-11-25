@@ -9,11 +9,11 @@
 import logging
 from threading import local
 from typing import Any, List, Optional
+import copy
 
 from pydantic.schema import schema
 
 logger = logging.getLogger(__name__)
-
 
 # stolen from https://github.com/getsentry/sentry/
 class PluginMount(type):
@@ -124,3 +124,24 @@ class Plugin(IPlugin):
 
     __version__ = 1
     __metaclass__ = PluginMount
+
+class ConfigurablePlugin(Plugin):
+    """
+    A configurable plugin should be superceded and specified with its own attributes.
+    """
+
+    type = "ConfigurablePlugin"
+    title = "Easy Dispatch Plugins"
+    slug = "configurable_plugin"
+    author = "Kandbox"
+    author_url = "https://github.com/alibaba/easydispatch"
+    description = "Kandbox Plugin"
+    version = "0.1.0"
+    default_config = dict()
+    config_form_spec = dict()
+
+    def __init__(self, config=None):
+        self.config = copy.deepcopy(self.default_config)
+        if config:
+            self.config.update(config) 
+

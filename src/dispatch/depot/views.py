@@ -1,12 +1,11 @@
 from dispatch.database import get_db
-from dispatch.org import service as orgService
-import random
 from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from dispatch.auth.models import DispatchUser
 from dispatch.auth.service import get_current_user
+from dispatch.org import service as org_service
 
 from dispatch.database_util.service import common_parameters, search_filter_sort_paginate
 from .models import (
@@ -21,12 +20,9 @@ from .service import create, delete, get, get_by_code, get_by_code_org_id, updat
 router = APIRouter()
 
 
-@router.get(
-    "/", response_model=DepotPagination
-)
+@router.get("/", response_model=DepotPagination)
 def get_depots(*, common: dict = Depends(common_parameters)):
-    """
-    """
+
     return search_filter_sort_paginate(model="Depot", **common)
 
 
@@ -61,8 +57,10 @@ def create_depot(*, db_session: Session = Depends(get_db), depot_in: DepotCreate
     """
     Create a new depot contact.
     """
+    org_service.verify_status(db_session=db_session, org_id=current_user.org_id)
+
     # limit max
-    org_data = orgService.get(db_session=db_session, org_code=current_user.org_code)
+    org_data = org_service.get(db_session=db_session, org_code=current_user.org_code)
     if not org_data:
         raise HTTPException(status_code=400, detail="org not exists")
 

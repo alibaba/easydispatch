@@ -129,7 +129,7 @@ class NearestNeighbourPlannerJobsInSlots(JobsInSlotsPlannerTrait):  # to fake Op
             job_1.location
             )
 
-        all_worker_codes = [s.worker_id for s in working_time_slots]
+        all_worker_codes = [s.worker_code for s in working_time_slots]
         job_1_action_dict = ActionDict(
             is_forced_action=False,
             job_code=job_1_code,

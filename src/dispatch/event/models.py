@@ -12,24 +12,6 @@ from dispatch.models import DispatchBase, TimeStampMixin
 
 
 # SQLAlchemy Model
-class Event(Base, TimeStampMixin):
-    # columns
-    id = Column(Integer, primary_key=True)
-    uuid = Column(SQLAlchemyUUID(as_uuid=True), unique=True, nullable=False)
-    started_at = Column(DateTime, nullable=False)
-    ended_at = Column(DateTime, nullable=False)
-    source = Column(String, nullable=False)
-    description = Column(String, nullable=False)
-    details = Column(JSONType, nullable=True)
-
-    # relationships
-    worker_id = Column(Integer, ForeignKey("worker.id"))
-    job_id = Column(Integer, ForeignKey("job.id"))
-
-    # full text search capabilities
-    search_vector = Column(
-        TSVectorType("source", "description", weights={"source": "A", "description": "B"})
-    )
 
 
 # Pydantic Models
@@ -40,6 +22,7 @@ class EventBase(DispatchBase):
     source: str
     description: str
     details: Optional[dict]
+    flex_form_data: Optional[dict]
 
 
 class EventCreate(EventBase):

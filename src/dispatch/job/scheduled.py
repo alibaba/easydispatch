@@ -15,7 +15,7 @@ from dispatch.worker import service as worker_service
 from dispatch.worker.models import Worker, WorkerUpdate
 from dispatch.location.models import Location, LocationUpdate
 from dispatch.scheduler import scheduler
-from dispatch.service import service as service_service
+from dispatch.planner_service import service as service_service
 
 
 from collections import Counter
@@ -42,19 +42,19 @@ def calc_historical_location_features_real_func(db_session=None):
 
     job_loc_df = pd.read_sql(
         db_session.query(
-            Job.scheduled_primary_worker_id,
+            Job.scheduled_primary_worker_code,
             Worker.code.label("scheduled_primary_worker_code"),
-            Job.id.label("job_id"),
+            Job.code.label("job_code"),
             Job.scheduled_start_datetime,
             Job.scheduled_duration_minutes,
             Job.requested_start_datetime,
             Job.flex_form_data,
-            Job.location_id,
+            Job.location_code,
             Location.geo_longitude,
             Location.geo_latitude,
         )
-        .filter(Job.location_id == Location.id)
-        .filter(Job.scheduled_primary_worker_id == Worker.id)
+        .filter(Job.location_code == Location.code)
+        .filter(Job.scheduled_primary_worker_code == Worker.code)
         .filter(Job.planning_status.in_((JobPlanningStatus.FINISHED,)))
         .statement,
         db_session.bind,
@@ -84,7 +84,7 @@ def calc_historical_location_features_real_func(db_session=None):
     worker_job_gmm_df = (
         job_loc_df.groupby(["actual_primary_worker_code"])
         .agg(
-            # job_count=pd.NamedAgg(column='location_code', aggfunc='count')
+            # job_count=pd.NamedAgg(column='code', aggfunc='count')
             avg_geo_longitude=pd.NamedAgg(column="geo_longitude", aggfunc="mean"),
             avg_geo_latitude=pd.NamedAgg(column="geo_latitude", aggfunc="mean"),
             std_geo_longitude=pd.NamedAgg(column="geo_longitude", aggfunc="std"),
@@ -92,10 +92,10 @@ def calc_historical_location_features_real_func(db_session=None):
             list_geo_longitude=pd.NamedAgg(column="geo_longitude", aggfunc=list),
             list_geo_latitude=pd.NamedAgg(column="geo_latitude", aggfunc=list),
             # cov_geo =pd.NamedAgg(column=("geo_longitude","geo_latitude"), aggfunc=np.cov),
-            job_count=pd.NamedAgg(column="scheduled_primary_worker_id", aggfunc="count"),
+            job_count=pd.NamedAgg(column="scheduled_primary_worker_code", aggfunc="count"),
         )
         .reset_index()
-    )  # .sort_values(['location_code'], ascending=True)
+    )  # .sort_values(['code'], ascending=True)
 
     def get_cov(x):
         arr = np.array([x["list_geo_longitude"], x["list_geo_latitude"], ])
@@ -144,17 +144,17 @@ def calc_historical_location_features_real_func(db_session=None):
     return
 
     loc_gmm_df = (
-        job_loc_df.groupby(["location_id"])
+        job_loc_df.groupby(["location_code"])
         .agg(
-            # job_count=pd.NamedAgg(column='location_code', aggfunc='count')
+            # job_count=pd.NamedAgg(column='code', aggfunc='count')
             avg_geo_longitude=pd.NamedAgg(column="geo_longitude", aggfunc="mean"),
             avg_geo_latitude=pd.NamedAgg(column="geo_latitude", aggfunc="mean"),
             std_geo_longitude=pd.NamedAgg(column="geo_longitude", aggfunc="std"),
             std_geo_latitude=pd.NamedAgg(column="geo_latitude", aggfunc="std"),
             cov_geo=pd.NamedAgg(column=["geo_longitude", "geo_latitude"], aggfunc=np.cov),
-            job_count=pd.NamedAgg(column="scheduled_primary_worker_id", aggfunc="count"),
+            job_count=pd.NamedAgg(column="scheduled_primary_worker_code", aggfunc="count"),
             list_scheduled_worker_code=pd.NamedAgg(
-                column="scheduled_primary_worker_id", aggfunc=list
+                column="scheduled_primary_worker_code", aggfunc=list
             ),
             avg_actual_start_minutes=pd.NamedAgg(column="actual_start_minutes", aggfunc="mean"),
             avg_actual_duration_minutes=pd.NamedAgg(
@@ -164,7 +164,7 @@ def calc_historical_location_features_real_func(db_session=None):
             stddev_days_delay=pd.NamedAgg(column="days_delay", aggfunc="std"),
         )
         .reset_index()
-    )  # .sort_values(['location_code'], ascending=True)
+    )  # .sort_values(['code'], ascending=True)
 
     loc_gmm_df["job_historical_worker_service_dict"] = loc_gmm_df.apply(
         lambda x: Counter(x["list_scheduled_worker_code"]),
@@ -184,7 +184,7 @@ def calc_historical_location_features_real_func(db_session=None):
 
     loc_feature_df = loc_gmm_df[
         [
-            "location_id",
+            "code",
             "job_history_feature_data",
             "job_count",
             "avg_actual_start_minutes",
@@ -193,7 +193,7 @@ def calc_historical_location_features_real_func(db_session=None):
             "stddev_days_delay",
         ]
     ]
-    loc_feature_df.rename(columns={"location_id": "id"}, inplace=True)
+    loc_feature_df.rename(columns={"code": "id"}, inplace=True)
 
     loc_update_dict_list = json.loads(loc_feature_df.to_json(orient="records"))
 
@@ -210,8 +210,8 @@ def calc_historical_location_features_real_func(db_session=None):
 
     job_loc_df = job_loc_df[
         [
-            "scheduled_primary_worker_id",
-            "location_id",
+            "scheduled_primary_worker_code",
+            "code",
             "geo_longitude",
             "geo_latitude",
         ]
@@ -219,16 +219,16 @@ def calc_historical_location_features_real_func(db_session=None):
 
     worker_loc_df = pd.read_sql(
         db_session.query(
-            Worker.id.label("scheduled_primary_worker_id"),
-            Worker.location_id,
+            Worker.code.label("scheduled_primary_worker_code"),
+            Worker.code,
             Location.geo_longitude,
             Location.geo_latitude,
         )
-        .filter(Worker.location_id == Location.id)
+        .filter(Worker.code == Location.code)
         .statement,
         db_session.bind,
     )
-    # worker_loc_df.rename(columns={"id": "scheduled_primary_worker_id"}, inplace=True)
+    # worker_loc_df.rename(columns={"id": "scheduled_primary_worker_code"}, inplace=True)
 
     """
     job_loc_df = pd.read_sql(
@@ -243,11 +243,11 @@ def calc_historical_location_features_real_func(db_session=None):
         .statement,
         db_session.bind,
     )
-    worker_loc_df.rename(columns={"id": "scheduled_primary_worker_id"}, inplace=True)
+    worker_loc_df.rename(columns={"id": "scheduled_primary_worker_code"}, inplace=True)
 
     job_loc_with_worker_home = pd.concat(
         [
-            visit[["actual_worker_code", "location_code", "geo_longitude", "geo_latitude"]],
+            visit[["actual_worker_code", "code", "geo_longitude", "geo_latitude"]],
             worker_df,
         ]
     ).copy()
@@ -266,17 +266,17 @@ def calc_historical_location_features_real_func(db_session=None):
     #
 
     worker_gmm_df = (
-        job_loc_with_worker_home.groupby(["scheduled_primary_worker_id"])
+        job_loc_with_worker_home.groupby(["scheduled_primary_worker_code"])
         .agg(
-            # job_count=pd.NamedAgg(column='location_code', aggfunc='count')
+            # job_count=pd.NamedAgg(column='code', aggfunc='count')
             avg_geo_longitude=pd.NamedAgg(column="geo_longitude", aggfunc="mean"),
             avg_geo_latitude=pd.NamedAgg(column="geo_latitude", aggfunc="mean"),
             std_geo_longitude=pd.NamedAgg(column="geo_longitude", aggfunc="std"),
             std_geo_latitude=pd.NamedAgg(column="geo_latitude", aggfunc="std"),
-            job_count=pd.NamedAgg(column="scheduled_primary_worker_id", aggfunc="count"),
+            job_count=pd.NamedAgg(column="scheduled_primary_worker_code", aggfunc="count"),
         )
         .reset_index()
-    )  # .sort_values(['location_code'], ascending=True)
+    )  # .sort_values(['code'], ascending=True)
 
     # json.dumps(
     worker_gmm_df["job_history_feature_data"] = worker_gmm_df.apply(
@@ -288,7 +288,7 @@ def calc_historical_location_features_real_func(db_session=None):
         axis=1,
     )
 
-    worker_gmm_df.rename(columns={"scheduled_primary_worker_id": "id"}, inplace=True)
+    worker_gmm_df.rename(columns={"scheduled_primary_worker_code": "id"}, inplace=True)
     update_dict_list = json.loads(
         worker_gmm_df[["id", "job_history_feature_data"]].to_json(orient="records")
     )

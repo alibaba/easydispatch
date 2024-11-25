@@ -37,7 +37,7 @@ class KandboxRulePluginRequestedSkills(KandboxRulePlugin):
         # return score, violated_rules (negative values)
         # return self.weight * 1
         # Now check if this new job can fit into existing
-        worker_code = job["scheduled_primary_worker_id"]
+        worker_code = job["scheduled_primary_worker_code"]
         worker = env.workers_dict[worker_code]
         res = {}
         overall_message = "Job ({}) requires skill ({}), checking workers {}".format(

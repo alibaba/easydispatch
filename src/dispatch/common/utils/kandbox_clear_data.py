@@ -3,7 +3,7 @@ import json
 import time
 import click
 
-from kafka import KafkaAdminClient, KafkaConsumer
+# from kafka import KafkaAdminClient, KafkaConsumer
 
 import redis
 from redis.exceptions import LockError
@@ -12,6 +12,7 @@ from sqlalchemy_utils import database_exists
 from sqlalchemy import MetaData, create_engine
 from sqlalchemy.schema import CreateSchema
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy import text
 from psycopg2.errors import DuplicateSchema, ProgrammingError
 
 from dispatch.config import (
@@ -23,12 +24,15 @@ from dispatch.config import (
     REDIS_HOST,
     REDIS_PORT,
     REDIS_PASSWORD,
+    REDIS_DB,
     KAFKA_BOOTSTRAP_SERVERS,
 )
+# 
+# from etc.experimental_code.cvrp.ortools_cvrp1 import main
 
 # fmt:off
 
-data_start_day = "20201015"
+# data_start_day = "20201015"
 token = ""
 
 def login():
@@ -60,14 +64,15 @@ def clear_kafka():
 
 def clear_redis():
     if REDIS_PASSWORD == "":
-        redis_conn = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, password=None)
+        redis_conn = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, password=None,db=REDIS_DB)
     else:
-        redis_conn = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, password=REDIS_PASSWORD)
+        redis_conn = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, password=REDIS_PASSWORD,db=REDIS_DB)
 
     redis_conn.flushdb()
     print("--redis cleared --")
 
 def clear_all_data():
+    assert False, "be careful"
     clear_kafka()
     clear_redis()
 
@@ -81,7 +86,7 @@ def clear_all_data():
     session = db_session()
 
     session.execute("delete from event;")
-    session.execute("delete from assoc_job_tags;")
+
     session.execute("delete from job_scheduled_secondary_workers;")
 
 
@@ -137,7 +142,7 @@ def clear_team_data_for_redispatching(org_code, team_id):
     db_session = sessionmaker(bind=engine)
     session = db_session()
 
-    session.execute(f"delete from job_scheduled_secondary_workers where job_id in (select id from job where team_id={team_id});")
+    session.execute(f"delete from job_scheduled_secondary_workers where job_code in (select id from job where team_id={team_id});")
     session.execute(f"update job set planning_status = 'U'  where team_id={team_id};") 
     session.execute(f"update team set latest_env_kafka_offset=0  where id={team_id};")
     session.execute("commit;")
@@ -170,7 +175,39 @@ def clear_all_worker_jobs():
     click.secho("Success. clear_all_worker_jobs is done.", fg="yellow")
 
 
+
+def clear_all_worker_jobs_in_team(db_session, org_code: str, team_id: int,delete_dispatch_user=None ):
+    click.secho(f"--Started removing jobs for {org_code}.{team_id}--")
+    schema_name = "dispatch_organization_" + org_code
+
+    # clear_kafka()
+    # clear_redis()
+
+    db_session.execute(text("delete from {}.job_event".format(schema_name)))
+    db_session.execute(text("delete from {}.job where team_id = {}".format(schema_name, team_id)))
+
+    db_session.execute(text("""
+        delete from {}.order_event  
+        where order_code in (
+            select order_code from {}.order
+            where team_id = {}
+        )""".format(schema_name, schema_name, team_id)))
+    db_session.execute(text("delete from {}.order where team_id = {}".format(schema_name, team_id)))
+    db_session.execute(text("delete from {}.location_group".format(schema_name)))
+    db_session.execute(text("delete from {}.worker_event".format(schema_name)))
+    db_session.execute(text("delete from {}.worker where team_id = {}".format(schema_name, team_id)))
+    db_session.execute(text("delete from {}.location where team_id = {}".format(schema_name, team_id)))
+    if delete_dispatch_user:
+        # 默认任务 不带 .com 的是 创建的User 
+        db_session.execute(text(f"delete from dispatch_core.dispatch_user where org_code = '{org_code}' and email  not like '%.com%' "))
+        
+    db_session.commit()
+
+    click.secho(f"clear_all_worker_jobs_in_team is done for team: {org_code}.{team_id}", fg="yellow")
+
 #
 # clear_all_data()
 # clear_all_worker_jobs()
 # clear_all_data_for_redispatching()
+if __name__ == '__main__':
+    clear_kafka()

@@ -15,6 +15,11 @@ def minutes_to_time_string(minutes):
         return ":".join(str(datetime.timedelta(minutes=minutes % (24 * 60))).split(":")[0:2])
 
 
+def minutes_to_hhmm(minutes):
+    m = minutes  % (24 * 60)
+    return str(int(m // 60)).zfill(2) + str(int(m % 60)).zfill(2)
+
+
 def time_string_hhmm_to_minutes(time_str):
     return int(time_string_hhmm_to_seconds(time_str) / 60)
 
@@ -259,5 +264,5 @@ def days_between_2_day_string(start_day=None, end_day=None):
 
 def get_current_day_string():
 
-    start_date = datetime.datetime.strptime(datetime.datetime.now(), "YYYYMMDD")
+    start_date = datetime.datetime.strftime(datetime.datetime.now(), "%Y%m%d")
     return start_date

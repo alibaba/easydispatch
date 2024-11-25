@@ -9,17 +9,20 @@ from dispatch.models import (
     DispatchBase,
     TermNested,
     TermReadNested,
+    TimeStampMixin
 )
 from dispatch.team.models import TeamCreate, TeamRead
 from dispatch.auth.models import DispatchUser, UserRead
+# 2022-10-31 22:44:55 This will cause circular importing
+# from dispatch.location_group.models import LocationGroup 
+
 
 from sqlalchemy.sql.schema import UniqueConstraint
 
 
-class Location(Base):
-    id = Column(BigInteger, primary_key=True)
-
-    location_code = Column(String, nullable=False)
+class Location(Base,TimeStampMixin):
+    code = Column(String, primary_key=True,)
+    name = Column(String, nullable=True)
     geo_longitude = Column(Float, nullable=False)
     geo_latitude = Column(Float, nullable=False)
     geo_address_text = Column(String)
@@ -36,21 +39,26 @@ class Location(Base):
     avg_days_delay = Column(Float, default=0)
     stddev_days_delay = Column(Float, default=0)
 
+    # Used to store the customer id, to associate customer to it's own location.
     dispatch_user_id = Column(Integer, ForeignKey("dispatch_core.dispatch_user.id"))
     dispatch_user = relationship("DispatchUser", backref="location_auth")
     team_id = Column(Integer, ForeignKey("team.id"), nullable=True)
     team = relationship("Team", backref="location2team")
     org_id = Column(Integer, nullable=True, default=-1)
 
+    # Location group FK will cause circular reference location-> locaiton group ->worker -> locaiton.
+    # location_group = relationship("LocationGroup", backref="locationgroup2loc")
+    location_group_code = Column(String, nullable=True)
+
+
     search_vector = Column(
         TSVectorType(
-            "location_code",
+            "code",
+            "name",
             "geo_address_text",
-            weights={"location_code": "A", "geo_address_text": "B"},
+            weights={"code": "A", "geo_address_text": "B", "name": "C"},
         )
     )
-
-    __table_args__ = (UniqueConstraint('location_code', 'org_id', name='uix_org_location_code'),)
 
 # Pydantic models...
 
@@ -59,20 +67,26 @@ class LocationBase(DispatchBase):
     """ A location is where a worker or a job is positioned on a map. The longitude and latitude are mandatory and textual addresses are optional.
     \n A location is treated as first class citizen in parallel to job because we see that there are repeated jobs for same customer and location. The historical assignment patterns can be learned on location level.
     """
-    id: int = None
-    location_code: str = None
-    geo_longitude: float = None
-    geo_latitude: float = None
-    # description: Optional[str] = None
+    code: str
+    # long, lat are mandatory
+    geo_longitude: float # = None 
+    geo_latitude: float # = None
     geo_address_text: str = None
     geo_json: dict = None
+
     dispatch_user: Optional[UserRead]
     team: Optional[TeamCreate] = None
+    code: str = None
 
 
 class LocationCreate(LocationBase):
-    
+    geo_longitude: float = None 
+    geo_latitude: float = None
+    region_code: str = None # "THA" ,
+    language: str = None #  "th-TH",
+
     org_id: int = None
+    overwrite: bool = False
 
 
 class LocationUpdate(LocationBase):
@@ -80,7 +94,6 @@ class LocationUpdate(LocationBase):
 
 
 class LocationRead(LocationBase):
-    id: int
     team: Optional[TeamRead]
 
 

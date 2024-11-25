@@ -13,7 +13,6 @@ from dispatch.config import (
     DISPATCH_JWT_ALG,
     LOCAL_ENCRYPT_KEY
 )
-# LOCAL_ENCRYPT_KEY = '01010'
 
 '''
 AES对称加密算法
@@ -64,7 +63,7 @@ def decrypt(text):
 edit_job_token = 'job_edit_token|{}'
 
 
-def token(job_id):
+def token(job_code):
     DISPATCH_JWT_EXP = 3600 * 24 * 7
     today = date.today()
     now = datetime(
@@ -75,22 +74,20 @@ def token(job_id):
     exp = (now + timedelta(seconds=int(DISPATCH_JWT_EXP))).timestamp()
     data = {
         "exp": exp,
-        "job_id": job_id,
+        "job_code": job_code,
     }
     token = jwt.encode(data, DISPATCH_JWT_SECRET, algorithm=DISPATCH_JWT_ALG)
-    token_key = edit_job_token.format(job_id)
+    token_key = edit_job_token.format(job_code)
     redis_conn = redis.Redis(connection_pool=redis_pool)
     redis_conn.set(token_key, token)
     return token
 
 
-def check_edit_job_token(job_id, token):
-    redis_conn = redis.Redis(connection_pool=redis_pool)
-    token_key = edit_job_token.format(job_id)
-    redis_value = redis_conn.get(token_key)
-    if token == redis_value:
-        return True
-    return False
+def check_edit_job_token(job_code, token):
+    info = get_jwt_info(token)
+    # if info and str(info.get('job_code', '')) == str(job_code):
+    #     return True
+    return False if not info else True
 
 
 def get_jwt_info(token):
@@ -108,7 +105,7 @@ if __name__ == '__main__':
     # print(a)
     # b = decrypt(a)
     # print(b)
-    job_id = 489
-    token_str = token(job_id)
+    job_code = 489
+    token_str = token(job_code)
     print(token_str)
-    check_edit_job_token(job_id, token_str)
+    check_edit_job_token(job_code, token_str)

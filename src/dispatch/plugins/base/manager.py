@@ -76,6 +76,9 @@ class PluginManager(InstanceManager):
                 return result
 
     def register(self, cls):
+        """
+            register  plugins , config it's here 
+        """
         from dispatch.database import SessionLocal
         from dispatch.plugin import service as plugin_service
         from dispatch.plugin.models import Plugin

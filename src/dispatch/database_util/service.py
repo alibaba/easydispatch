@@ -22,8 +22,9 @@ from sqlalchemy_filters.filters import build_filters, get_named_models
 from dispatch.exceptions import FieldNotFoundError, InvalidFilterError
 from dispatch.auth.models import DispatchUser, UserRoles
 from dispatch.auth.service import get_current_user, get_current_role
+
 # from dispatch.enums import UserRoles, Visibility
-from dispatch.fulltext.composite_search import CompositeSearch
+# from dispatch.fulltext.composite_search import CompositeSearch
 
 from dispatch.location.models import Location
 from dispatch.location import service as location_service
@@ -46,32 +47,17 @@ log = logging.getLogger(__file__)
 QueryStr = constr(regex=r"^[ -~]+$", min_length=1)
 
 
-# def restricted_incident_filter(query: orm.Query, current_user: DispatchUser, role: UserRoles):
-#     """Adds additional incident filters to query (usually for permissions)."""
-#     if role == UserRoles.member:
-#         # We filter out resticted incidents for users with a member role if the user is not an incident participant
-#         query = (
-#             query.join(Participant, Incident.id == Participant.incident_id)
-#             .join(IndividualContact)
-#             .filter(
-#                 or_(
-#                     Incident.visibility == Visibility.open,
-#                     IndividualContact.email == current_user.email,
-#                 )
-#             )
-#         )
-#     return query.distinct()
-
 
 def restricted_job_filter(query: orm.Query, current_user: DispatchUser, role: UserRoles):
     """Adds additional incident type filters to query (usually for permissions)."""
 
     if current_user:
         if role == UserRoles.WORKER:
-            query = (query
-                .join(Worker, Worker.id == Job.scheduled_primary_worker_id)
+            query = (
+                query.join(Worker, Worker.code == Job.scheduled_primary_worker_code)
                 .join(DispatchUser, DispatchUser.id == Worker.dispatch_user_id)
-                .filter(DispatchUser.email == current_user.email))
+                .filter(DispatchUser.email == current_user.email)
+            )
             query.distinct()
         elif role == UserRoles.PLANNER:
             team_list = [i.id for i in current_user.managed_teams]
@@ -79,9 +65,11 @@ def restricted_job_filter(query: orm.Query, current_user: DispatchUser, role: Us
             query = query.filter(Job.team_id.in_(set(team_list)))
         elif role == UserRoles.CUSTOMER:
             # team_list = [i.id for i in current_user.managed_teams]
-            locs = location_service.get_by_auth_email(db_session=query.session, email=current_user.email)
-            loc_id_list = [i.id for i in locs]
-            query = query.filter(Job.location_id.in_(set(loc_id_list)))
+            locs = location_service.get_by_auth_email(
+                db_session=query.session, email=current_user.email
+            )
+            loc_code_list = [i.code for i in locs]
+            query = query.filter(Job.location_code.in_(set(loc_code_list)))
 
     return query
 
@@ -89,10 +77,10 @@ def restricted_job_filter(query: orm.Query, current_user: DispatchUser, role: Us
 def restricted_location_filter(query: orm.Query, current_user: DispatchUser, role: UserRoles):
     """Adds additional incident type filters to query (usually for permissions)."""
 
-    if current_user: 
+    if current_user:
         if role == UserRoles.CUSTOMER:
             # team_list = [i.id for i in current_user.managed_teams]
-            query = query.filter(Location.dispatch_user_id==current_user.id)
+            query = query.filter(Location.dispatch_user_id == current_user.id)
 
     return query
 
@@ -106,11 +94,12 @@ def restricted_team_filter(query: orm.Query, current_user: DispatchUser, role: U
             team_list.append(current_user.default_team_id)
             query = query.filter(Team.id.in_(set(team_list)))
         elif role in (UserRoles.WORKER, UserRoles.CUSTOMER):
-            query = (query.filter(Team.id == -999999))
+            query = query.filter(Team.id == -999999)
             query.distinct()
         # Owner has no restriction
 
     return query
+
 
 def restricted_worker_filter(query: orm.Query, current_user: DispatchUser, role: UserRoles):
     """Adds additional incident type filters to query (usually for permissions)."""
@@ -121,7 +110,7 @@ def restricted_worker_filter(query: orm.Query, current_user: DispatchUser, role:
             team_list.append(current_user.default_team_id)
             query = query.filter(Worker.team_id.in_(set(team_list)))
         elif role in (UserRoles.WORKER, UserRoles.CUSTOMER):
-            query = (query.filter(Worker.id == -999999))
+            query = query.filter(Worker.code == "_SHOULD_NOT_EXIST_")
             query.distinct()
 
     return query
@@ -133,9 +122,9 @@ def apply_model_specific_filters(
     """Applies any model specific filter as it pertains to the given user."""
     model_map = {
         Job: [restricted_job_filter],
-        Location:[restricted_location_filter], 
-        Team:[restricted_team_filter],
-        Worker:[restricted_worker_filter],
+        Location: [restricted_location_filter],
+        Team: [restricted_team_filter],
+        Worker: [restricted_worker_filter],
     }
 
     filters = model_map.get(model, [])
@@ -285,7 +274,8 @@ def search_filter_sort_paginate(
         if query_str:
             sort = False if sort_by else True
             query = search(query_str=query_str, query=query, model=model, sort=sort)
-
+        if "is_deleted" in model_cls._sa_class_manager.keys():
+            query = query.filter((model_cls.is_deleted == None)|(model_cls.is_deleted == 0))
         query = apply_model_specific_filters(model_cls, query, current_user, role)
 
         filter_spec = create_filter_spec(model, fields, ops, values)
@@ -317,7 +307,7 @@ def search_filter_sort_paginate(
     try:
         query, pagination = apply_pagination(query, page_number=page, page_size=items_per_page)
     except sqlalchemy.exc.ProgrammingError as e:
-        log.debug(e)
+        log.error(e)
         return {
             "items": [],
             "itemsPerPage": items_per_page,
@@ -360,7 +350,7 @@ def create_filter_spec(model, fields, ops, values):
         filters = list(g)
         force_and = False
         for f in filters:
-            if ">" in f["op"] or "<" in f["op"]:
+            if ">" in f["op"] or "<" in f["op"] or "!=" in f["op"]:
                 force_and = True
 
         if force_and:

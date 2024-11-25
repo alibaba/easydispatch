@@ -1,4 +1,7 @@
 from collections import OrderedDict
+import logging
+log = logging.getLogger("CacheDict_Class")
+
 
 # https://gist.github.com/davesteele/44793cd0348f59f8fadd49d7799bd306
 class CacheDict(OrderedDict):
@@ -11,11 +14,13 @@ class CacheDict(OrderedDict):
         super().__init__(*args, **kwargs)
 
     def __setitem__(self, key, value):
+        log.info(f"adding item for key: {key}, value: {value}")
         super().__setitem__(key, value)
         super().move_to_end(key)
 
         while len(self) > self.cache_len:
             oldkey = next(iter(self))
+            log.info(f"deleting item for key: {key}")
             super().__delitem__(oldkey)
 
     def __getitem__(self, key):

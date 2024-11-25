@@ -9,15 +9,19 @@ from fastapi.encoders import jsonable_encoder
 
 from sqlalchemy.dialects.postgresql import UUID
 
-from dispatch.job import service as job_service
-from dispatch.worker import service as worker_service
+from dispatch.cloudmarket.instance import service as instance_service
+from dispatch.cloudmarket.mearsurement import service as mearsurement_service
+from ..cloudmarket.sku import service as sku_service
 
-from .models import Event, EventCreate, EventUpdate
+from dispatch.cloudmarket.job_event.models import JobEvent
+from dispatch.cloudmarket.worker_event.models import WorkerEvent
+
+from dispatch.cloudmarket.mearsurement.models import Mearsurement
 
 
 logger = logging.getLogger(__name__)
 
-
+'''
 def get(*, db_session, event_id: int) -> Optional[Event]:
     """
     Get an event by id.
@@ -32,27 +36,27 @@ def get_by_uuid(*, db_session, uuid: UUID) -> Optional[Event]:
     return db_session.query(Event).filter(Event.uuid == uuid).one_or_none()
 
 
-def get_by_job_id(*, db_session, job_id: int) -> List[Optional[Event]]:
+def get_by_job_code(*, db_session, job_code: str) -> List[Optional[Event]]:
     """
     Get events by job id.
     """
-    return db_session.query(Event).filter(Event.job_id == job_id)
+    return db_session.query(Event).filter(Event.job_code == job_code)
 
 
-def get_by_job_id_and_source(*, db_session, job_id: int, source: str) -> List[Optional[Event]]:
+def get_by_job_code_and_source(*, db_session, job_code: str, source: str) -> List[Optional[Event]]:
     """
     Get events by job id and source.
     """
-    return db_session.query(Event).filter(Event.job_id == job_id).filter(Event.source == source)
+    return db_session.query(Event).filter(Event.job_code == job_code).filter(Event.source == source)
 
 
-def get_by_job_id_and_worker_id(
-    *, db_session, job_id: int, worker_id: int
+def get_by_job_code_and_worker_code(
+    *, db_session, job_code: str, worker_code: str
 ) -> List[Optional[Event]]:
     """
     Get events by job id and worker id.
     """
-    return db_session.query(Event).filter(Event.job_id == job_id).filter(Event.source == worker_id)
+    return db_session.query(Event).filter(Event.job_code == job_code).filter(Event.source == worker_code)
 
 
 def get_all(*, db_session) -> List[Optional[Event]]:
@@ -88,25 +92,96 @@ def update(*, db_session, event: Event, event_in: EventUpdate) -> Event:
     return event
 
 
-def delete(*, db_session, event_id: int):
+def delete(*, db_session, event_id: str):
     """
     Deletes an event
     """
     event = db_session.query(Event).filter(Event.id == event_id).first()
     db_session.delete(event)
     db_session.commit()
+'''
 
 
-def log(
+def log_job_event(
     db_session,
     source: str,
-    description: str,
-    job_id: int = None,
-    worker_id: int = None,
+    description: str, 
+    job_code: str,
+    planning_status: str = 'U',
     started_at: datetime = None,
     ended_at: datetime = None,
     details: dict = None,
-) -> Event:
+    flex_form_data: dict = None,
+    job = None
+) -> JobEvent:
+    """
+    Logs an event
+    """
+    # # TODO, temp block
+    # return
+    uuid = uuid4()
+
+    if not started_at:
+        started_at = datetime.datetime.utcnow()
+
+    if not ended_at:
+        ended_at = started_at
+
+
+    logger.info(f"{source}: {description}")
+
+
+    # 改造 event拆分为 worker_event 和job_event
+
+    job_event = JobEvent()
+    job_event.uuid = uuid
+    job_event.started_at = started_at
+    job_event.ended_at = ended_at
+    job_event.source = source
+    if job_event.source == "Unknown":
+        job_event.source = "Auto Planner"
+    job_event.description = description
+    job_event.details =  details
+    job_event.job_code = job_code
+    job_event.planning_status = planning_status
+    job_event.flex_form_data = flex_form_data
+    job_event.job_execution_time = datetime.datetime.now()
+    db_session.add(job_event)
+    db_session.commit()
+
+    # 如果该job执行成功，判断是否来自云市场，如果是则再次添加job记录表
+    if job and job.planning_status == "I":
+        instance = instance_service.get_by_organization_id(db_session=db_session,organization_id=job.org_id)
+
+        if instance:
+            #TODO 添加mearsurement表
+            sku = sku_service.get_by_sku_id(db_session=db_session,sku_id=instance.sku_id)
+            mearsurement = Mearsurement()
+            mearsurement.instance_id = instance.instance_id
+            mearsurement.fk_organization_id = instance.fk_organization_id
+            mearsurement.sku_id = instance.sku_id
+            mearsurement.sku_type =sku.sku_payment_type if sku else ''
+            mearsurement.job_code = job_code 
+            mearsurement.job_name = job.name
+            mearsurement.job_type = job.job_type
+            mearsurement.planning_status = job.planning_status
+            mearsurement.planner_execution_time = datetime.datetime.now()
+            mearsurement_service.add(db_session = db_session,mearsurement=mearsurement)
+
+
+    return job_event
+
+
+def log_worker_event(
+    db_session,
+    source: str,
+    description: str, 
+    worker_code: str = None,
+    started_at: datetime = None,
+    ended_at: datetime = None,
+    details: dict = None,
+
+) -> WorkerEvent:
     """
     Logs an event
     """
@@ -118,28 +193,19 @@ def log(
     if not ended_at:
         ended_at = started_at
 
-    event_in = EventCreate(
-        uuid=uuid,
-        started_at=started_at,
-        ended_at=ended_at,
-        source=source,
-        description=description,
-        details=details,
-    )
-    event = create(db_session=db_session, event_in=event_in)
-
-    if job_id:
-        job = job_service.get(db_session=db_session, job_id=job_id)
-        job.events.append(event)
-        db_session.add(job)
-
-    if worker_id:
-        worker = worker_service.get(db_session=db_session, worker_id=worker_id)
-        worker.events.append(event)
-        db_session.add(worker)
-
-    db_session.commit()
 
     logger.info(f"{source}: {description}")
 
-    return event
+
+    worker_event = WorkerEvent(
+        worker_code = worker_code,
+        uuid = uuid,
+        started_at = started_at,
+        ended_at = ended_at,
+        source = source,
+        description = description,
+        details = details,
+    )
+    db_session.add(worker_event)
+    db_session.commit()
+    return worker_event

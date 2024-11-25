@@ -40,9 +40,9 @@ class JobsInSlotsPlannerTrait:
         "properties": {},
     }
 
-    def __init__(self, env, config=None):
+    def __init__(self, env, config=None, travel_router = None):
         self.env = env
-        self.travel_router = env.travel_router  # TravelTime(travel_speed=25)
+        self.travel_router = travel_router or  env.travel_router  # TravelTime(travel_speed=25)
         self.config = config or self.default_config 
 
     def _get_travel_time_from_location_to_job(self, location, job_code_2):
@@ -70,7 +70,7 @@ class JobsInSlotsPlannerTrait:
             [site2.location.geo_longitude, site2.location.geo_latitude],
         )
         if new_time > 200:
-            log.warn(
+            log.warning(
                 [site1.location.geo_longitude, site1.location.geo_latitude],
                 [site2.location.geo_longitude, site2.location.geo_latitude],
                 (new_time),
@@ -80,5 +80,14 @@ class JobsInSlotsPlannerTrait:
         return int(new_time / 1)
 
     def dispatch_jobs_in_slots(self, working_time_slots: list=[], last_job_count=1):
-        """Assign jobs to workers."""
+        """Arrange jobs inside the slots.
+        If there is a new job, it should be appended to the time slot before calling this one.
+        If there is a job shared by multiple worker, each time slot should contain that job. The jobs in different slots should have an identical job_code.
+        """
+        raise NotImplemented("Pls use sub class")
+
+    def dispatch_jobs_to_slots(self, working_time_slots: list=[], unplanned_job_code_list=[]):
+        """Assign jobs to slots.
+        Each slot is a worker.
+        """
         raise NotImplemented("Pls use sub class")

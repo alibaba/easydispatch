@@ -1,12 +1,15 @@
+import copy
+from dispatch.plugins.kandbox_planner.env.configurable_dispatch_env import ConfigurableDispatchEnv
 import dispatch.plugins.kandbox_planner.util.kandbox_date_util as date_util
 
 
 from dispatch.plugins.bases.kandbox_planner import KandboxRulePlugin
 from dispatch.plugins.kandbox_planner.env.env_models import (
-    Worker,
-    Job,
-    Appointment,
-    Absence,
+    ActionDict,
+    # Worker,
+    # Job,
+    # Appointment,
+    # Absence,
     ActionEvaluationScore,
 )
 
@@ -30,12 +33,14 @@ class KandboxRulePluginWithinWorkingHour(KandboxRulePlugin):
     overtime_allowed_message_template = (
         "Job time ({}-{}) ({}-{}) is not in working hour, but overtime ({} mins) allows it"
     )
+    default_config = copy.copy(KandboxRulePlugin.default_config)
 
-    default_config = {
+
+    default_config.update({
         "allow_overtime": False,
         #
         "overtim_minutes": 180,
-    }
+    })
     config_form_spec = {
         "type": "object",
         "properties": {
@@ -47,111 +52,43 @@ class KandboxRulePluginWithinWorkingHour(KandboxRulePlugin):
         },
     }
 
-    def evalute_normal_single_worker_n_job(self, env=None, job=None):  # worker = None,
+    def evalute_action_normal(self, env:ConfigurableDispatchEnv, action:ActionDict):
+        job = action.jobs[0]
         overall_message = ""
         score = 1
         metrics_detail = {"status_code": "OK"}
 
-        for worker_code in job.scheduled_worker_codes:
-            worker = env.workers_dict[worker_code]
-
-            day_seq = int(job.scheduled_start_minutes / 1440)
-            weekday_i = env.env_encode_day_seq_to_weekday(day_seq)
-            slot_in_day_count = len(worker.weekly_working_slots[weekday_i])
-            slot_intersected=False
-            slot_covered = False
-            for slot_in_day_i, slot_in_day in enumerate(worker.weekly_working_slots[weekday_i]):
-                working_slot_in_the_day = [
-                    slot_in_day[0] + (24 * 60 * day_seq),
-                    slot_in_day[1] + (24 * 60 * day_seq),
-                ]
-                clipped_slot = date_util.clip_time_period(
-                    p1=working_slot_in_the_day,
-                    p2=[
-                        job.scheduled_start_minutes,
-                        job.scheduled_start_minutes + job.scheduled_duration_minutes,
-                    ],
-                )
-                if len(clipped_slot) > 1:
-                    slot_intersected = True
-                    if (clipped_slot[0] == job.scheduled_start_minutes) & (
-                        clipped_slot[1] == job.scheduled_start_minutes + job.scheduled_duration_minutes
-                    ):
-                        overall_message = self.success_message_template.format(
-                            date_util.minutes_to_time_string(job.scheduled_start_minutes),
-                            date_util.minutes_to_time_string(
-                                job.scheduled_start_minutes + job.scheduled_duration_minutes
-                            ),
-                            job.scheduled_start_minutes,
-                            job.scheduled_start_minutes + job.scheduled_duration_minutes,
-                        )
-                        # move on to next worker
-                        slot_covered = True
-                        break
-            if slot_covered:
-                continue
-            available_overtime = env.get_worker_available_overtime_minutes(
-                worker_code=worker_code, day_seq=day_seq
-            )
-            # if self.config["allow_overtime"]:
-            if slot_intersected & (available_overtime > 0):
-                start_with_overtime = working_slot_in_the_day[0]
-                if slot_in_day_i ==0:
-                    start_with_overtime -= available_overtime
-
-                end_with_overtime = working_slot_in_the_day[1]
-                if slot_in_day_i == slot_in_day_count - 1:
-                    end_with_overtime += available_overtime
-
-
-                if (
-                    ( 
-                        start_with_overtime < job.scheduled_start_minutes
-                    ) & (
-                        end_with_overtime > job.scheduled_start_minutes + job.scheduled_duration_minutes
-                    ) & (
-                        working_slot_in_the_day[1]
-                        - working_slot_in_the_day[0]
-                        + available_overtime
-                        > job.scheduled_duration_minutes
-                    )
-                ):
-                    score = 0
-                    overall_message = self.overtime_allowed_message_template.format(
-                        date_util.minutes_to_time_string(job.scheduled_start_minutes),
-                        date_util.minutes_to_time_string(
-                            job.scheduled_start_minutes + job.scheduled_duration_minutes
-                        ),
-                        job.scheduled_start_minutes,
-                        job.scheduled_start_minutes + job.scheduled_duration_minutes,
-                        available_overtime,
-                    )
-                    # move on to next worker
-                    print(overall_message)
+        for worker_code in action.scheduled_worker_codes:
+            overlapped_slots = env.get_working_slot_list(
+                worker_code=worker_code,
+                active_only=False,
+                start_minutes=action.scheduled_start_minutes - 1,
+                end_minutes=action.scheduled_start_minutes + 1,
+                ) 
+            for slot in overlapped_slots:
+                if slot.end_minutes < action.scheduled_start_minutes or slot.start_minutes > action.scheduled_start_minutes:
                     continue
-            
-            # If the time slot were ok (i.e. included in any slot), it should have been skipped by continue  
-            # If the start time does not fully fall in one working slot for any worker, reject it instantly.
-            score = -1
-            overall_message = self.message_template.format(
-                date_util.minutes_to_time_string(job.scheduled_start_minutes),
-                date_util.minutes_to_time_string(
-                    job.scheduled_start_minutes + job.scheduled_duration_minutes
-                ),
-                job.scheduled_start_minutes,
-                job.scheduled_start_minutes + job.scheduled_duration_minutes,
-                available_overtime,
-            )
-            return ActionEvaluationScore(
-                score=score,
-                score_type=self.title,
-                message=overall_message,
-                metrics_detail={"status_code": "ERROR"},
-            )
-
-        return ActionEvaluationScore(
+                overall_message += f"Slot {slot.slot_code} was found at time {str(env.env_decode_from_minutes_to_datetime(action.scheduled_start_minutes))}!" 
+                score_res = ActionEvaluationScore(
+                    score=score,
+                    score_type=self.title,
+                    message=overall_message,
+                    metrics_detail=metrics_detail,
+                )
+                return score_res
+            else:   # if len(overlapped_slots) < 1:
+                overall_message += f"No slot was found at time {str(env.env_decode_from_minutes_to_datetime(action.scheduled_start_minutes))}! Note: Overtime not implemented" 
+                score = -1
+                return ActionEvaluationScore(
+                    score=score,
+                    score_type=self.title,
+                    message=overall_message,
+                    metrics_detail={"status_code": "ERROR"},
+                )
+        score_res = ActionEvaluationScore(
             score=score,
             score_type=self.title,
             message=overall_message,
             metrics_detail=metrics_detail,
         )
+        return score_res

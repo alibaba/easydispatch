@@ -35,8 +35,11 @@ class Depot(TimeStampMixin, Base):
     max_volume = Column(Integer, nullable=True, default=0)
     max_weight = Column(Integer, nullable=True, default=0)
     #
-    location = relationship("Location", backref="location_depot")
-    location_id = Column(BigInteger, ForeignKey("location.id"))
+    # location = relationship("Location", backref="location_depot")
+    # , ForeignKey("location.code")
+    location_code = Column(String, nullable=True)
+    geo_longitude = Column(Float, nullable=True)
+    geo_latitude = Column(Float, nullable=True)
 
     flex_form_data = Column(JSON, default={})
 
@@ -66,7 +69,7 @@ class DepotBase(DispatchBase):
     max_volume: float = 0
     # In KG
     max_weight: float = 0
-    location: LocationCreate
+    location: LocationCreate=None
 
 
 class DepotCreate(DepotBase):
@@ -84,3 +87,5 @@ class DepotRead(DepotBase):
 class DepotPagination(DispatchBase):
     total: int
     items: List[DepotRead] = []
+    itemsPerPage: int
+    page : int

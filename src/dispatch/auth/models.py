@@ -3,21 +3,29 @@ import secrets
 from typing import List
 from enum import Enum
 from datetime import datetime, timedelta, date
-from sqlalchemy.orm import relationship
 
 from sqlalchemy_utils import TSVectorType
 import bcrypt
 from jose import jwt
 from typing import Optional
 from pydantic import validator, Field
-from sqlalchemy import (Column, String, LargeBinary as Binary, Integer, Boolean, Table,
-                        BigInteger, ForeignKey, PrimaryKeyConstraint)
+from sqlalchemy import (
+    Column,
+    String,
+    LargeBinary as Binary,
+    Integer,
+    Boolean,
+    Table,
+    ForeignKey,
+    PrimaryKeyConstraint,
+)
 
 from sqlalchemy.orm import relationship
 
 from dispatch.database import Base
 from dispatch.models import TimeStampMixin, DispatchBase
-from dispatch.team.models import TeamCreate, TeamRead
+from dispatch.team.models import TeamRead
+from dispatch.org.enums import UserRoles
 
 from dispatch.config import (
     DISPATCH_JWT_SECRET,
@@ -47,13 +55,6 @@ def hash_password(password: str):
     return bcrypt.hashpw(pw, salt)
 
 
-class UserRoles(str, Enum):
-    WORKER = "Worker"
-    PLANNER = "Planner"
-    OWNER = "Owner"
-    CUSTOMER = "Customer"
-    # admin = "Admin"
-
 
 dispatch_user_managed_teams = Table(
     "dispatch_user_managed_teams",
@@ -79,7 +80,7 @@ class DispatchUser(Base, TimeStampMixin):
     # team_code = Column(String, nullable=True, default="t1")
     default_team_id = Column(Integer, default=-1)
     # https://avatars1.githubusercontent.com/u/5224736?s=400&u=c9dd310fdfea18388a409197a3f5f4f6b64af46e&v=4
-    thumbnail_photo_url = Column(String, default='')
+    thumbnail_photo_url = Column(String, default="")
     full_name = Column(String)
 
     is_team_worker = Column(Boolean, nullable=True, default=False)
@@ -103,7 +104,24 @@ class DispatchUser(Base, TimeStampMixin):
         return bcrypt.checkpw(password.encode("utf-8"), self.password)
 
     def generate_token(self, duration_seconds):
-        
+
+        # now = datetime.utcnow()
+        now = datetime.now()
+        exp = (now + timedelta(seconds=int(duration_seconds))).timestamp()
+        data = {
+            "exp": exp,
+            "email": self.email,
+            "org_code": self.org_code,
+            "org_id": self.org_id,
+            # "trx_20sec": 20, # 未来做流量控制？
+            # "id": self.id,
+            "role": self.role,
+            "default_team_id": self.default_team_id,
+        }
+        return jwt.encode(data, DISPATCH_JWT_SECRET, algorithm=DISPATCH_JWT_ALG)
+
+    def generate_token_for_job(self, duration_seconds, job_code):
+
         # now = datetime.utcnow()
         today = date.today()
         now = datetime(
@@ -111,17 +129,16 @@ class DispatchUser(Base, TimeStampMixin):
             month=today.month,
             day=today.day,
         )
-        exp = (now + timedelta(seconds=int(duration_seconds))).timestamp() 
+        exp = (now + timedelta(seconds=int(duration_seconds))).timestamp()
         data = {
             "exp": exp,
             "email": self.email,
             "org_code": self.org_code,
             "org_id": self.org_id,
-            # "role": self.role,
+            "job_code": job_code,
             # "default_team_id": self.default_team_id,
         }
         return jwt.encode(data, DISPATCH_JWT_SECRET, algorithm=DISPATCH_JWT_ALG)
-
 
     @property
     def token(self):
@@ -133,7 +150,8 @@ class DispatchUser(Base, TimeStampMixin):
 
 class UserBase(DispatchBase):
     email: str = Field(
-        default=None, title="username or email",
+        default=None,
+        title="username or email",
         description="The username to login. Though name is email, it may not be email format.",
     )
     is_active: bool = False
@@ -159,7 +177,10 @@ class UserRegister(UserLogin):
     id: int = None
     password: Optional[str]
     role: UserRoles = Field(
-        default=UserRoles.WORKER, title="user role", description="in current version, all users have user roles",)
+        default=UserRoles.WORKER,
+        title="user role",
+        description="in current version, all users have user roles",
+    )
     org_id: int = None
     org_code: str = None
     en_code: Optional[str]
@@ -169,6 +190,8 @@ class UserRegister(UserLogin):
     is_team_owner: bool = False
     default_team_id: int = None
     full_name: str = None
+    import_sample_data: str = "no_data"
+    planner_code: str = "single_planner"
     """
     org_code: Optional[str]
     is_org_owner: Optional[bool]
@@ -183,6 +206,15 @@ class UserRegister(UserLogin):
 
 class UserLoginResponse(DispatchBase):
     token: Optional[str]
+    is_first_login: int = 0
+    instance_id: str = None
+    org_id:int = 0
+    role:str = "Worker"
+    org_code:Optional[str] = None
+    default_team_id:Optional[int] = None
+    userToken:Optional[str] = None
+
+    
 
 
 class UserRead(UserBase):
@@ -196,6 +228,7 @@ class UserRead(UserBase):
     thumbnail_photo_url: Optional[str]
     full_name: Optional[str]
     managed_teams: Optional[List[TeamRead]] = []
+
 
 # class UserReadInternal(UserRead):
 #     managed_team_ids: List[int] = []
@@ -213,6 +246,8 @@ class UserUpdate(DispatchBase):
     old_password: Optional[str] = None
     managed_teams: Optional[List[TeamRead]] = []
     is_active: bool = False
+    org_id: Optional[int] = None
+    org_code: Optional[str] = None
 
     def password_required(cls, v):
         # we generate a password for those that don't have one
@@ -238,3 +273,12 @@ class DispatchUserOrganization(Base, TimeStampMixin):
     organization_id = Column(Integer, primary_key=True)
     role = Column(String, default=UserRoles.WORKER)
     team_id = Column(Integer)
+    worker_code =Column(String)
+
+
+class LoginRespones(DispatchBase):
+   status:int
+
+   message:str='succeed'
+   data:UserLoginResponse=None
+   result:str='success' 

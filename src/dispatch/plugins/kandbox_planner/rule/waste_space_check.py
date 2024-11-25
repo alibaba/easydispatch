@@ -5,10 +5,10 @@ from dispatch.plugins.kandbox_planner.env.env_models import (
     ActionDict,
     LocationTuple,
     JobLocation,
-    Worker,
-    Job,
-    Appointment,
-    Absence,
+    # Worker,
+    # Job,
+    # Appointment,
+    # Absence,
     ActionEvaluationScore,
 )
 
@@ -40,6 +40,7 @@ class KandboxRulePluginWasteSpace(KandboxRulePlugin):
         # Now check if this new job can fit into existing
 
         score = 1
+        assert False, ("Wrong, deprecated by jobinslot.flex_form_data")
         job_requested_items = job.requested_items
         requested_volume = sum([
             job_requested_items[item_key] * env.items_dict[item_key]["volume"]
@@ -59,7 +60,7 @@ class KandboxRulePluginWasteSpace(KandboxRulePlugin):
         
             worker_code = job.scheduled_worker_codes[0] 
             overlapped_slots = env.slot_server.get_overlapped_slots(
-                worker_id=worker_code, 
+                worker_code=worker_code, 
                 start_minutes=job.scheduled_start_minutes, 
                 end_minutes=job.scheduled_start_minutes + job.scheduled_duration_minutes
             )
@@ -72,12 +73,12 @@ class KandboxRulePluginWasteSpace(KandboxRulePlugin):
                 slot = overlapped_slots[0]  
 
                 spare_weight =slot.max_weight - sum([
-                    slot.loaded_items[item_key] * env.items_dict[item_key]["weight"]
-                    for item_key in slot.loaded_items.keys()
+                    slot.accum_items[item_key] * env.items_dict[item_key]["weight"]
+                    for item_key in slot.accum_items.keys()
                 ])
                 spare_volume =slot.max_weight - sum([
-                    slot.loaded_items[item_key] * env.items_dict[item_key]["volume"]
-                    for item_key in slot.loaded_items.keys()
+                    slot.accum_items[item_key] * env.items_dict[item_key]["volume"]
+                    for item_key in slot.accum_items.keys()
                 ])
 
                 if (spare_weight +  requested_weight < 0) or (spare_volume +  requested_volume < 0):
